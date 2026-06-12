@@ -3,7 +3,7 @@
 #include <string_view>
 #include <vector>
 
-enum class TokenType 
+enum class TokenType
 {
     IDENTIFIER,
     NUMBER,
@@ -12,67 +12,65 @@ enum class TokenType
     RETURN,
     IF,
     WHILE,
-    
+
     PLUS,
     MINUS,
     ASTERISK,
     SLASH,
-    
+
     EQUAL,
     DOUBLE_EQUAL,
     NOT_EQUAL,
-    
+
     LESS,
     LESS_EQUAL,
     GREATER,
     GREATER_EQUAL,
-    
+
     LPAREN,
     RPAREN,
     LBRACE,
     RBRACE,
-    
+
     COMMA,
     SEMICOLON,
-    
+
     END
 };
 
-constexpr std::string_view TokenNames[] = 
-{
-    "IDENTIFIER",
-    "NUMBER",
-    
-    "INT",
-    "RETURN",
-    "IF",
-    "WHILE",
-    
-    "PLUS",
-    "MINUS",
-    "ASTERISK",
-    "SLASH",
-    
-    "EQUAL",
-    "DOUBLE_EQUAL",
-    "NOT_EQUAL",
-    
-    "LESS",
-    "LESS_EQUAL",
-    "GREATER",
-    "GREATER_EQUAL",
-    
-    "LPAREN",
-    "RPAREN",
-    "LBRACE",
-    "RBRACE",
-    
-    "COMMA",
-    "SEMICOLON",
-    
-    "END"
-};
+constexpr std::string_view TokenNames[] =
+    {
+        "IDENTIFIER",
+        "NUMBER",
 
+        "INT",
+        "RETURN",
+        "IF",
+        "WHILE",
+
+        "PLUS",
+        "MINUS",
+        "ASTERISK",
+        "SLASH",
+
+        "EQUAL",
+        "DOUBLE_EQUAL",
+        "NOT_EQUAL",
+
+        "LESS",
+        "LESS_EQUAL",
+        "GREATER",
+        "GREATER_EQUAL",
+
+        "LPAREN",
+        "RPAREN",
+        "LBRACE",
+        "RBRACE",
+
+        "COMMA",
+        "SEMICOLON",
+
+        "END"};
 
 struct Token
 {

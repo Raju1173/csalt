@@ -9,15 +9,14 @@ enum class NodeType
     PROGRAM,
 
     VAR,
-
     FUNCTION,
-    BLOCK,
 
     IF,
     WHILE,
     RETURN,
-    EXPR,
+    BLOCK,
 
+    EXPR,
     NUMBER,
     IDENTIFIER,
     BINARY_OP,
@@ -31,6 +30,6 @@ struct Node
     std::vector<std::unique_ptr<Node>> children;
 };
 
-Node parse(const std::vector<Token>& TokenStream);
+Node parse(const std::vector<Token> &TokenStream);
 
-void printNode(const Node& node, int depth = 0);
+void printNode(const Node &node, int depth = 0);
