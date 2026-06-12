@@ -1,9 +1,9 @@
-#include <ostream>
 #include <print>
 #include <string>
 #include <fstream>
 #include <vector>
 #include "lexer.h"
+#include "parser.h"
 
 int main(int argc, char** argv)
 {
@@ -33,6 +33,10 @@ int main(int argc, char** argv)
 	else
 	    std::print("{}\n", TokenNames[std::to_underlying(t.type)]);
     }
+
+    Node AST = parse(TokenStream);
+
+    printNode(AST);
 
     return 0;
 }
