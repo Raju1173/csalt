@@ -1,3 +1,5 @@
+#pragma once
+
 #include "lexer.h"
 #include <memory>
 #include <vector>
@@ -6,10 +8,11 @@ enum class NodeType
 {
     PROGRAM,
 
-    FUNCTION,
-
-    BLOCK,
     VAR,
+
+    FUNCTION,
+    BLOCK,
+
     IF,
     WHILE,
     RETURN,
