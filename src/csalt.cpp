@@ -26,6 +26,8 @@ int main(int argc, char **argv)
 
     std::vector<Token> TokenStream = tokenize(source);
 
+    std::print("------TOKENS-------\n\n");
+
     for (Token t : TokenStream)
     {
         if (t.type == TokenType::IDENTIFIER || t.type == TokenType::NUMBER)
@@ -33,6 +35,8 @@ int main(int argc, char **argv)
         else
             std::print("{}\n", TokenNames[std::to_underlying(t.type)]);
     }
+
+    std::print("\n------AST-------\n\n");
 
     Node AST = parse(TokenStream);
 

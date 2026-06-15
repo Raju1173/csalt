@@ -27,10 +27,10 @@ enum class TokenType
     GREATER,
     GREATER_EQUAL,
 
-    LPAREN,
-    RPAREN,
     LBRACE,
     RBRACE,
+    LPAREN,
+    RPAREN,
 
     COMMA,
     SEMICOLON,
@@ -62,10 +62,10 @@ constexpr std::string_view TokenNames[] =
         "GREATER",
         "GREATER_EQUAL",
 
-        "LPAREN",
-        "RPAREN",
         "LBRACE",
         "RBRACE",
+        "LPAREN",
+        "RPAREN",
 
         "COMMA",
         "SEMICOLON",

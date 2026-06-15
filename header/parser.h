@@ -10,6 +10,7 @@ enum class NodeType
 
     VAR,
     FUNCTION,
+    CALL,
 
     IF,
     WHILE,
@@ -17,11 +18,28 @@ enum class NodeType
     BLOCK,
 
     EXPR,
-    NUMBER,
     IDENTIFIER,
+    NUMBER,
     BINARY_OP,
-    CALL
 };
+
+constexpr std::string_view NodeNames[] =
+    {
+        "PROGRAM",
+
+        "VAR",
+        "FUNCTION",
+        "CALL",
+
+        "IF",
+        "WHILE",
+        "RETURN",
+        "BLOCK",
+
+        "EXPR",
+        "IDENTIFIER",
+        "NUMBER",
+        "BINARY_OP"};
 
 struct Node
 {
