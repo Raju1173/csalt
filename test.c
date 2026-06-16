@@ -1,10 +1,10 @@
 int main()
 {
-    int x = foo(a, b) + c * bar(d, e) - f / baz(g, h);
+    int x = foo(a, b) + c * (bar(d, e) - f) / baz(g, h);
 
     hello(x, foo(1, 2), bar(a + b, c));
 
-    if(a > b + c * d)
+    if(a > (b + c) * d)
     {
         doSomething();
     }

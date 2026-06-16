@@ -170,9 +170,24 @@ Node parse(const std::vector<Token> &TokenStream)
                     case TokenType::RPAREN:
                     case TokenType::COMMA:
                     case TokenType::SEMICOLON:
-                        popAndAttach();
+                    {
+                        auto child = std::move(nodeStack.top());
+                        nodeStack.pop();
+
+                        if (nodeStack.top()->type != NodeType::BINARY_OP)
+                        {
+                            nodeStack.top()->children.push_back(std::move(child));
+                        }
+
+                        else
+                        {
+                            nodeStack.top()->children.push_back(std::move(child->children[0]));
+                            pos++;
+                        }
+
                         continue;
-                        break;
+                    }
+                    break;
 
                     case TokenType::NUMBER:
                     case TokenType::IDENTIFIER:
@@ -330,6 +345,12 @@ Node parse(const std::vector<Token> &TokenStream)
                     }
 
                     break;
+
+                    case TokenType::LPAREN:
+                        pushNode(NodeType::EXPR);
+                        pos++;
+                        continue;
+                        break;
                 }
 
                 break;
