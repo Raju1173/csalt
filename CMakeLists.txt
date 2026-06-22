@@ -12,5 +12,5 @@ target_link_options(projectConfigs INTERFACE -stdlib=libc++)
 
 target_include_directories(projectConfigs INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/header)
 
-add_executable(csalt src/csalt.cpp src/lexer.cpp src/parser.cpp)
+add_executable(csalt src/csalt.cpp src/lexer.cpp src/parser.cpp src/CFGBuilder.cpp)
 target_link_libraries(csalt PRIVATE projectConfigs)

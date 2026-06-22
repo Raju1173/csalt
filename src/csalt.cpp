@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "parser.h"
+#include "CFGBuilder.h"
 #include <fstream>
 #include <print>
 #include <string>
@@ -41,6 +42,12 @@ int main(int argc, char **argv)
     Node AST = parse(TokenStream);
 
     printNode(AST);
+
+    std::print("\n------CFG-------\n");
+
+    auto CFG = constructCFG(AST);
+
+    printCFG(std::move(CFG));
 
     return 0;
 }

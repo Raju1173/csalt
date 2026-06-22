@@ -1,19 +1,31 @@
 int main()
 {
-    int x = foo(a, b) + c * (bar(d, e) - f) / baz(g, h);
+    int x = a + b;
 
-    hello(x, foo(1, 2), bar(a + b, c));
-
-    if(a > (b + c) * d)
+    if(x > c + d)
     {
-        doSomething();
+        hello(x, d);
+
     }
 
-    while(a == false)
+    while(a < b)
     {
-        doSomething(a, b + c * d, e);
-        a = true;
+        a = a + 1;
+
+        if(a > c)
+        {
+            b = b - 1;
+
+            hello(a, b);
+        }
+
+        b = b + 1;
     }
 
-    return x + y * z - w;
+    return hello(x, b);
+}
+
+int hello(int a, int b)
+{
+    return 0;
 }
