@@ -25,11 +25,15 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
             CFGFunc->Blocks.push_back(std::move(continuation));
 
             block->TransitionFalse = contPtr;
+            contPtr->Parents.push_back(block.get());
 
             if (cur->type == NodeType::IF || cur->type == NodeType::WHILE)
             {
                 auto trueBranch = constructBlock(cur->children[1].get(), CFGFunc, 0, cur->type == NodeType::IF ? contPtr : block.get());
+
                 block->TransitionTrue = trueBranch.get();
+                trueBranch->Parents.push_back(block.get());
+
                 CFGFunc->Blocks.push_back(std::move(trueBranch));
             }
 
@@ -43,7 +47,12 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
     }
 
     if (block->Condition == nullptr && block->TransitionNext == nullptr)
+    {
         block->TransitionNext = exitTarget;
+
+        if (exitTarget != nullptr)
+            exitTarget->Parents.push_back(block.get());
+    }
 
     return block;
 }
@@ -85,10 +94,19 @@ void printBlock(CFGBlock *Block)
         std::print("\n|    Transition Next : Block - {}\n", Block->TransitionNext->ID);
 
     if (Block->TransitionTrue != nullptr)
-        std::print("\n|    Transition True : Block - {}\n", Block->TransitionTrue->ID);
+        std::print("|    Transition True : Block - {}\n", Block->TransitionTrue->ID);
 
     if (Block->TransitionFalse != nullptr)
-        std::print("\n|    Transition False : Block - {}\n", Block->TransitionFalse->ID);
+        std::print("|    Transition False : Block - {}\n", Block->TransitionFalse->ID);
+
+    std::print("\n|    Dominators : {{ ");
+
+    for (CFGBlock *b : Block->Dominators)
+    {
+        std::print("{}, ", b->ID);
+    }
+
+    std::print("}}\n");
 }
 
 void printCFG(std::vector<std::unique_ptr<CFGFunction>> CFG)

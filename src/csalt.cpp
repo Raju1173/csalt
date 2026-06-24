@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "CFGBuilder.h"
+#include "SSAConstructor.h"
 #include <fstream>
 #include <print>
 #include <string>
@@ -45,7 +46,9 @@ int main(int argc, char **argv)
 
     std::print("\n------CFG-------\n");
 
-    auto CFG = constructCFG(AST);
+    std::vector<std::unique_ptr<CFGFunction>> CFG = constructCFG(AST);
+
+    ComputeDominators(CFG);
 
     printCFG(std::move(CFG));
 

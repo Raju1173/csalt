@@ -1,6 +1,9 @@
+#pragma once
+
 #include "parser.h"
 #include <cstddef>
 #include <memory>
+#include <set>
 #include <vector>
 
 struct CFGBlock
@@ -14,6 +17,8 @@ struct CFGBlock
     CFGBlock *TransitionNext = nullptr;
     CFGBlock *TransitionTrue = nullptr;
     CFGBlock *TransitionFalse = nullptr;
+
+    std::set<CFGBlock *> Dominators;
 
     std::vector<CFGBlock *> Parents;
 };
