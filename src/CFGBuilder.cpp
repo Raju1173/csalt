@@ -107,6 +107,24 @@ void printBlock(CFGBlock *Block)
     }
 
     std::print("}}\n");
+
+    std::print("\n|    Dominator Tree Children : {{ ");
+
+    for (CFGBlock *b : Block->DominatorTreeChildren)
+    {
+        std::print("{}, ", b->ID);
+    }
+
+    std::print("}}\n");
+
+    std::print("\n|    Frontiers : {{ ");
+
+    for (CFGBlock *b : Block->Frontiers)
+    {
+        std::print("{}, ", b->ID);
+    }
+
+    std::print("}}\n");
 }
 
 void printCFG(std::vector<std::unique_ptr<CFGFunction>> CFG)

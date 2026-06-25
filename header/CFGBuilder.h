@@ -20,6 +20,10 @@ struct CFGBlock
 
     std::set<CFGBlock *> Dominators;
 
+    std::vector<CFGBlock *> DominatorTreeChildren;
+
+    std::set<CFGBlock *> Frontiers;
+
     std::vector<CFGBlock *> Parents;
 };
 

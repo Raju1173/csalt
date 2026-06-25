@@ -1,4 +1,5 @@
 #include "SSAConstructor.h"
+#include "CFGBuilder.h"
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
@@ -68,6 +69,81 @@ void ComputeDominators(std::vector<std::unique_ptr<CFGFunction>> &CFG)
                     curBlock->Dominators = std::move(NewDominators);
                     changed = true;
                 }
+            }
+        }
+    }
+}
+
+void ComputeDominatorTree(std::vector<std::unique_ptr<CFGFunction>> &CFG)
+{
+    CFGBlock *nearestDominator = nullptr;
+    size_t maxSize = 0;
+
+    for (auto &CFGFunc : CFG)
+    {
+        for (auto &block : CFGFunc->Blocks)
+        {
+            for (CFGBlock *dom : block->Dominators)
+            {
+                if (dom == block.get())
+                    continue;
+
+                size_t size = dom->Dominators.size();
+
+                if (size > maxSize)
+                {
+                    maxSize = size;
+
+                    nearestDominator = dom;
+                }
+            }
+
+            if (nearestDominator != nullptr)
+            {
+                nearestDominator->DominatorTreeChildren.push_back(block.get());
+
+                nearestDominator = nullptr;
+                maxSize = 0;
+            }
+        }
+    }
+}
+
+void ComputeFrontiers(CFGBlock *Block)
+{
+    if (Block->TransitionNext != nullptr)
+    {
+        if (!Block->TransitionNext->Dominators.contains(Block))
+        {
+            Block->Frontiers.insert(Block->TransitionNext);
+        }
+    }
+
+    if (Block->TransitionTrue != nullptr)
+    {
+        if (!Block->TransitionTrue->Dominators.contains(Block))
+        {
+            Block->Frontiers.insert(Block->TransitionTrue);
+        }
+    }
+
+    if (Block->TransitionFalse != nullptr)
+    {
+        if (!Block->TransitionFalse->Dominators.contains(Block))
+        {
+            Block->Frontiers.insert(Block->TransitionFalse);
+        }
+    }
+
+    for (auto domChild : Block->DominatorTreeChildren)
+    {
+        ComputeFrontiers(domChild);
+
+        for (auto childFrontier : domChild->Frontiers)
+        {
+            if (!childFrontier->Dominators.contains(Block) || childFrontier == Block)
+            {
+                Block->Frontiers.insert(childFrontier);
             }
         }
     }

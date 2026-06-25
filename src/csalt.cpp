@@ -50,6 +50,13 @@ int main(int argc, char **argv)
 
     ComputeDominators(CFG);
 
+    ComputeDominatorTree(CFG);
+
+    for (auto &CFGFunc : CFG)
+    {
+        ComputeFrontiers(CFGFunc->Blocks[0].get());
+    }
+
     printCFG(std::move(CFG));
 
     return 0;
