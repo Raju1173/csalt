@@ -41,11 +41,15 @@ constexpr std::string_view NodeNames[] =
         "NUMBER",
         "BINARY_OP"};
 
+struct CFGBlock;
+
 struct Node
 {
     NodeType type;
     Token token;
     std::vector<std::unique_ptr<Node>> children;
+
+    CFGBlock *source = nullptr;
 };
 
 Node parse(const std::vector<Token> &TokenStream);

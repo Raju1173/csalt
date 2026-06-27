@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "parser.h"
+#include "CFGBuilder.h"
 #include <cstddef>
 #include <memory>
 #include <print>
@@ -473,7 +474,17 @@ void printNode(const Node &node, int depth)
         std::print("|    ");
 
     if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER)
-        std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], node.token.lexeme);
+    {
+        if (node.source != nullptr)
+        {
+            std::print("{}({}) [Source : B{}]\n", NodeNames[std::to_underlying(node.type)], node.token.lexeme, node.source->ID);
+        }
+
+        else
+        {
+            std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], node.token.lexeme);
+        }
+    }
     else if (node.type == NodeType::BINARY_OP)
         std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], TokenNames[std::to_underlying(node.token.type)]);
     else

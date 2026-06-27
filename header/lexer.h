@@ -76,6 +76,8 @@ struct Token
 {
     TokenType type;
     std::string_view lexeme;
+
+    auto operator<=>(const Token &) const = default;
 };
 
 std::vector<Token> tokenize(std::string_view source);

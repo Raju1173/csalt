@@ -54,8 +54,10 @@ int main(int argc, char **argv)
 
     for (auto &CFGFunc : CFG)
     {
-        ComputeFrontiers(CFGFunc->Blocks[0].get());
+        ComputeFrontiers(CFGFunc->Blocks[0].get(), true);
     }
+
+    InsertPhiNodes(CFG);
 
     printCFG(std::move(CFG));
 

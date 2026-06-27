@@ -16,7 +16,7 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
 
         if (cur->type == NodeType::IF || cur->type == NodeType::WHILE)
         {
-            block->Condition = cur->children[0].get();
+            block->Condition = std::move(cur->children[0]);
 
             auto continuation = constructBlock(ASTBlockNode, CFGFunc, i + 1, exitTarget);
 
@@ -40,7 +40,7 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
             break;
         }
 
-        block->Statements.push_back(cur);
+        block->Statements.push_back(std::move(ASTBlockNode->children[i]));
 
         if (cur->type == NodeType::RETURN)
             break;
@@ -94,10 +94,10 @@ void printBlock(CFGBlock *Block)
         std::print("\n|    Transition Next : Block - {}\n", Block->TransitionNext->ID);
 
     if (Block->TransitionTrue != nullptr)
-        std::print("|    Transition True : Block - {}\n", Block->TransitionTrue->ID);
+        std::print("\n|    Transition True : Block - {}\n", Block->TransitionTrue->ID);
 
     if (Block->TransitionFalse != nullptr)
-        std::print("|    Transition False : Block - {}\n", Block->TransitionFalse->ID);
+        std::print("\n|    Transition False : Block - {}\n", Block->TransitionFalse->ID);
 
     std::print("\n|    Dominators : {{ ");
 

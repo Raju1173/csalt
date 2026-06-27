@@ -1,8 +1,12 @@
 #include "SSAConstructor.h"
 #include "CFGBuilder.h"
+#include "lexer.h"
+#include "parser.h"
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <map>
+#include <memory>
 #include <set>
 #include <utility>
 
@@ -109,7 +113,7 @@ void ComputeDominatorTree(std::vector<std::unique_ptr<CFGFunction>> &CFG)
     }
 }
 
-void ComputeFrontiers(CFGBlock *Block)
+void ComputeFrontiers(CFGBlock *Block, bool ComputeWeakFrontiers)
 {
     if (Block->TransitionNext != nullptr)
     {
@@ -137,13 +141,93 @@ void ComputeFrontiers(CFGBlock *Block)
 
     for (auto domChild : Block->DominatorTreeChildren)
     {
-        ComputeFrontiers(domChild);
+        ComputeFrontiers(domChild, ComputeWeakFrontiers);
 
         for (auto childFrontier : domChild->Frontiers)
         {
-            if (!childFrontier->Dominators.contains(Block) || childFrontier == Block)
+            if ((!childFrontier->Dominators.contains(Block) || childFrontier == Block) || ComputeWeakFrontiers == true)
             {
                 Block->Frontiers.insert(childFrontier);
+            }
+        }
+    }
+}
+
+void InsertPhiNodes(std::vector<std::unique_ptr<CFGFunction>> &CFG)
+{
+    for (auto &CFGFunc : CFG)
+    {
+        bool newPhiAdded = true;
+
+        while (newPhiAdded)
+        {
+            newPhiAdded = false;
+
+            for (auto &block : CFGFunc->Blocks)
+            {
+                std::set<Token> varDefs;
+
+                for (auto &statement : block->Statements)
+                {
+                    if (statement->type == NodeType::VAR)
+                    {
+                        varDefs.insert(statement->token);
+                    }
+
+                    else if (statement->type == NodeType::EXPR && statement->children[0]->type == NodeType::BINARY_OP)
+                    {
+                        varDefs.insert(statement->children[0]->children[0]->token);
+                    }
+                }
+
+                for (auto &frontier : block->Frontiers)
+                {
+                    frontier->PhiPlacementInfo.push_back(VarDefInfo{block.get(), varDefs});
+                }
+            }
+
+            for (auto &block : CFGFunc->Blocks)
+            {
+                std::map<Token, std::pair<int, std::vector<CFGBlock *>>> Counter;
+
+                for (VarDefInfo varDefInfo : block->PhiPlacementInfo)
+                {
+                    for (auto &var : varDefInfo.vardefs)
+                    {
+                        Counter[var].first++;
+                        Counter[var].second.push_back(varDefInfo.source);
+                    }
+                }
+
+                block->PhiPlacementInfo.clear();
+
+                for (auto &var : Counter)
+                {
+                    if (Counter[var.first].first >= 2)
+                    {
+                        if (!block->ExisitingPhiNodes.contains(var.first))
+                        {
+                            std::unique_ptr<Node> phiNode = std::make_unique<Node>(Node{NodeType::EXPR, {}, {}});
+
+                            phiNode->children.push_back(std::make_unique<Node>(Node{NodeType::BINARY_OP, Token{TokenType::EQUAL, "="}, {}}));
+
+                            phiNode->children[0]->children.push_back(std::make_unique<Node>(Node{NodeType::IDENTIFIER, var.first, {}}));
+
+                            phiNode->children[0]->children.push_back(std::make_unique<Node>(Node{NodeType::CALL, Token{TokenType::IDENTIFIER, "PHI"}, {}}));
+
+                            for (CFGBlock *src : Counter[var.first].second)
+                            {
+                                phiNode->children[0]->children[1]->children.push_back(std::make_unique<Node>(Node{NodeType::IDENTIFIER, var.first, {}, src}));
+                            }
+
+                            block->Statements.insert(block->Statements.begin(), std::move(phiNode));
+
+                            block->ExisitingPhiNodes.insert(var.first);
+
+                            newPhiAdded = true;
+                        }
+                    }
+                }
             }
         }
     }
