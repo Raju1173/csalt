@@ -46,13 +46,11 @@ Node parse(const std::vector<Token> &TokenStream)
 
     int pos = 0;
 
-    auto pushNode = [&nodeStack](NodeType type, Token val = Token{}, std::vector<std::unique_ptr<Node>> children = {})
-    {
+    auto pushNode = [&nodeStack](NodeType type, Token val = Token{}, std::vector<std::unique_ptr<Node>> children = {}) {
         nodeStack.push(std::make_unique<Node>(Node{type, val, std::move(children)}));
     };
 
-    auto popAndAttach = [&nodeStack]()
-    {
+    auto popAndAttach = [&nodeStack]() {
         auto child = std::move(nodeStack.top());
         nodeStack.pop();
         nodeStack.top()->children.push_back(std::move(child));
@@ -170,8 +168,7 @@ Node parse(const std::vector<Token> &TokenStream)
                 {
                     case TokenType::RPAREN:
                     case TokenType::COMMA:
-                    case TokenType::SEMICOLON:
-                    {
+                    case TokenType::SEMICOLON: {
                         auto child = std::move(nodeStack.top());
                         nodeStack.pop();
 
@@ -321,8 +318,7 @@ Node parse(const std::vector<Token> &TokenStream)
                     case TokenType::LESS:
                     case TokenType::LESS_EQUAL:
                     case TokenType::GREATER:
-                    case TokenType::GREATER_EQUAL:
-                    {
+                    case TokenType::GREATER_EQUAL: {
                         TokenType stackOp = nodeStack.top()->token.type;
                         TokenType currentOp = cur.type;
 
@@ -473,20 +469,9 @@ void printNode(const Node &node, int depth)
     for (int i = 0; i < depth; i++)
         std::print("|    ");
 
-    if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER)
-    {
-        if (node.source != nullptr)
-        {
-            std::print("{}({}) [Source : B{}]\n", NodeNames[std::to_underlying(node.type)], node.token.lexeme, node.source->ID);
-        }
+    if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER || node.type == NodeType::CALL || node.type == NodeType::BINARY_OP)
+        std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], node.type == NodeType::BINARY_OP ? TokenNames[std::to_underlying(node.token.type)] : node.token.lexeme);
 
-        else
-        {
-            std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], node.token.lexeme);
-        }
-    }
-    else if (node.type == NodeType::BINARY_OP)
-        std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], TokenNames[std::to_underlying(node.token.type)]);
     else
         std::print("{}\n", NodeNames[std::to_underlying(node.type)]);
 

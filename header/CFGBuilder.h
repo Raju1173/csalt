@@ -3,17 +3,12 @@
 #include "lexer.h"
 #include "parser.h"
 #include <cstddef>
+#include <deque>
 #include <memory>
+#include <queue>
 #include <set>
+#include <map>
 #include <vector>
-
-struct CFGBlock;
-
-struct VarDefInfo
-{
-    CFGBlock *source;
-    std::set<Token> vardefs;
-};
 
 struct CFGBlock
 {
@@ -33,8 +28,6 @@ struct CFGBlock
 
     std::set<CFGBlock *> Frontiers;
 
-    std::vector<VarDefInfo> PhiPlacementInfo;
-
     std::set<Token> ExisitingPhiNodes;
 
     std::vector<CFGBlock *> Parents;
@@ -45,6 +38,8 @@ struct CFGFunction
     std::string_view FunctionName;
 
     std::vector<std::unique_ptr<CFGBlock>> Blocks;
+
+    std::map<Token, std::deque<CFGBlock *>> DefBlocks;
 
     size_t NextBlockID = 1;
 };

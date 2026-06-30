@@ -1,9 +1,11 @@
 #include "CFGBuilder.h"
+#include "lexer.h"
 #include "parser.h"
 #include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <print>
+#include <utility>
 #include <vector>
 
 std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFunc, size_t offset = 0, CFGBlock *exitTarget = nullptr)
@@ -27,17 +29,25 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
             block->TransitionFalse = contPtr;
             contPtr->Parents.push_back(block.get());
 
-            if (cur->type == NodeType::IF || cur->type == NodeType::WHILE)
-            {
-                auto trueBranch = constructBlock(cur->children[1].get(), CFGFunc, 0, cur->type == NodeType::IF ? contPtr : block.get());
+            auto trueBranch = constructBlock(cur->children[1].get(), CFGFunc, 0, cur->type == NodeType::IF ? contPtr : block.get());
 
-                block->TransitionTrue = trueBranch.get();
-                trueBranch->Parents.push_back(block.get());
+            block->TransitionTrue = trueBranch.get();
+            trueBranch->Parents.push_back(block.get());
 
-                CFGFunc->Blocks.push_back(std::move(trueBranch));
-            }
+            CFGFunc->Blocks.push_back(std::move(trueBranch));
 
             break;
+        }
+
+        else if (cur->type == NodeType::EXPR)
+        {
+            CFGFunc->DefBlocks[cur->children[0]->children[0]->token].push_back(block.get());
+        }
+
+        else if (cur->type == NodeType::VAR)
+        {
+            if (cur->children[0]->type == NodeType::EXPR)
+                CFGFunc->DefBlocks[cur->children[0]->children[0]->children[0]->token].push_back(block.get());
         }
 
         block->Statements.push_back(std::move(ASTBlockNode->children[i]));
@@ -137,6 +147,20 @@ void printCFG(std::vector<std::unique_ptr<CFGFunction>> CFG)
         {
             std::print("\nBlock - {} :\n\n", CFG[i]->Blocks[j]->ID);
             printBlock(CFG[i]->Blocks[j].get());
+        }
+
+        std::print("\nVariable Definitions :\n\n");
+
+        for (auto [token, defBlocks] : CFG[i]->DefBlocks)
+        {
+            std::print("|    {} : {{ ", token.lexeme);
+
+            for (CFGBlock *b : defBlocks)
+            {
+                std::print("{}, ", b->ID);
+            }
+
+            std::print("}}\n");
         }
     }
 }
