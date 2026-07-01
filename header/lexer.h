@@ -75,7 +75,7 @@ constexpr std::string_view TokenNames[] =
 struct Token
 {
     TokenType type;
-    std::string_view lexeme;
+    std::string lexeme;
 
     auto operator<=>(const Token &) const = default;
 };

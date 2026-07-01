@@ -23,7 +23,7 @@ std::vector<Token> tokenize(std::string_view source)
                 i++;
             }
 
-            std::string_view lexeme = source.substr(start, (i - start) + 1);
+            std::string lexeme = std::string(source.substr(start, (i - start) + 1));
 
             if (lexeme == "if")
             {
@@ -62,7 +62,7 @@ std::vector<Token> tokenize(std::string_view source)
                 i++;
             }
 
-            std::string_view value = source.substr(start, (i - start) + 1);
+            std::string value = std::string(source.substr(start, (i - start) + 1));
 
             TokenStream.push_back({TokenType::NUMBER, value});
 

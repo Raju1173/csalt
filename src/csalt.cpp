@@ -59,6 +59,8 @@ int main(int argc, char **argv)
 
     InsertPhiNodes(CFG);
 
+    RenameVariables(CFG);
+
     printCFG(std::move(CFG));
 
     return 0;

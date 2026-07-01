@@ -8,6 +8,8 @@
 #include <iterator>
 #include <memory>
 #include <set>
+#include <stack>
+#include <string>
 #include <utility>
 
 void ComputeDominators(std::vector<std::unique_ptr<CFGFunction>> &CFG)
@@ -161,30 +163,25 @@ void InsertPhiNodes(std::vector<std::unique_ptr<CFGFunction>> &CFG)
     {
         for (const auto &[var, defBlocks] : CFGFunc->DefBlocks)
         {
-            std::deque<CFGBlock *> worklist = defBlocks;
+            std::set<CFGBlock *> worklist = defBlocks;
+
+            std::set<CFGBlock *> added;
 
             while (!worklist.empty())
             {
-                CFGBlock *block = worklist.front();
-                worklist.pop_front();
+                auto it = worklist.begin();
+                CFGBlock *block = *it;
+                worklist.erase(it);
 
                 for (CFGBlock *frontier : block->Frontiers)
                 {
-                    if (!frontier->ExisitingPhiNodes.contains(var))
+                    if (added.find(frontier) == added.end())
                     {
-                        std::unique_ptr<Node> phiNode = std::make_unique<Node>(Node{NodeType::EXPR, {}, {}});
+                        frontier->PhiNodes.push_back({var.lexeme, -1, {}});
 
-                        phiNode->children.push_back(std::make_unique<Node>(Node{NodeType::BINARY_OP, Token{TokenType::EQUAL, "="}, {}}));
+                        added.insert(frontier);
 
-                        phiNode->children[0]->children.push_back(std::make_unique<Node>(Node{NodeType::IDENTIFIER, var, {}}));
-
-                        phiNode->children[0]->children.push_back(std::make_unique<Node>(Node{NodeType::CALL, Token{TokenType::IDENTIFIER, "PHI"}, {}}));
-
-                        frontier->Statements.insert(frontier->Statements.begin(), std::move(phiNode));
-
-                        frontier->ExisitingPhiNodes.insert(var);
-
-                        worklist.push_back(frontier);
+                        worklist.insert(frontier);
                     }
                 }
             }
@@ -192,8 +189,135 @@ void InsertPhiNodes(std::vector<std::unique_ptr<CFGFunction>> &CFG)
     }
 }
 
+std::map<std::string, std::pair<std::stack<int>, int>> VarStacks;
+
+void RenameNode(Node *node, std::vector<std::string> &pushed, bool definition = false)
+{
+    if (node->type == NodeType::VAR)
+    {
+        Token &token = node->token;
+
+        std::string originalName = token.lexeme;
+
+        int currentId = VarStacks[originalName].second;
+
+        VarStacks[originalName].first.push(currentId);
+        VarStacks[originalName].second++;
+
+        pushed.push_back(originalName);
+
+        token.lexeme += std::to_string(currentId);
+    }
+
+    else if (node->type == NodeType::IDENTIFIER)
+    {
+        Token &token = node->token;
+
+        if (!definition)
+        {
+            if (!VarStacks[token.lexeme].first.empty())
+                token.lexeme += std::to_string(VarStacks[token.lexeme].first.top());
+        }
+
+        else
+        {
+            std::string originalName = token.lexeme;
+
+            int currentId = VarStacks[originalName].second;
+
+            VarStacks[originalName].first.push(currentId);
+            VarStacks[originalName].second++;
+
+            pushed.push_back(originalName);
+
+            token.lexeme += std::to_string(currentId);
+        }
+    }
+
+    if (definition && node->type == NodeType::BINARY_OP)
+    {
+        RenameNode(node->children[1].get(), pushed, false);
+
+        RenameNode(node->children[0].get(), pushed, true);
+    }
+    else
+    {
+        for (size_t i = 0; i < node->children.size(); i++)
+        {
+            RenameNode(node->children[i].get(), pushed, definition);
+        }
+    }
+}
+
+void RenameBlock(CFGBlock *Block)
+{
+    std::vector<std::string> pushed;
+
+    for (auto &phi : Block->PhiNodes)
+    {
+        phi.version = VarStacks[phi.variable].second++;
+
+        VarStacks[phi.variable].first.push(phi.version);
+
+        pushed.push_back(phi.variable);
+    }
+
+    for (auto &s : Block->Statements)
+    {
+        RenameNode(s.get(), pushed, s->type == NodeType::VAR || s->type == NodeType::EXPR ? true : false);
+    }
+
+    if (Block->Condition != nullptr)
+        RenameNode(Block->Condition.get(), pushed);
+
+    if (Block->TransitionNext != nullptr)
+    {
+        for (auto &phi : Block->TransitionNext->PhiNodes)
+        {
+            if (!VarStacks[phi.variable].first.empty())
+                phi.arguments.push_back(PhiArgument{Block, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+        }
+    }
+
+    if (Block->TransitionTrue != nullptr)
+    {
+        for (auto &phi : Block->TransitionTrue->PhiNodes)
+        {
+            if (!VarStacks[phi.variable].first.empty())
+                phi.arguments.push_back(PhiArgument{Block, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+        }
+    }
+
+    if (Block->TransitionFalse != nullptr)
+    {
+        for (auto &phi : Block->TransitionFalse->PhiNodes)
+        {
+            if (!VarStacks[phi.variable].first.empty())
+                phi.arguments.push_back(PhiArgument{Block, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+        }
+    }
+
+    for (size_t i = 0; i < Block->DominatorTreeChildren.size(); i++)
+        RenameBlock(Block->DominatorTreeChildren[i]);
+
+    for (auto var : pushed)
+    {
+        VarStacks[var].first.pop();
+    }
+}
+
+void RenameVariables(std::vector<std::unique_ptr<CFGFunction>> &CFG)
+{
+    for (auto &CFGFunc : CFG)
+    {
+        RenameBlock(CFGFunc->Blocks[0].get());
+
+        VarStacks.clear();
+    }
+}
+
 /*
-Experimental phi insertion algorithm (abandoned).
+Experimental phi insertion algorithm (abandoned)
 
 *** Core Idea :-
 

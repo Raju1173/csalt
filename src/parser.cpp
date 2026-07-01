@@ -469,7 +469,7 @@ void printNode(const Node &node, int depth)
     for (int i = 0; i < depth; i++)
         std::print("|    ");
 
-    if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER || node.type == NodeType::CALL || node.type == NodeType::BINARY_OP)
+    if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER || node.type == NodeType::CALL || node.type == NodeType::BINARY_OP || node.type == NodeType::VAR)
         std::print("{}({})\n", NodeNames[std::to_underlying(node.type)], node.type == NodeType::BINARY_OP ? TokenNames[std::to_underlying(node.token.type)] : node.token.lexeme);
 
     else
