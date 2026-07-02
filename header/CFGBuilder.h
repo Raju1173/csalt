@@ -57,4 +57,4 @@ struct CFGFunction
 
 std::vector<std::unique_ptr<CFGFunction>> constructCFG(const Node &AST);
 
-void printCFG(std::vector<std::unique_ptr<CFGFunction>> CFG);
+void printCFG(std::vector<std::unique_ptr<CFGFunction>> &CFG);

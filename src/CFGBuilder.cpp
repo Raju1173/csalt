@@ -10,8 +10,7 @@
 
 size_t NextBlockID = 1;
 
-std::unique_ptr<CFGBlock>
-constructBlock(Node *ASTBlockNode, CFGFunction *CFGFunc, size_t offset = 0, CFGBlock *exitTarget = nullptr)
+std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFunc, size_t offset = 0, CFGBlock *exitTarget = nullptr)
 {
     auto block = std::make_unique<CFGBlock>(NextBlockID++);
 
@@ -183,7 +182,7 @@ void printBlock(CFGBlock *Block)
     std::print("}}\n");
 }
 
-void printCFG(std::vector<std::unique_ptr<CFGFunction>> CFG)
+void printCFG(std::vector<std::unique_ptr<CFGFunction>> &CFG)
 {
     for (size_t i = 0; i < CFG.size(); i++)
     {

@@ -46,9 +46,7 @@ Node parse(const std::vector<Token> &TokenStream)
 
     int pos = 0;
 
-    auto pushNode = [&nodeStack](NodeType type, Token val = Token{}, std::vector<std::unique_ptr<Node>> children = {}) {
-        nodeStack.push(std::make_unique<Node>(Node{type, val, std::move(children)}));
-    };
+    auto pushNode = [&nodeStack](NodeType type, Token val = Token{}, std::vector<std::unique_ptr<Node>> children = {}) { nodeStack.push(std::make_unique<Node>(Node{type, val, std::move(children)})); };
 
     auto popAndAttach = [&nodeStack]() {
         auto child = std::move(nodeStack.top());
@@ -168,24 +166,25 @@ Node parse(const std::vector<Token> &TokenStream)
                 {
                     case TokenType::RPAREN:
                     case TokenType::COMMA:
-                    case TokenType::SEMICOLON: {
-                        auto child = std::move(nodeStack.top());
-                        nodeStack.pop();
-
-                        if (nodeStack.top()->type != NodeType::BINARY_OP)
+                    case TokenType::SEMICOLON:
                         {
-                            nodeStack.top()->children.push_back(std::move(child));
-                        }
+                            auto child = std::move(nodeStack.top());
+                            nodeStack.pop();
 
-                        else
-                        {
-                            nodeStack.top()->children.push_back(std::move(child->children[0]));
-                            pos++;
-                        }
+                            if (nodeStack.top()->type != NodeType::BINARY_OP)
+                            {
+                                nodeStack.top()->children.push_back(std::move(child));
+                            }
 
-                        continue;
-                    }
-                    break;
+                            else
+                            {
+                                nodeStack.top()->children.push_back(std::move(child->children[0]));
+                                pos++;
+                            }
+
+                            continue;
+                        }
+                        break;
 
                     case TokenType::NUMBER:
                     case TokenType::IDENTIFIER:
@@ -318,30 +317,31 @@ Node parse(const std::vector<Token> &TokenStream)
                     case TokenType::LESS:
                     case TokenType::LESS_EQUAL:
                     case TokenType::GREATER:
-                    case TokenType::GREATER_EQUAL: {
-                        TokenType stackOp = nodeStack.top()->token.type;
-                        TokenType currentOp = cur.type;
-
-                        if (precedence(stackOp) >= precedence(currentOp))
+                    case TokenType::GREATER_EQUAL:
                         {
-                            popAndAttach();
-                            continue;
+                            TokenType stackOp = nodeStack.top()->token.type;
+                            TokenType currentOp = cur.type;
+
+                            if (precedence(stackOp) >= precedence(currentOp))
+                            {
+                                popAndAttach();
+                                continue;
+                            }
+                            else
+                            {
+                                auto rightChild = std::move(nodeStack.top()->children.back());
+                                nodeStack.top()->children.pop_back();
+
+                                std::vector<std::unique_ptr<Node>> children;
+                                children.push_back(std::move(rightChild));
+
+                                pushNode(NodeType::BINARY_OP, cur, std::move(children));
+                                pos++;
+                                continue;
+                            }
                         }
-                        else
-                        {
-                            auto rightChild = std::move(nodeStack.top()->children.back());
-                            nodeStack.top()->children.pop_back();
 
-                            std::vector<std::unique_ptr<Node>> children;
-                            children.push_back(std::move(rightChild));
-
-                            pushNode(NodeType::BINARY_OP, cur, std::move(children));
-                            pos++;
-                            continue;
-                        }
-                    }
-
-                    break;
+                        break;
 
                     case TokenType::LPAREN:
                         pushNode(NodeType::EXPR);

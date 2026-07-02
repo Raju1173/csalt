@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "CFGBuilder.h"
 #include "SSAConstructor.h"
+#include "TACGenerator.h"
 #include <fstream>
 #include <print>
 #include <string>
@@ -61,7 +62,13 @@ int main(int argc, char **argv)
 
     RenameVariables(CFG);
 
-    printCFG(std::move(CFG));
+    printCFG(CFG);
+
+    std::print("\n------TAC-------\n\n");
+
+    auto TAC = GenerateTAC(CFG);
+
+    printTAC(TAC);
 
     return 0;
 }
