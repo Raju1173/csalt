@@ -274,7 +274,7 @@ void RenameBlock(CFGBlock *Block)
         for (auto &phi : Block->TransitionNext->PhiNodes)
         {
             if (!VarStacks[phi.variable].first.empty())
-                phi.arguments.push_back(PhiArgument{Block, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+                phi.arguments.push_back(PhiArgument{Block->ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
         }
     }
 
@@ -283,7 +283,7 @@ void RenameBlock(CFGBlock *Block)
         for (auto &phi : Block->TransitionTrue->PhiNodes)
         {
             if (!VarStacks[phi.variable].first.empty())
-                phi.arguments.push_back(PhiArgument{Block, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+                phi.arguments.push_back(PhiArgument{Block->ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
         }
     }
 
@@ -292,7 +292,7 @@ void RenameBlock(CFGBlock *Block)
         for (auto &phi : Block->TransitionFalse->PhiNodes)
         {
             if (!VarStacks[phi.variable].first.empty())
-                phi.arguments.push_back(PhiArgument{Block, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+                phi.arguments.push_back(PhiArgument{Block->ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
         }
     }
 

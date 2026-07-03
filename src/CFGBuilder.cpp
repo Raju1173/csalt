@@ -123,7 +123,7 @@ void printBlock(CFGBlock *Block)
 
             for (PhiArgument arg : Block->PhiNodes[i].arguments)
             {
-                std::print("{} FROM BLOCK - {}, ", arg.Value, arg.Pred->ID);
+                std::print("{} FROM BLOCK - {}, ", arg.Value, arg.SourceID);
             }
 
             std::print("}}\n");

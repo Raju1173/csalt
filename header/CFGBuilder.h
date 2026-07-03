@@ -8,9 +8,11 @@
 #include <map>
 #include <vector>
 
+struct TACBlock;
+
 struct PhiArgument
 {
-    CFGBlock *Pred;
+    size_t SourceID;
     std::string Value;
 };
 

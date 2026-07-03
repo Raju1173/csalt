@@ -239,6 +239,45 @@ std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_pt
     return TAC;
 }
 
+void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>> &TAC)
+{
+    for (auto &TACFunc : TAC)
+    {
+        for (auto &TACBlock : TACFunc->Blocks)
+        {
+            for (auto &inst : TACBlock->Instructions)
+            {
+                if (auto phi = dynamic_cast<TACPhi *>(inst.get()))
+                {
+                    for (PhiArgument arg : phi->args)
+                    {
+                        for (auto &sourceBlock : TACFunc->Blocks)
+                        {
+                            if (sourceBlock->ID == arg.SourceID)
+                            {
+                                auto assign = std::make_unique<TACAssign>();
+
+                                assign->dest = phi->variable;
+
+                                assign->source = TACValue{arg.Value};
+
+                                if (sourceBlock->Instructions.size() >= 1)
+                                    sourceBlock->Instructions.insert(sourceBlock->Instructions.end() - 1, std::move(assign));
+                                else
+                                    sourceBlock->Instructions.push_back(std::move(assign));
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            std::erase_if(TACBlock->Instructions, [](const auto &inst) { return dynamic_cast<TACPhi *>(inst.get()) != nullptr; });
+        }
+    }
+}
+
 void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC)
 {
     for (auto &func : TAC)
@@ -257,7 +296,7 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC)
 
                     for (size_t i = 0; i < phi->args.size(); i++)
                     {
-                        std::print("{} from B{}", phi->args[i].Value, phi->args[i].Pred->ID);
+                        std::print("{} from B{}", phi->args[i].Value, phi->args[i].SourceID);
 
                         if (i + 1 != phi->args.size())
                             std::print(", ");

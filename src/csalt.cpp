@@ -68,6 +68,8 @@ int main(int argc, char **argv)
 
     auto TAC = GenerateTAC(CFG);
 
+    ResolvePhiNodes(TAC);
+
     printTAC(TAC);
 
     return 0;

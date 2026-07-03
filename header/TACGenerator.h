@@ -97,7 +97,7 @@ public:
 
 struct TACBlock
 {
-    int ID;
+    size_t ID;
 
     std::vector<std::unique_ptr<TACInstruction>> Instructions;
 };
@@ -110,5 +110,7 @@ struct TACFunction
 };
 
 std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>> &CFG);
+
+void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>> &TAC);
 
 void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC);
