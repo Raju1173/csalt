@@ -106,11 +106,13 @@ struct TACFunction
 {
     std::string Name;
 
+    std::vector<std::string> Parameters;
+
     std::vector<std::unique_ptr<TACBlock>> Blocks;
 };
 
-std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>> &CFG);
+std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>>& CFG);
 
-void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>> &TAC);
+void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>>& TAC);
 
-void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC);
+void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC);

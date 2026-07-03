@@ -1,14 +1,14 @@
-#include "lexer.h"
-#include "parser.h"
 #include "CFGBuilder.h"
 #include "SSAConstructor.h"
 #include "TACGenerator.h"
+#include "lexer.h"
+#include "parser.h"
 #include <fstream>
 #include <print>
 #include <string>
 #include <vector>
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     if (argc != 2)
     {
@@ -25,7 +25,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::string source((std::istreambuf_iterator<char>(file)),
+        std::istreambuf_iterator<char>());
 
     std::vector<Token> TokenStream = tokenize(source);
 
@@ -53,7 +54,7 @@ int main(int argc, char **argv)
 
     ComputeDominatorTree(CFG);
 
-    for (auto &CFGFunc : CFG)
+    for (auto& CFGFunc : CFG)
     {
         ComputeFrontiers(CFGFunc->Blocks[0].get());
     }
@@ -71,6 +72,8 @@ int main(int argc, char **argv)
     ResolvePhiNodes(TAC);
 
     printTAC(TAC);
+
+    std::print("\n------ASSEMBLY-----\n\n");
 
     return 0;
 }

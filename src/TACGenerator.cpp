@@ -52,15 +52,15 @@ TACValue MakeTemp()
     return TACValue{"t" + std::to_string(NextTemp++)};
 }
 
-TACValue flattenBinaryOpNode(Node *BinaryOpNode, std::vector<std::unique_ptr<TACInstruction>> &Instructions);
+TACValue flattenBinaryOpNode(Node* BinaryOpNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions);
 
-std::optional<TACValue> flattenCallNode(Node *CallNode, std::vector<std::unique_ptr<TACInstruction>> &Instructions, bool hasValue = true)
+std::optional<TACValue> flattenCallNode(Node* CallNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions, bool hasValue = true)
 {
     auto call = std::make_unique<TACCall>();
 
     call->functionName = CallNode->token.lexeme;
 
-    for (auto &child : CallNode->children)
+    for (auto& child : CallNode->children)
     {
         if (child->children[0]->type == NodeType::BINARY_OP)
             call->args.push_back(flattenBinaryOpNode(child->children[0].get(), Instructions));
@@ -81,7 +81,7 @@ std::optional<TACValue> flattenCallNode(Node *CallNode, std::vector<std::unique_
     return returnVal;
 }
 
-TACValue flattenBinaryOpNode(Node *BinaryOpNode, std::vector<std::unique_ptr<TACInstruction>> &Instructions)
+TACValue flattenBinaryOpNode(Node* BinaryOpNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions)
 {
     auto binaryOp = std::make_unique<TACBinaryOp>();
 
@@ -114,19 +114,19 @@ TACValue flattenBinaryOpNode(Node *BinaryOpNode, std::vector<std::unique_ptr<TAC
     return returnVal;
 }
 
-std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>> &CFG)
+std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>>& CFG)
 {
     std::vector<std::unique_ptr<TACFunction>> TAC;
 
-    for (auto &CFGFunc : CFG)
+    for (auto& CFGFunc : CFG)
     {
-        TAC.push_back(std::make_unique<TACFunction>(CFGFunc->FunctionName));
+        TAC.push_back(std::make_unique<TACFunction>(CFGFunc->FunctionName, CFGFunc->Parameters));
 
-        for (auto &CFGBlock : CFGFunc->Blocks)
+        for (auto& CFGBlock : CFGFunc->Blocks)
         {
             TAC.back()->Blocks.push_back(std::make_unique<TACBlock>(CFGBlock->ID));
 
-            TACBlock *curBlock = TAC.back()->Blocks.back().get();
+            TACBlock* curBlock = TAC.back()->Blocks.back().get();
 
             for (PhiNode phi : CFGBlock->PhiNodes)
             {
@@ -137,11 +137,10 @@ std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_pt
                 curBlock->Instructions.push_back(std::move(phiInst));
             }
 
-            for (auto &statement : CFGBlock->Statements)
+            for (auto& statement : CFGBlock->Statements)
             {
                 switch (statement->type)
                 {
-
                     case NodeType::VAR:
                         {
                             auto assign = std::make_unique<TACAssign>();
@@ -239,19 +238,19 @@ std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_pt
     return TAC;
 }
 
-void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>> &TAC)
+void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>>& TAC)
 {
-    for (auto &TACFunc : TAC)
+    for (auto& TACFunc : TAC)
     {
-        for (auto &TACBlock : TACFunc->Blocks)
+        for (auto& TACBlock : TACFunc->Blocks)
         {
-            for (auto &inst : TACBlock->Instructions)
+            for (auto& inst : TACBlock->Instructions)
             {
-                if (auto phi = dynamic_cast<TACPhi *>(inst.get()))
+                if (auto phi = dynamic_cast<TACPhi*>(inst.get()))
                 {
                     for (PhiArgument arg : phi->args)
                     {
-                        for (auto &sourceBlock : TACFunc->Blocks)
+                        for (auto& sourceBlock : TACFunc->Blocks)
                         {
                             if (sourceBlock->ID == arg.SourceID)
                             {
@@ -273,24 +272,34 @@ void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>> &TAC)
                 }
             }
 
-            std::erase_if(TACBlock->Instructions, [](const auto &inst) { return dynamic_cast<TACPhi *>(inst.get()) != nullptr; });
+            std::erase_if(TACBlock->Instructions, [](const auto& inst) { return dynamic_cast<TACPhi*>(inst.get()) != nullptr; });
         }
     }
 }
 
-void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC)
+void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC)
 {
-    for (auto &func : TAC)
+    for (auto& func : TAC)
     {
-        std::print("# Function - {} :\n", func->Name);
+        std::print("# Function(");
 
-        for (auto &block : func->Blocks)
+        for (size_t j = 0; j < func->Parameters.size(); ++j)
+        {
+            if (j != 0)
+                std::print(", ");
+
+            std::print("{}", func->Parameters[j]);
+        }
+
+        std::print(") - {} :\n", func->Name);
+
+        for (auto& block : func->Blocks)
         {
             std::print("\nBlock - {} :\n", block->ID);
 
-            for (auto &inst : block->Instructions)
+            for (auto& inst : block->Instructions)
             {
-                if (auto phi = dynamic_cast<TACPhi *>(inst.get()))
+                if (auto phi = dynamic_cast<TACPhi*>(inst.get()))
                 {
                     std::print("    {} = phi(", phi->variable.value);
 
@@ -305,12 +314,12 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC)
                     std::print(")\n");
                 }
 
-                else if (auto assign = dynamic_cast<TACAssign *>(inst.get()))
+                else if (auto assign = dynamic_cast<TACAssign*>(inst.get()))
                 {
                     std::print("    {} = {}\n", assign->dest.value, assign->source.value);
                 }
 
-                else if (auto binary = dynamic_cast<TACBinaryOp *>(inst.get()))
+                else if (auto binary = dynamic_cast<TACBinaryOp*>(inst.get()))
                 {
                     std::string op;
 
@@ -351,7 +360,7 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC)
                     std::print("    {} = {} {} {}\n", binary->dest.value, binary->left.value, op, binary->right.value);
                 }
 
-                else if (auto call = dynamic_cast<TACCall *>(inst.get()))
+                else if (auto call = dynamic_cast<TACCall*>(inst.get()))
                 {
                     if (call->dest.has_value())
                         std::print("    {} = ", call->dest->value);
@@ -371,17 +380,17 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>> &TAC)
                     std::print(")\n");
                 }
 
-                else if (auto branch = dynamic_cast<TACBranch *>(inst.get()))
+                else if (auto branch = dynamic_cast<TACBranch*>(inst.get()))
                 {
                     std::print("    branch {} ? B{} : B{}\n", branch->Condition.value, branch->TrueTarget, branch->FalseTarget);
                 }
 
-                else if (auto jump = dynamic_cast<TACJump *>(inst.get()))
+                else if (auto jump = dynamic_cast<TACJump*>(inst.get()))
                 {
                     std::print("    jump B{}\n", jump->TargetBlock);
                 }
 
-                else if (auto ret = dynamic_cast<TACReturn *>(inst.get()))
+                else if (auto ret = dynamic_cast<TACReturn*>(inst.get()))
                 {
                     if (ret->ReturnValue.value.empty())
                         std::print("    return\n");

@@ -2,6 +2,7 @@
 
 #include "lexer.h"
 #include <memory>
+#include <optional>
 #include <vector>
 
 enum class NodeType
@@ -10,6 +11,7 @@ enum class NodeType
 
     VAR,
     FUNCTION,
+    PARAMETERS,
     CALL,
 
     IF,
@@ -23,23 +25,20 @@ enum class NodeType
     BINARY_OP,
 };
 
-constexpr std::string_view NodeNames[] =
-    {
-        "PROGRAM",
-
-        "VAR",
-        "FUNCTION",
-        "CALL",
-
-        "IF",
-        "WHILE",
-        "RETURN",
-        "BLOCK",
-
-        "EXPR",
-        "IDENTIFIER",
-        "NUMBER",
-        "BINARY_OP"};
+constexpr std::string_view NodeNames[] = {
+    "PROGRAM",
+    "VAR",
+    "FUNCTION",
+    "PARAMETERS",
+    "CALL",
+    "IF",
+    "WHILE",
+    "RETURN",
+    "BLOCK",
+    "EXPR",
+    "IDENTIFIER",
+    "NUMBER",
+    "BINARY_OP"};
 
 struct CFGBlock;
 
@@ -47,9 +46,10 @@ struct Node
 {
     NodeType type;
     Token token;
+
     std::vector<std::unique_ptr<Node>> children;
 };
 
-Node parse(const std::vector<Token> &TokenStream);
+Node parse(const std::vector<Token>& TokenStream);
 
-void printNode(const Node &node, int depth = 0);
+void printNode(const Node& node, int depth = 0);

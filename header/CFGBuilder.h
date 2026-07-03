@@ -35,28 +35,30 @@ struct CFGBlock
 
     std::unique_ptr<Node> Condition = nullptr;
 
-    CFGBlock *TransitionNext = nullptr;
-    CFGBlock *TransitionTrue = nullptr;
-    CFGBlock *TransitionFalse = nullptr;
+    CFGBlock* TransitionNext = nullptr;
+    CFGBlock* TransitionTrue = nullptr;
+    CFGBlock* TransitionFalse = nullptr;
 
-    std::set<CFGBlock *> Dominators;
+    std::set<CFGBlock*> Dominators;
 
-    std::vector<CFGBlock *> DominatorTreeChildren;
+    std::vector<CFGBlock*> DominatorTreeChildren;
 
-    std::set<CFGBlock *> Frontiers;
+    std::set<CFGBlock*> Frontiers;
 
-    std::vector<CFGBlock *> Parents;
+    std::vector<CFGBlock*> Parents;
 };
 
 struct CFGFunction
 {
     std::string FunctionName;
 
+    std::vector<std::string> Parameters;
+
     std::vector<std::unique_ptr<CFGBlock>> Blocks;
 
-    std::map<Token, std::set<CFGBlock *>> DefBlocks;
+    std::map<Token, std::set<CFGBlock*>> DefBlocks;
 };
 
-std::vector<std::unique_ptr<CFGFunction>> constructCFG(const Node &AST);
+std::vector<std::unique_ptr<CFGFunction>> constructCFG(const Node& AST);
 
-void printCFG(std::vector<std::unique_ptr<CFGFunction>> &CFG);
+void printCFG(std::vector<std::unique_ptr<CFGFunction>>& CFG);

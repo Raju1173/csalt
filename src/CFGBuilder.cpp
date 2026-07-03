@@ -10,20 +10,20 @@
 
 size_t NextBlockID = 1;
 
-std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFunc, size_t offset = 0, CFGBlock *exitTarget = nullptr)
+std::unique_ptr<CFGBlock> constructBlock(Node* ASTBlockNode, CFGFunction* CFGFunc, size_t offset = 0, CFGBlock* exitTarget = nullptr)
 {
     auto block = std::make_unique<CFGBlock>(NextBlockID++);
 
     for (size_t i = offset; i < ASTBlockNode->children.size(); i++)
     {
-        Node *cur = ASTBlockNode->children[i].get();
+        Node* cur = ASTBlockNode->children[i].get();
 
         if (cur->type == NodeType::IF)
         {
             block->Condition = std::move(cur->children[0]);
 
             auto continuation = constructBlock(ASTBlockNode, CFGFunc, i + 1, exitTarget);
-            CFGBlock *contPtr = continuation.get();
+            CFGBlock* contPtr = continuation.get();
             CFGFunc->Blocks.push_back(std::move(continuation));
 
             block->TransitionFalse = contPtr;
@@ -47,7 +47,7 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
             loopHeader->Condition = std::move(cur->children[0]);
 
             auto continuation = constructBlock(ASTBlockNode, CFGFunc, i + 1, exitTarget);
-            CFGBlock *contPtr = continuation.get();
+            CFGBlock* contPtr = continuation.get();
 
             loopHeader->TransitionFalse = contPtr;
             contPtr->Parents.push_back(loopHeader.get());
@@ -91,16 +91,20 @@ std::unique_ptr<CFGBlock> constructBlock(Node *ASTBlockNode, CFGFunction *CFGFun
     return block;
 }
 
-std::vector<std::unique_ptr<CFGFunction>> constructCFG(const Node &AST)
+std::vector<std::unique_ptr<CFGFunction>> constructCFG(const Node& AST)
 {
     std::vector<std::unique_ptr<CFGFunction>> CFG;
 
     for (size_t i = 0; i < AST.children.size(); i++)
     {
         auto newFunc = std::make_unique<CFGFunction>(AST.children[i]->token.lexeme);
+
+        for (auto& arg : AST.children[i]->children[0]->children)
+            newFunc->Parameters.push_back(arg->token.lexeme);
+
         CFG.push_back(std::move(newFunc));
 
-        auto entryBlock = constructBlock(AST.children[i]->children[0].get(), CFG.back().get());
+        auto entryBlock = constructBlock(AST.children[i]->children[1].get(), CFG.back().get());
         CFG.back()->Blocks.push_back(std::move(entryBlock));
 
         std::reverse(CFG.back()->Blocks.begin(), CFG.back()->Blocks.end());
@@ -111,7 +115,7 @@ std::vector<std::unique_ptr<CFGFunction>> constructCFG(const Node &AST)
     return CFG;
 }
 
-void printBlock(CFGBlock *Block)
+void printBlock(CFGBlock* Block)
 {
     if (Block->PhiNodes.size() > 0)
     {
@@ -156,7 +160,7 @@ void printBlock(CFGBlock *Block)
 
     std::print("\n|    Dominators : {{ ");
 
-    for (CFGBlock *b : Block->Dominators)
+    for (CFGBlock* b : Block->Dominators)
     {
         std::print("{}, ", b->ID);
     }
@@ -165,7 +169,7 @@ void printBlock(CFGBlock *Block)
 
     std::print("\n|    Dominator Tree Children : {{ ");
 
-    for (CFGBlock *b : Block->DominatorTreeChildren)
+    for (CFGBlock* b : Block->DominatorTreeChildren)
     {
         std::print("{}, ", b->ID);
     }
@@ -174,7 +178,7 @@ void printBlock(CFGBlock *Block)
 
     std::print("\n|    Frontiers : {{ ");
 
-    for (CFGBlock *b : Block->Frontiers)
+    for (CFGBlock* b : Block->Frontiers)
     {
         std::print("{}, ", b->ID);
     }
@@ -182,11 +186,21 @@ void printBlock(CFGBlock *Block)
     std::print("}}\n");
 }
 
-void printCFG(std::vector<std::unique_ptr<CFGFunction>> &CFG)
+void printCFG(std::vector<std::unique_ptr<CFGFunction>>& CFG)
 {
     for (size_t i = 0; i < CFG.size(); i++)
     {
-        std::print("\n# Function - {} :\n", CFG[i]->FunctionName);
+        std::print("\n# Function(");
+
+        for (size_t j = 0; j < CFG[i]->Parameters.size(); ++j)
+        {
+            if (j != 0)
+                std::print(", ");
+
+            std::print("{}", CFG[i]->Parameters[j]);
+        }
+
+        std::print(") - {} :\n", CFG[i]->FunctionName);
 
         for (size_t j = 0; j < CFG[i]->Blocks.size(); j++)
         {
@@ -200,7 +214,7 @@ void printCFG(std::vector<std::unique_ptr<CFGFunction>> &CFG)
         {
             std::print("|    {} : {{ ", token.lexeme);
 
-            for (CFGBlock *b : defBlocks)
+            for (CFGBlock* b : defBlocks)
             {
                 std::print("{}, ", b->ID);
             }

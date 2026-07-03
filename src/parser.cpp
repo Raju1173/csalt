@@ -1,6 +1,6 @@
+#include "CFGBuilder.h"
 #include "lexer.h"
 #include "parser.h"
-#include "CFGBuilder.h"
 #include <cstddef>
 #include <memory>
 #include <print>
@@ -38,9 +38,9 @@ constexpr int precedence(TokenType op)
     }
 }
 
-//This abomination of a parser was basically my attempt to understand recursive descent and pratt parsing at a deeper level by merging them together into a single loop with a single stack (I dont hate clean code)...
+// This abomination of a parser was basically my attempt to understand recursive descent and pratt parsing at a deeper level by merging them together into a single loop with a single stack (I dont hate clean code)...
 
-Node parse(const std::vector<Token> &TokenStream)
+Node parse(const std::vector<Token>& TokenStream)
 {
     std::stack<std::unique_ptr<Node>> nodeStack;
 
@@ -48,7 +48,10 @@ Node parse(const std::vector<Token> &TokenStream)
 
     int pos = 0;
 
-    auto pushNode = [&nodeStack](NodeType type, Token val = Token{}, std::vector<std::unique_ptr<Node>> children = {}) { nodeStack.push(std::make_unique<Node>(Node{type, val, std::move(children)})); };
+    auto pushNode = [&nodeStack](NodeType type, Token val = Token{}, std::vector<std::unique_ptr<Node>> children = {}) {
+        nodeStack.push(
+            std::make_unique<Node>(Node{type, val, std::move(children)}));
+    };
 
     auto popAndAttach = [&nodeStack]() {
         auto child = std::move(nodeStack.top());
@@ -97,6 +100,12 @@ Node parse(const std::vector<Token> &TokenStream)
             case NodeType::FUNCTION:
                 switch (cur.type)
                 {
+                    case TokenType::LPAREN:
+                        pushNode(NodeType::PARAMETERS);
+                        pos++;
+                        continue;
+                        break;
+
                     case TokenType::LBRACE:
                         pushNode(NodeType::BLOCK);
                         pos++;
@@ -115,6 +124,28 @@ Node parse(const std::vector<Token> &TokenStream)
                         break;
                 }
 
+                break;
+
+            case NodeType::PARAMETERS:
+                switch (cur.type)
+                {
+                    case TokenType::IDENTIFIER:
+                        nodeStack.top()->children.push_back(std::make_unique<Node>(Node{NodeType::IDENTIFIER, cur, {}}));
+                        pos++;
+                        continue;
+                        break;
+
+                    case TokenType::RPAREN:
+                        popAndAttach();
+                        pos++;
+                        continue;
+                        break;
+
+                    default:
+                        pos++;
+                        continue;
+                        break;
+                }
                 break;
 
             case NodeType::CALL:
@@ -329,6 +360,7 @@ Node parse(const std::vector<Token> &TokenStream)
                                 popAndAttach();
                                 continue;
                             }
+
                             else
                             {
                                 auto rightChild = std::move(nodeStack.top()->children.back());
@@ -406,7 +438,7 @@ Node parse(const std::vector<Token> &TokenStream)
                         if (topType == NodeType::PROGRAM)
                         {
                             pushNode(NodeType::FUNCTION, cur);
-                            pos += 2;
+                            pos++;
                             continue;
                         }
 
@@ -466,7 +498,7 @@ Node parse(const std::vector<Token> &TokenStream)
     return std::move(*nodeStack.top());
 }
 
-void printNode(const Node &node, int depth)
+void printNode(const Node& node, int depth)
 {
     for (int i = 0; i < depth; i++)
         std::print("|    ");
