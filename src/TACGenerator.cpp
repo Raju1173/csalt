@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 #include <print>
 
@@ -204,7 +205,7 @@ std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_pt
                                     ret->ReturnValue = flattenCallNode(statement->children[0]->children[0].get(), curBlock->Instructions).value();
 
                                 else
-                                    ret->ReturnValue = TACValue{statement->children[0]->token.lexeme};
+                                    ret->ReturnValue = TACValue{statement->children[0]->children[0]->token.lexeme};
                             }
 
                             else
@@ -218,7 +219,13 @@ std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_pt
 
             if (CFGBlock->Condition != nullptr)
             {
-                auto branch = std::make_unique<TACBranch>(flattenBinaryOpNode(CFGBlock->Condition->children[0].get(), curBlock->Instructions));
+                flattenBinaryOpNode(CFGBlock->Condition->children[0].get(), curBlock->Instructions);
+
+                auto TACBinOp = dynamic_cast<TACBinaryOp*>(curBlock->Instructions.back().get());
+
+                auto branch = std::make_unique<TACBranch>(Comparison{TACBinOp->left, TACBinOp->op, TACBinOp->right});
+
+                curBlock->Instructions.pop_back();
 
                 branch->TrueTarget = CFGBlock->TransitionTrue->ID;
                 branch->FalseTarget = CFGBlock->TransitionFalse->ID;
@@ -277,6 +284,21 @@ void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>>& TAC)
     }
 }
 
+constexpr std::string_view BinaryOpToStr[] = {
+    "+",
+    "-",
+    "*",
+    "/",
+
+    "==",
+    "!=",
+
+    "<",
+    "<=",
+
+    ">",
+    ">="};
+
 void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC)
 {
     for (auto& func : TAC)
@@ -321,43 +343,7 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC)
 
                 else if (auto binary = dynamic_cast<TACBinaryOp*>(inst.get()))
                 {
-                    std::string op;
-
-                    switch (binary->op)
-                    {
-                        case BinaryOp::PLUS:
-                            op = "+";
-                            break;
-                        case BinaryOp::MINUS:
-                            op = "-";
-                            break;
-                        case BinaryOp::MUL:
-                            op = "*";
-                            break;
-                        case BinaryOp::DIV:
-                            op = "/";
-                            break;
-                        case BinaryOp::DOUBLE_EQUAL:
-                            op = "==";
-                            break;
-                        case BinaryOp::NOT_EQUAL:
-                            op = "!=";
-                            break;
-                        case BinaryOp::LESS:
-                            op = "<";
-                            break;
-                        case BinaryOp::LESS_EQUAL:
-                            op = "<=";
-                            break;
-                        case BinaryOp::GREATER:
-                            op = ">";
-                            break;
-                        case BinaryOp::GREATER_EQUAL:
-                            op = ">=";
-                            break;
-                    }
-
-                    std::print("    {} = {} {} {}\n", binary->dest.value, binary->left.value, op, binary->right.value);
+                    std::print("    {} = {} {} {}\n", binary->dest.value, binary->left.value, BinaryOpToStr[std::to_underlying(binary->op)], binary->right.value);
                 }
 
                 else if (auto call = dynamic_cast<TACCall*>(inst.get()))
@@ -382,7 +368,7 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC)
 
                 else if (auto branch = dynamic_cast<TACBranch*>(inst.get()))
                 {
-                    std::print("    branch {} ? B{} : B{}\n", branch->Condition.value, branch->TrueTarget, branch->FalseTarget);
+                    std::print("    branch ({} {} {}) ? B{} : B{}\n", branch->cond.Left.value, BinaryOpToStr[std::to_underlying(branch->cond.Op)], branch->cond.Right.value, branch->TrueTarget, branch->FalseTarget);
                 }
 
                 else if (auto jump = dynamic_cast<TACJump*>(inst.get()))

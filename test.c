@@ -1,32 +1,14 @@
-int hello(int x, int y, int z)
+int fact(int n)
 {
-    return x + y * z;
+    if (n <= 1)
+    {
+        return 1;
+    }
+
+    return n * fact(n - 1);
 }
 
 int main()
 {
-    int x = 0;
-    int y = 0;
-
-    while (a > 1 + 2 * hello(1, 2, hello(1, 2, 3)))
-    {
-        if (b == 4)
-        {
-            x = x + 1;
-        }
-
-        if (c != 3)
-        {
-            y = y + 1;
-        }
-
-        if (d >= 2)
-        {
-            x = y;
-        }
-
-        hello(x, y, x + y * x);
-    }
-
-    return x + y;
+    return fact(5);
 }

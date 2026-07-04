@@ -1,3 +1,4 @@
+#include "ASMGenerator.h"
 #include "CFGBuilder.h"
 #include "SSAConstructor.h"
 #include "TACGenerator.h"
@@ -74,6 +75,25 @@ int main(int argc, char** argv)
     printTAC(TAC);
 
     std::print("\n------ASSEMBLY-----\n\n");
+
+    auto MIR = GenerateMachineIR(TAC);
+
+    std::string AssemblyFilePath = std::string(argv[1], 0, std::strlen(argv[1]) - 1) + "s";
+
+    EmitAssembly(MIR, AssemblyFilePath);
+
+    std::ifstream AsmFile(AssemblyFilePath, std::ios::in | std::ios::binary | std::ios::ate);
+
+    std::streamsize size = AsmFile.tellg();
+    AsmFile.seekg(0, std::ios::beg);
+
+    std::string AsmOutput(size, '\0');
+
+    AsmFile.read(AsmOutput.data(), size);
+
+    std::print("{}", AsmOutput);
+
+    std::string ExecutableFileName = std::string(argv[1], 0, std::strlen(argv[1]) - 2);
 
     return 0;
 }

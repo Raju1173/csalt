@@ -68,12 +68,19 @@ public:
     std::vector<PhiArgument> args;
 };
 
+struct Comparison
+{
+    TACValue Left;
+    BinaryOp Op;
+    TACValue Right;
+};
+
 class TACBranch : public TACInstruction
 {
 public:
-    TACBranch(TACValue cond) : Condition(std::move(cond)){};
+    TACBranch(Comparison cond) : cond(cond){};
 
-    TACValue Condition;
+    Comparison cond;
 
     int TrueTarget;
     int FalseTarget;

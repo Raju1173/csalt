@@ -9,10 +9,10 @@ enum class Register
 {
     EAX,
 
-    ECX,
-    EDX,
     EDI,
     ESI,
+    EDX,
+    ECX,
     R8D,
     R9D,
 
@@ -25,17 +25,21 @@ enum class Register
     R14D,
     R15D,
 
-    ESP,
-    EBP
+    RSP,
+    RBP
 };
 
-struct StackValue
+struct StackOffset
 {
-    Register Base;
     int Offset;
 };
 
-using Operand = std::variant<Register, StackValue, int>;
+struct Immediate
+{
+    int Value;
+};
+
+using Operand = std::variant<Register, StackOffset, Immediate>;
 
 class MIRInstruction
 {
@@ -114,7 +118,7 @@ enum class Condition
     GREATER_EQUAL
 };
 
-class MIRJumpCond : public MIRInstruction
+class MIRCondJump : public MIRInstruction
 {
 public:
     Condition Cond;
@@ -149,6 +153,10 @@ struct MIRFunction
     std::vector<std::string> Parameters;
 
     std::vector<std::unique_ptr<MIRBlock>> Blocks;
+
+    int StackFrameSize = 0;
 };
 
 std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::unique_ptr<TACFunction>>& TAC);
+
+void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const std::string& filename);
