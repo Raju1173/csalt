@@ -2,7 +2,7 @@
 .text
 
 fact:
-.L1:
+.factL1:
 	push rbp
 	mov rbp, rsp
 	sub rsp, 48
@@ -17,19 +17,17 @@ fact:
 	mov eax, DWORD PTR [rbp+24]
 	mov DWORD PTR [rbp-48], eax
 	cmp DWORD PTR [rbp-8], 1
-	jle .L3
-	jmp .L2
+	jle .factL3
+	jmp .factL2
 
-.L3:
+.factL3:
 	mov eax, 1
 	mov rsp, rbp
 	pop rbp
 	ret
-	jmp .L2
+	jmp .factL2
 
-.L2:
-	mov eax, 2
-	mov DWORD PTR [rbp-8], eax
+.factL2:
 	mov eax, DWORD PTR [rbp-8]
 	sub eax, 1
 	mov DWORD PTR [rbp-12], eax
@@ -55,7 +53,7 @@ fact:
 
 .global main
 main:
-.L1:
+.mainL1:
 	push rbp
 	mov rbp, rsp
 	sub rsp, 8
@@ -76,3 +74,4 @@ main:
 	ret
 
 
+.section .note.GNU-stack, "", @progbits

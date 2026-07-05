@@ -5,6 +5,8 @@
 #include "lexer.h"
 #include "parser.h"
 #include <fstream>
+#include <iostream>
+#include <ostream>
 #include <print>
 #include <string>
 #include <vector>
@@ -93,7 +95,13 @@ int main(int argc, char** argv)
 
     std::print("{}", AsmOutput);
 
-    std::string ExecutableFileName = std::string(argv[1], 0, std::strlen(argv[1]) - 2);
+    std::print("\n------OUTPUT-----\n\n");
+
+    std::string ExecutableFilePath = std::string(argv[1], 0, std::strlen(argv[1]) - 2);
+
+    EmitExecutable(AssemblyFilePath, ExecutableFilePath);
+
+    PrintOutput(ExecutableFilePath);
 
     return 0;
 }

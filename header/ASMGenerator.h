@@ -160,3 +160,7 @@ struct MIRFunction
 std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::unique_ptr<TACFunction>>& TAC);
 
 void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const std::string& filename);
+
+void EmitExecutable(std::string ASMFilePath, std::string ExecFileName);
+
+void PrintOutput(std::string ExecFilePath);

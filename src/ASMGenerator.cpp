@@ -3,10 +3,10 @@
 #include <cctype>
 #include <cstddef>
 #include <memory>
-#include <numeric>
 #include <print>
 #include <utility>
 #include <variant>
+#include <fstream>
 
 std::map<std::string, std::variant<Register, StackOffset>> StackSlots;
 
@@ -400,10 +400,6 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
     return MIR;
 }
 
-#include <fstream>
-#include <string>
-#include <variant>
-
 static std::string RegisterName(Register reg)
 {
     switch (reg)
@@ -492,7 +488,7 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
 
         for (const auto& block : function->Blocks)
         {
-            out << ".L" << block->ID << ":\n";
+            out << "." << function->FunctionName << "L" << block->ID << ":\n";
 
             for (const auto& inst : block->Instructions)
             {
@@ -538,7 +534,7 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
 
                 else if (auto jump = dynamic_cast<MIRJump*>(inst.get()))
                 {
-                    out << "\tjmp .L" << jump->TargetBlock << "\n";
+                    out << "\tjmp ." << function->FunctionName << "L" << jump->TargetBlock << "\n";
                 }
 
                 else if (auto jump = dynamic_cast<MIRCondJump*>(inst.get()))
@@ -567,7 +563,7 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
                             break;
                     }
 
-                    out << ".L" << jump->TargetBlock << "\n";
+                    out << "." << function->FunctionName << "L" << jump->TargetBlock << "\n";
                 }
 
                 else if (auto call = dynamic_cast<MIRCall*>(inst.get()))
@@ -591,4 +587,21 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
 
         out << "\n";
     }
+
+    out << ".section .note.GNU-stack, \"\", @progbits\n";
+}
+
+
+void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)
+{
+    std::string cmd = "gcc " + ASMFilePath + " -o " + ExecFilePath;
+
+    std::system(cmd.c_str());
+}
+
+void PrintOutput(std::string ExecFilePath)
+{
+    std::string cmd = "./" + ExecFilePath + "; echo 'EXIT CODE : ' $?";
+
+    std::system(cmd.c_str());
 }
