@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include <cctype>
 #include <vector>
+#include <print>
 
 std::vector<Token> tokenize(std::string_view source)
 {
@@ -80,9 +81,35 @@ std::vector<Token> tokenize(std::string_view source)
             case '*':
                 TokenStream.push_back({TokenType::ASTERISK});
                 break;
+
             case '/':
-                TokenStream.push_back({TokenType::SLASH});
+                if (next == '/')
+                {
+                    while (i < source.size() && source[i] != '\n')
+                    {
+                        i++;
+                    }
+                }
+
+                else if (next == '*')
+                {
+                    i += 2;
+
+                    while (i + 1 < source.size() && !(source[i] == '*' && source[i + 1] == '/'))
+                    {
+                        i++;
+                    }
+
+                    i++;
+                }
+
+                else
+                {
+                    TokenStream.push_back({TokenType::SLASH});
+                }
+
                 break;
+
             case '(':
                 TokenStream.push_back({TokenType::LPAREN});
                 break;
@@ -164,4 +191,15 @@ std::vector<Token> tokenize(std::string_view source)
     TokenStream.push_back({TokenType::END});
 
     return TokenStream;
+}
+
+void printTokens(std::vector<Token>& TokenStream)
+{
+    for (Token t : TokenStream)
+    {
+        if (t.type == TokenType::IDENTIFIER || t.type == TokenType::NUMBER)
+            std::print("{}({})\n", TokenNames[std::to_underlying(t.type)], t.lexeme);
+        else
+            std::print("{}\n", TokenNames[std::to_underlying(t.type)]);
+    }
 }

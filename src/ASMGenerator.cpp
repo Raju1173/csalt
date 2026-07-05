@@ -4,9 +4,16 @@
 #include <cstddef>
 #include <memory>
 #include <print>
+#include <sys/types.h>
 #include <utility>
 #include <variant>
 #include <fstream>
+#include <sys/ptrace.h>
+#include <sys/user.h>
+#include <sys/syscall.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <sys/resource.h>
 
 std::map<std::string, std::variant<Register, StackOffset>> StackSlots;
 
@@ -232,8 +239,28 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
                 {
                     auto CMP = std::make_unique<MIRCmp>();
 
-                    CMP->Left = GetOperand(branch->cond.Left, MIR.back());
-                    CMP->Right = GetOperand(branch->cond.Right, MIR.back());
+
+                    auto left = GetOperand(branch->cond.Left, MIR.back());
+                    auto right = GetOperand(branch->cond.Right, MIR.back());
+
+                    if (right.index() == 1 && left.index() == 1)
+                    {
+                        auto movLeft = std::make_unique<MIRMov>();
+
+                        movLeft->Dest = Register::EAX;
+                        movLeft->Source = left;
+
+                        curBlock->Instructions.push_back(std::move(movLeft));
+
+                        CMP->Left = Register::EAX;
+                        CMP->Right = right;
+                    }
+
+                    else
+                    {
+                        CMP->Left = left;
+                        CMP->Right = right;
+                    }
 
                     curBlock->Instructions.push_back(std::move(CMP));
 
@@ -494,52 +521,52 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
             {
                 if (auto mov = dynamic_cast<MIRMov*>(inst.get()))
                 {
-                    out << "\tmov " << OperandString(mov->Dest) << ", " << OperandString(mov->Source) << "\n";
+                    out << "    mov " << OperandString(mov->Dest) << ", " << OperandString(mov->Source) << "\n";
                 }
 
                 else if (auto add = dynamic_cast<MIRAdd*>(inst.get()))
                 {
-                    out << "\tadd " << OperandString(add->Dest) << ", " << OperandString(add->Source) << "\n";
+                    out << "    add " << OperandString(add->Dest) << ", " << OperandString(add->Source) << "\n";
                 }
 
                 else if (auto sub = dynamic_cast<MIRSub*>(inst.get()))
                 {
-                    out << "\tsub " << OperandString(sub->Dest) << ", " << OperandString(sub->Source) << "\n";
+                    out << "    sub " << OperandString(sub->Dest) << ", " << OperandString(sub->Source) << "\n";
                 }
 
                 else if (auto mul = dynamic_cast<MIRImul*>(inst.get()))
                 {
-                    out << "\timul " << OperandString(mul->Dest) << ", " << OperandString(mul->Source) << "\n";
+                    out << "    imul " << OperandString(mul->Dest) << ", " << OperandString(mul->Source) << "\n";
                 }
 
                 else if (auto div = dynamic_cast<MIRIdiv*>(inst.get()))
                 {
-                    out << "\tidiv " << OperandString(div->Divisor) << "\n";
+                    out << "    idiv " << OperandString(div->Divisor) << "\n";
                 }
 
                 else if (auto cmp = dynamic_cast<MIRCmp*>(inst.get()))
                 {
-                    out << "\tcmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
+                    out << "    cmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
                 }
 
                 else if (auto push = dynamic_cast<MIRPush*>(inst.get()))
                 {
-                    out << "\tpush " << OperandString(push->Source) << "\n";
+                    out << "    push " << OperandString(push->Source) << "\n";
                 }
 
                 else if (auto pop = dynamic_cast<MIRPop*>(inst.get()))
                 {
-                    out << "\tpop " << OperandString(pop->Dest) << "\n";
+                    out << "    pop " << OperandString(pop->Dest) << "\n";
                 }
 
                 else if (auto jump = dynamic_cast<MIRJump*>(inst.get()))
                 {
-                    out << "\tjmp ." << function->FunctionName << "L" << jump->TargetBlock << "\n";
+                    out << "    jmp ." << function->FunctionName << "L" << jump->TargetBlock << "\n";
                 }
 
                 else if (auto jump = dynamic_cast<MIRCondJump*>(inst.get()))
                 {
-                    out << "\t";
+                    out << "    ";
 
                     switch (jump->Cond)
                     {
@@ -568,17 +595,17 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
 
                 else if (auto call = dynamic_cast<MIRCall*>(inst.get()))
                 {
-                    out << "\tcall " << call->Function << "\n";
+                    out << "    call " << call->Function << "\n";
                 }
 
                 else if (dynamic_cast<MIRRet*>(inst.get()))
                 {
-                    out << "\tret\n";
+                    out << "    ret\n";
                 }
 
                 else if (dynamic_cast<MIRCdq*>(inst.get()))
                 {
-                    out << "\tcdq\n";
+                    out << "    cdq\n";
                 }
             }
 
@@ -601,7 +628,48 @@ void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)
 
 void PrintOutput(std::string ExecFilePath)
 {
-    std::string cmd = "./" + ExecFilePath + "; echo 'EXIT CODE : ' $?";
+    pid_t pid = fork();
 
-    std::system(cmd.c_str());
+    if (pid == 0)
+    {
+        ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
+
+        execl(("./" + ExecFilePath).c_str(), ("./" + ExecFilePath).c_str(), nullptr);
+
+        _exit(1);
+    }
+
+    else
+    {
+        int status;
+
+        waitpid(pid, &status, 0);
+
+        ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
+
+        struct user_regs_struct regs;
+
+        while (true)
+        {
+            waitpid(pid, &status, 0);
+
+            if (WIFEXITED(status) || WIFSIGNALED(status))
+            {
+                break;
+            }
+
+            ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
+
+            if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
+            {
+                std::print("EXIT CODE : {}\n", regs.rdi);
+
+                break;
+            }
+
+            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
+        }
+
+        ptrace(PTRACE_KILL, pid, nullptr, nullptr);
+    }
 }

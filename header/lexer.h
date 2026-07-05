@@ -79,3 +79,5 @@ struct Token
 };
 
 std::vector<Token> tokenize(std::string_view source);
+
+void printTokens(std::vector<Token>& TokenStream);
