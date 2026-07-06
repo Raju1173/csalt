@@ -284,21 +284,6 @@ void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>>& TAC)
     }
 }
 
-constexpr std::string_view BinaryOpToStr[] = {
-    "+",
-    "-",
-    "*",
-    "/",
-
-    "==",
-    "!=",
-
-    "<",
-    "<=",
-
-    ">",
-    ">="};
-
 void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC)
 {
     for (auto& func : TAC)
@@ -338,7 +323,7 @@ void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC)
 
                 else if (auto assign = dynamic_cast<TACAssign*>(inst.get()))
                 {
-                    std::print("    {} = {}\n", assign->dest.value, assign->source.value);
+                    std::print("    {} = {}\n", assign->dest.value, (assign->source.neg ? "-" : "") + assign->source.value);
                 }
 
                 else if (auto binary = dynamic_cast<TACBinaryOp*>(inst.get()))

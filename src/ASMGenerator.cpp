@@ -21,7 +21,7 @@ int NextOffset = -4;
 
 Operand GetOperand(const TACValue& TACVal, std::unique_ptr<MIRFunction>& CurFunc)
 {
-    if (TACVal.value[0] >= '0' && TACVal.value[0] <= '9')
+    if ((TACVal.value[0] >= '0' && TACVal.value[0] <= '9') || TACVal.value[0] == '-')
         return Immediate{std::stoi(TACVal.value)};
 
     if (StackSlots.contains(TACVal.value))
@@ -76,6 +76,15 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
 
                     curBlock->Instructions.push_back(std::move(movSrc));
 
+                    if (assign->source.neg)
+                    {
+                        auto negSrc = std::make_unique<MIRNeg>();
+
+                        negSrc->Dest = Register::EAX;
+
+                        curBlock->Instructions.push_back(std::move(negSrc));
+                    }
+
                     auto movDest = std::make_unique<MIRMov>();
 
                     movDest->Dest = GetOperand(assign->dest, MIR.back());
@@ -95,27 +104,60 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
 
                         curBlock->Instructions.push_back(std::move(movOperand));
 
+                        if (binary->left.neg)
+                        {
+                            auto negLeft = std::make_unique<MIRNeg>();
+                            negLeft->Dest = Register::EAX;
+                            curBlock->Instructions.push_back(std::move(negLeft));
+                        }
+
                         switch (binary->op)
                         {
                             case BinaryOp::PLUS:
                                 {
-                                    auto operation = std::make_unique<MIRAdd>();
+                                    if (binary->right.neg)
+                                    {
+                                        auto operation = std::make_unique<MIRSub>();
 
-                                    operation->Dest = Register::EAX;
-                                    operation->Source = GetOperand(binary->right, MIR.back());
+                                        operation->Dest = Register::EAX;
+                                        operation->Source = GetOperand(binary->right, MIR.back());
 
-                                    curBlock->Instructions.push_back(std::move(operation));
+                                        curBlock->Instructions.push_back(std::move(operation));
+                                    }
+
+                                    else
+                                    {
+                                        auto operation = std::make_unique<MIRAdd>();
+
+                                        operation->Dest = Register::EAX;
+                                        operation->Source = GetOperand(binary->right, MIR.back());
+
+                                        curBlock->Instructions.push_back(std::move(operation));
+                                    }
                                 }
                                 break;
 
                             case BinaryOp::MINUS:
                                 {
-                                    auto operation = std::make_unique<MIRSub>();
+                                    if (binary->right.neg)
+                                    {
+                                        auto operation = std::make_unique<MIRAdd>();
 
-                                    operation->Dest = Register::EAX;
-                                    operation->Source = GetOperand(binary->right, MIR.back());
+                                        operation->Dest = Register::EAX;
+                                        operation->Source = GetOperand(binary->right, MIR.back());
 
-                                    curBlock->Instructions.push_back(std::move(operation));
+                                        curBlock->Instructions.push_back(std::move(operation));
+                                    }
+
+                                    else
+                                    {
+                                        auto operation = std::make_unique<MIRSub>();
+
+                                        operation->Dest = Register::EAX;
+                                        operation->Source = GetOperand(binary->right, MIR.back());
+
+                                        curBlock->Instructions.push_back(std::move(operation));
+                                    }
                                 }
                                 break;
 
@@ -127,6 +169,13 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
                                     operation->Source = GetOperand(binary->right, MIR.back());
 
                                     curBlock->Instructions.push_back(std::move(operation));
+
+                                    if (binary->right.neg)
+                                    {
+                                        auto negResult = std::make_unique<MIRNeg>();
+                                        negResult->Dest = Register::EAX;
+                                        curBlock->Instructions.push_back(std::move(negResult));
+                                    }
                                 }
                                 break;
                         }
@@ -147,6 +196,13 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
                         movDividend->Source = GetOperand(binary->left, MIR.back());
 
                         curBlock->Instructions.push_back(std::move(movDividend));
+
+                        if (binary->left.neg)
+                        {
+                            auto negLeft = std::make_unique<MIRNeg>();
+                            negLeft->Dest = Register::EAX;
+                            curBlock->Instructions.push_back(std::move(negLeft));
+                        }
 
                         curBlock->Instructions.push_back(std::make_unique<MIRCdq>());
 
@@ -175,6 +231,13 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
                             idiv->Divisor = divisor;
 
                             curBlock->Instructions.push_back(std::move(idiv));
+                        }
+
+                        if (binary->right.neg)
+                        {
+                            auto negResult = std::make_unique<MIRNeg>();
+                            negResult->Dest = Register::EAX;
+                            curBlock->Instructions.push_back(std::move(negResult));
                         }
 
                         auto idivResult = std::make_unique<MIRMov>();
@@ -243,7 +306,7 @@ std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::uni
                     auto left = GetOperand(branch->cond.Left, MIR.back());
                     auto right = GetOperand(branch->cond.Right, MIR.back());
 
-                    if (right.index() == 1 && left.index() == 1)
+                    if ((right.index() == 1 && left.index() == 1) || (right.index() == 2 && left.index() == 2))
                     {
                         auto movLeft = std::make_unique<MIRMov>();
 
@@ -544,6 +607,11 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
                     out << "    idiv " << OperandString(div->Divisor) << "\n";
                 }
 
+                else if (auto neg = dynamic_cast<MIRNeg*>(inst.get()))
+                {
+                    out << "    neg " << OperandString(neg->Dest) << "\n";
+                }
+
                 else if (auto cmp = dynamic_cast<MIRCmp*>(inst.get()))
                 {
                     out << "    cmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
@@ -615,7 +683,7 @@ void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const st
         out << "\n";
     }
 
-    out << ".section .note.GNU-stack, \"\", @progbits\n";
+    out << ".section .note.GNU-stack, \"\", @progbits\n\n";
 }
 
 
@@ -662,7 +730,7 @@ void PrintOutput(std::string ExecFilePath)
 
             if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
             {
-                std::print("EXIT CODE : {}\n", regs.rdi);
+                std::print("\033[31mEXIT CODE\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
 
                 break;
             }

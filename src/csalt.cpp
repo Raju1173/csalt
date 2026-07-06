@@ -2,6 +2,9 @@
 #include "CFGBuilder.h"
 #include "SSAConstructor.h"
 #include "TACGenerator.h"
+#include "ConstantFolding.h"
+#include "AlgebraicSimplification.h"
+#include "BranchSimplification.h"
 #include "lexer.h"
 #include "parser.h"
 #include <fstream>
@@ -94,6 +97,8 @@ int main(int argc, char** argv)
         std::print("\n------AST-------\n\n");
 
         printNode(AST);
+
+        std::print("\n");
     }
 
     std::vector<std::unique_ptr<CFGFunction>> CFG = constructCFG(AST);
@@ -122,13 +127,18 @@ int main(int argc, char** argv)
 
     ResolvePhiNodes(TAC);
 
+    FoldConstants(TAC);
+
+    SimplifyAlgebra(TAC);
+
+    SimplifyBranches(TAC);
+
     if (dumpTAC)
     {
         std::print("\n------TAC-------\n\n");
 
         printTAC(TAC);
     }
-
 
     auto MIR = GenerateMachineIR(TAC);
 
@@ -152,8 +162,6 @@ int main(int argc, char** argv)
 
         std::print("{}", AsmOutput);
     }
-
-    std::print("\n------OUTPUT-----\n\n");
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 2);
 

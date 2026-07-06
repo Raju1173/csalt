@@ -216,8 +216,8 @@ void RenameNode(Node* node, std::vector<std::string>& pushed, bool definition = 
         {
             if (!VarStacks[token.lexeme].first.empty())
                 token.lexeme += std::to_string(VarStacks[token.lexeme].first.top());
-	    else
-		token.lexeme += "0";
+            else
+                token.lexeme += "0";
         }
 
         else

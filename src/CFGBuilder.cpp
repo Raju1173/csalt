@@ -222,4 +222,6 @@ void printCFG(std::vector<std::unique_ptr<CFGFunction>>& CFG)
             std::print("}}\n");
         }
     }
+
+    std::print("\n");
 }

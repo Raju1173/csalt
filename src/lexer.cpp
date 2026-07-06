@@ -202,4 +202,6 @@ void printTokens(std::vector<Token>& TokenStream)
         else
             std::print("{}\n", TokenNames[std::to_underlying(t.type)]);
     }
+
+    std::print("\n");
 }

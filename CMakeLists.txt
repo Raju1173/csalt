@@ -12,5 +12,5 @@ target_link_options(projectConfigs INTERFACE -stdlib=libc++)
 
 target_include_directories(projectConfigs INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/header)
 
-add_executable(csalt src/csalt.cpp src/lexer.cpp src/parser.cpp src/CFGBuilder.cpp src/SSAConstructor.cpp src/TACGenerator.cpp src/ASMGenerator.cpp)
+add_executable(csalt src/csalt.cpp src/lexer.cpp src/parser.cpp src/CFGBuilder.cpp src/SSAConstructor.cpp src/TACGenerator.cpp src/ASMGenerator.cpp src/ConstantFolding.cpp src/AlgebraicSimplification.cpp src/BranchSimplification.cpp)
 target_link_libraries(csalt PRIVATE projectConfigs)

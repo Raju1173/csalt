@@ -81,6 +81,35 @@ public:
     Operand Divisor;
 };
 
+class MIRNeg : public MIRInstruction
+{
+public:
+    Operand Dest;
+};
+
+class MIRShl : public MIRInstruction
+{
+public:
+    Operand Dest;
+    Operand Count;
+};
+
+class MIRSar : public MIRInstruction
+{
+public:
+    Operand Dest;
+    Operand Count;
+};
+
+class MIRLea : public MIRInstruction
+{
+public:
+    Operand Dest;
+    Operand Base;
+    Operand Index;
+    Operand Scale;
+};
+
 class MIRCmp : public MIRInstruction
 {
 public:

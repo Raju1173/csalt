@@ -40,6 +40,8 @@ constexpr int precedence(TokenType op)
 
 // This abomination of a parser was basically my attempt to understand recursive descent and pratt parsing at a deeper level by merging them together into a single loop with a single stack (I dont hate clean code)...
 
+// To understand how it works, refer to 'parser.md' inside the docs directory...
+
 Node parse(const std::vector<Token>& TokenStream)
 {
     std::stack<std::unique_ptr<Node>> nodeStack;
@@ -174,6 +176,11 @@ Node parse(const std::vector<Token>& TokenStream)
             case NodeType::VAR:
                 switch (cur.type)
                 {
+                    case TokenType::LPAREN:
+                        pushNode(NodeType::EXPR);
+                        continue;
+                        break;
+
                     case TokenType::NUMBER:
                     case TokenType::IDENTIFIER:
                         pushNode(NodeType::EXPR);

@@ -21,6 +21,21 @@ enum class BinaryOp
     GREATER_EQUAL
 };
 
+constexpr std::string_view BinaryOpToStr[] = {
+    "+",
+    "-",
+    "*",
+    "/",
+
+    "==",
+    "!=",
+
+    "<",
+    "<=",
+
+    ">",
+    ">="};
+
 class TACInstruction
 {
 public:
@@ -30,6 +45,8 @@ public:
 struct TACValue
 {
     std::string value;
+
+    bool neg = false;
 };
 
 class TACBinaryOp : public TACInstruction
