@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CFGBuilder.h"
 #include "SSAConstructor.h"
 #include <vector>
 #include <memory>
@@ -72,7 +73,7 @@ class TACJump : public TACInstruction
 public:
     TACJump(int target) : TargetBlock(target){};
 
-    int TargetBlock;
+    size_t TargetBlock;
 };
 
 class TACPhi : public TACInstruction
@@ -99,8 +100,8 @@ public:
 
     Comparison cond;
 
-    int TrueTarget;
-    int FalseTarget;
+    size_t TrueTarget;
+    size_t FalseTarget;
 };
 
 class TACCall : public TACInstruction
@@ -124,6 +125,12 @@ struct TACBlock
     size_t ID;
 
     std::vector<std::unique_ptr<TACInstruction>> Instructions;
+
+    std::vector<TACBlock*> Parents;
+    std::vector<TACBlock*> Children;
+
+    std::set<TACBlock*> Dominators;
+    std::vector<TACBlock*> DominatorTreeChildren;
 };
 
 struct TACFunction

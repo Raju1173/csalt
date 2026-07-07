@@ -5,6 +5,8 @@
 #include "ConstantFolding.h"
 #include "AlgebraicSimplification.h"
 #include "BranchSimplification.h"
+#include "GVN.h"
+#include "DCE.h"
 #include "lexer.h"
 #include "parser.h"
 #include <fstream>
@@ -127,11 +129,15 @@ int main(int argc, char** argv)
 
     ResolvePhiNodes(TAC);
 
-    FoldConstants(TAC);
+    //FoldConstants(TAC);
 
-    SimplifyAlgebra(TAC);
+    //SimplifyAlgebra(TAC);
 
-    SimplifyBranches(TAC);
+    //SimplifyBranches(TAC);
+
+    //RemoveDeadCodeAndMergeBlocks(TAC);
+
+    GVN(TAC);
 
     if (dumpTAC)
     {

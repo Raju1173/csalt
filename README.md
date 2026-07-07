@@ -27,33 +27,33 @@ CSalt only supports 6 features of C :
 - functions
 - return
 
-Keeping the fronted super small (like a grain of sea salt) makes implementing complex optimizations much easier
+Keeping the fronted super small *(like a grain of sea salt)* makes implementing complex optimizations extremely simple and some even become almost trivial
 
 # Unsupported Features
 
-- Unary operators (use '(0 - x)' for negation)
+- Unary operators *(use '(0 - x)' for negation)*
 - Structs
 - Unions
 - Arrays
 - Pointers
 - Any other keyword except int, if, while or return
 - Preprocessor statements
-- Variable shadowing (important)
-- Other fancy C features like "int x, y;"
+- Variable shadowing *(important)*
+- Other fancy C features like "int x, y;", etc.
 
 # Architecture
 
-`Source Code -> Lexer -> Parser -> CFG Construction -> SSA Construction -> TAC Generation -> Machine IR -> Assembly`
+`Source Code -> Tokens -> AST -> CFG -> SSA -> TAC -> Middle End optimizations -> Machine IR -> Backend Optimizations -> Assembly`
 
 *Note : I'm storing AST nodes inside the CFG because it felt much simpler than converting from AST to TAC directly...*
 
 # Limitations
 
-### **No error detection**\
-csalt treats incorrect code as undefined behaviour. (definitely not a sophisticated way of saying "I was too lazy to do semantic analysis")
-### **No support for external libraries**\
+### **No error detection**
+csalt treats incorrect code as undefined behaviour. *(definitely not a sophisticated way of saying "I was too lazy to do semantic analysis")*
+### **No support for external libraries**
 unfortunately, some external libraries require the stack frame to be aligned with 16 bytes for SIMD instructions but csalt does not perform any alignment
-### **Exit codes as the only method of getting an output**\
+### **Exit codes as the only method of getting an output**
 since csalt does not support external libraries, there is no way of printing to the terminal other than returning an integer and catching it using "echo $?" or using a parent process to fetch the value in rdi during termination before the OS truncates it to 8 bits...
 
 # Usage
