@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(epoll_http_server LANGUAGES CXX)
+project(csalt LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,7 +10,18 @@ target_compile_options(projectConfigs INTERFACE -Wall -Wextra -Wpedantic -stdlib
 
 target_link_options(projectConfigs INTERFACE -stdlib=libc++)
 
-target_include_directories(projectConfigs INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/header)
+set(HEADER ${CMAKE_CURRENT_SOURCE_DIR}/header)
 
-add_executable(csalt src/csalt.cpp src/lexer.cpp src/parser.cpp src/CFGBuilder.cpp src/SSAConstructor.cpp src/TACGenerator.cpp src/ASMGenerator.cpp src/ConstantFolding.cpp src/AlgebraicSimplification.cpp src/BranchSimplification.cpp src/DCE.cpp src/GVN.cpp)
+target_include_directories(projectConfigs INTERFACE ${HEADER}/Frontend ${HEADER}/IR ${HEADER}/Optimizations ${HEADER}/Backend)
+
+set(FRONTEND src/Frontend/lexer.cpp src/Frontend/parser.cpp)
+
+set(IR src/IR/CFGBuilder.cpp src/IR/SSAConstructor.cpp src/IR/TACGenerator.cpp src/IR/MIRGenerator.cpp)
+
+set(OPTIMIZATIONS src/Optimizations/ConstantFolding.cpp src/Optimizations/BranchSimplification.cpp src/Optimizations/AlgebraicSimplification.cpp src/Optimizations/DCE.cpp src/Optimizations/GVN.cpp)
+
+set(BACKEND src/Backend/ASMGenerator.cpp)
+
+add_executable(csalt src/csalt.cpp ${FRONTEND} ${IR} ${OPTIMIZATIONS} ${BACKEND})
+
 target_link_libraries(csalt PRIVATE projectConfigs)

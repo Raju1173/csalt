@@ -1,4 +1,4 @@
-#include "ASMGenerator.h"
+#include "MIRGenerator.h"
 #include "TACGenerator.h"
 #include <cctype>
 #include <cstddef>
@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <sys/resource.h>
 
-std::map<std::string, std::variant<Register, StackOffset>> StackSlots;
+std::unordered_map<std::string, std::variant<Register, StackOffset>> StackSlots;
 
 int NextOffset = -4;
 

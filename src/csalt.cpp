@@ -1,4 +1,4 @@
-#include "ASMGenerator.h"
+#include "MIRGenerator.h"
 #include "CFGBuilder.h"
 #include "SSAConstructor.h"
 #include "TACGenerator.h"
@@ -83,12 +83,10 @@ int main(int argc, char** argv)
 
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    std::vector<Token> TokenStream = tokenize(source);
+    TokenStream TokenStream = tokenize(source);
 
     if (dumpTokens)
     {
-        std::print("------TOKENS-------\n\n");
-
         printTokens(TokenStream);
     }
 
@@ -96,23 +94,16 @@ int main(int argc, char** argv)
 
     if (dumpAST)
     {
-        std::print("\n------AST-------\n\n");
-
-        printNode(AST);
-
-        std::print("\n");
+        printAST(AST);
     }
 
-    std::vector<std::unique_ptr<CFGFunction>> CFG = constructCFG(AST);
+    CFG CFG = constructCFG(AST);
 
     ComputeDominators(CFG);
 
     ComputeDominatorTree(CFG);
 
-    for (auto& CFGFunc : CFG)
-    {
-        ComputeFrontiers(CFGFunc->Blocks[0].get());
-    }
+    ComputeFrontiers(CFG);
 
     InsertPhiNodes(CFG);
 
@@ -120,8 +111,6 @@ int main(int argc, char** argv)
 
     if (dumpCFG)
     {
-        std::print("\n------CFG-------\n");
-
         printCFG(CFG);
     }
 
@@ -137,7 +126,7 @@ int main(int argc, char** argv)
 
     //RemoveDeadCodeAndMergeBlocks(TAC);
 
-    GVN(TAC);
+    //GVN(TAC);
 
     if (dumpTAC)
     {

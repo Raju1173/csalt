@@ -3,9 +3,9 @@
 #include <vector>
 #include <print>
 
-std::vector<Token> tokenize(std::string_view source)
+TokenStream tokenize(std::string_view source)
 {
-    std::vector<Token> TokenStream;
+    std::vector<Token> tokenStream;
 
     for (size_t i = 0; i < source.size(); ++i)
     {
@@ -28,27 +28,27 @@ std::vector<Token> tokenize(std::string_view source)
 
             if (lexeme == "if")
             {
-                TokenStream.push_back({TokenType::IF});
+                tokenStream.push_back({TokenType::IF});
             }
 
             else if (lexeme == "int")
             {
-                TokenStream.push_back({TokenType::INT});
+                tokenStream.push_back({TokenType::INT});
             }
 
             else if (lexeme == "while")
             {
-                TokenStream.push_back({TokenType::WHILE});
+                tokenStream.push_back({TokenType::WHILE});
             }
 
             else if (lexeme == "return")
             {
-                TokenStream.push_back({TokenType::RETURN});
+                tokenStream.push_back({TokenType::RETURN});
             }
 
             else
             {
-                TokenStream.push_back({TokenType::IDENTIFIER, lexeme});
+                tokenStream.push_back({TokenType::IDENTIFIER, lexeme});
             }
 
             continue;
@@ -65,7 +65,7 @@ std::vector<Token> tokenize(std::string_view source)
 
             std::string value = std::string(source.substr(start, (i - start) + 1));
 
-            TokenStream.push_back({TokenType::NUMBER, value});
+            tokenStream.push_back({TokenType::NUMBER, value});
 
             continue;
         }
@@ -73,13 +73,13 @@ std::vector<Token> tokenize(std::string_view source)
         switch (current)
         {
             case '+':
-                TokenStream.push_back({TokenType::PLUS});
+                tokenStream.push_back({TokenType::PLUS});
                 break;
             case '-':
-                TokenStream.push_back({TokenType::MINUS});
+                tokenStream.push_back({TokenType::MINUS});
                 break;
             case '*':
-                TokenStream.push_back({TokenType::ASTERISK});
+                tokenStream.push_back({TokenType::ASTERISK});
                 break;
 
             case '/':
@@ -105,40 +105,40 @@ std::vector<Token> tokenize(std::string_view source)
 
                 else
                 {
-                    TokenStream.push_back({TokenType::SLASH});
+                    tokenStream.push_back({TokenType::SLASH});
                 }
 
                 break;
 
             case '(':
-                TokenStream.push_back({TokenType::LPAREN});
+                tokenStream.push_back({TokenType::LPAREN});
                 break;
             case ')':
-                TokenStream.push_back({TokenType::RPAREN});
+                tokenStream.push_back({TokenType::RPAREN});
                 break;
             case '{':
-                TokenStream.push_back({TokenType::LBRACE});
+                tokenStream.push_back({TokenType::LBRACE});
                 break;
             case '}':
-                TokenStream.push_back({TokenType::RBRACE});
+                tokenStream.push_back({TokenType::RBRACE});
                 break;
             case ',':
-                TokenStream.push_back({TokenType::COMMA});
+                tokenStream.push_back({TokenType::COMMA});
                 break;
             case ';':
-                TokenStream.push_back({TokenType::SEMICOLON});
+                tokenStream.push_back({TokenType::SEMICOLON});
                 break;
 
             case '=':
                 if (next == '=')
                 {
-                    TokenStream.push_back({TokenType::DOUBLE_EQUAL});
+                    tokenStream.push_back({TokenType::DOUBLE_EQUAL});
                     i++;
                 }
 
                 else
                 {
-                    TokenStream.push_back({TokenType::EQUAL});
+                    tokenStream.push_back({TokenType::EQUAL});
                 }
 
                 break;
@@ -146,7 +146,7 @@ std::vector<Token> tokenize(std::string_view source)
             case '!':
                 if (next == '=')
                 {
-                    TokenStream.push_back({TokenType::NOT_EQUAL});
+                    tokenStream.push_back({TokenType::NOT_EQUAL});
 
                     i++;
                 }
@@ -156,13 +156,13 @@ std::vector<Token> tokenize(std::string_view source)
             case '<':
                 if (next == '=')
                 {
-                    TokenStream.push_back({TokenType::LESS_EQUAL});
+                    tokenStream.push_back({TokenType::LESS_EQUAL});
                     i++;
                 }
 
                 else
                 {
-                    TokenStream.push_back({TokenType::LESS});
+                    tokenStream.push_back({TokenType::LESS});
                 }
 
                 break;
@@ -170,13 +170,13 @@ std::vector<Token> tokenize(std::string_view source)
             case '>':
                 if (next == '=')
                 {
-                    TokenStream.push_back({TokenType::GREATER_EQUAL});
+                    tokenStream.push_back({TokenType::GREATER_EQUAL});
                     i++;
                 }
 
                 else
                 {
-                    TokenStream.push_back({TokenType::GREATER});
+                    tokenStream.push_back({TokenType::GREATER});
                 }
 
                 break;
@@ -188,13 +188,15 @@ std::vector<Token> tokenize(std::string_view source)
         continue;
     }
 
-    TokenStream.push_back({TokenType::END});
+    tokenStream.push_back({TokenType::END});
 
-    return TokenStream;
+    return TokenStream(tokenStream);
 }
 
-void printTokens(std::vector<Token>& TokenStream)
+void printTokens(const TokenStream& TokenStream)
 {
+    std::print("------TOKENS-------\n\n");
+
     for (Token t : TokenStream)
     {
         if (t.type == TokenType::IDENTIFIER || t.type == TokenType::NUMBER)
@@ -203,5 +205,5 @@ void printTokens(std::vector<Token>& TokenStream)
             std::print("{}\n", TokenNames[std::to_underlying(t.type)]);
     }
 
-    std::print("\n");
+    std::print("\n\n");
 }

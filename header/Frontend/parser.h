@@ -47,9 +47,11 @@ struct Node
     NodeType type;
     Token token;
 
-    std::vector<std::unique_ptr<Node>> children;
+    std::vector<Node> children;
 };
 
-Node parse(const std::vector<Token>& TokenStream);
+Node parse(TokenStream& TokenStream);
 
 void printNode(const Node& node, int depth = 0);
+
+void printAST(const Node& root);

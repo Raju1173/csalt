@@ -131,7 +131,7 @@ struct TACBlock
     std::vector<TACBlock*> Parents;
     std::vector<TACBlock*> Children;
 
-    std::set<TACBlock*> Dominators;
+    std::unordered_set<TACBlock*> Dominators;
     std::vector<TACBlock*> DominatorTreeChildren;
 };
 
@@ -142,6 +142,10 @@ struct TACFunction
     std::vector<std::string> Parameters;
 
     std::vector<std::unique_ptr<TACBlock>> Blocks;
+};
+
+class TAC
+{
 };
 
 std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>>& CFG);

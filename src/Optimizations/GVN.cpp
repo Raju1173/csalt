@@ -21,9 +21,9 @@ struct FunctionCallKey
     auto operator<=>(const FunctionCallKey&) const = default;
 };
 
-std::map<TACValue, TACValue> Copies;
-std::map<ExpressionKey, TACValue> Expressions;
-std::map<FunctionCallKey, TACValue> Calls; // All functions are guaranteed to be pure...
+std::unordered_map<TACValue, TACValue> Copies;
+std::unordered_map<ExpressionKey, TACValue> Expressions;
+std::unordered_map<FunctionCallKey, TACValue> Calls; // All functions are guaranteed to be pure...
 
 void ComputeTACTransitions(std::vector<std::unique_ptr<TACFunction>>& TAC)
 {
@@ -69,7 +69,7 @@ void ComputeTACDominators(std::vector<std::unique_ptr<TACFunction>>& TAC)
 
         TACBlock* entryBlock = Blocks[0].get();
 
-        std::set<TACBlock*> universalSet;
+        std::unordered_set<TACBlock*> universalSet;
 
         for (const auto& blockUniquePtr : Blocks)
         {
@@ -96,7 +96,7 @@ void ComputeTACDominators(std::vector<std::unique_ptr<TACFunction>>& TAC)
                 if (curBlock == entryBlock)
                     continue;
 
-                std::set<TACBlock*> NewDominators;
+                std::unordered_set<TACBlock*> NewDominators;
 
                 if (!curBlock->Parents.empty())
                 {
@@ -107,7 +107,7 @@ void ComputeTACDominators(std::vector<std::unique_ptr<TACFunction>>& TAC)
                         if (NewDominators.empty())
                             break;
 
-                        std::set<TACBlock*> currentIntersection;
+                        std::unordered_set<TACBlock*> currentIntersection;
                         std::set_intersection(NewDominators.begin(), NewDominators.end(), curBlock->Parents[k]->Dominators.begin(), curBlock->Parents[k]->Dominators.end(), std::inserter(currentIntersection, currentIntersection.begin()));
 
                         NewDominators = std::move(currentIntersection);

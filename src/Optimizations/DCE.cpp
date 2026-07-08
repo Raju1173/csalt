@@ -6,14 +6,14 @@
 
 struct BlockTransitions
 {
-    std::set<int> parentIDs;
-    std::set<int> childrenIDs;
+    std::unordered_set<int> parentIDs;
+    std::unordered_set<int> childrenIDs;
 };
 
-std::map<std::string, int> VarUses;
-std::map<int, BlockTransitions> BlockPreds;
+std::unordered_map<std::string, int> VarUses;
+std::unordered_map<int, BlockTransitions> BlockPreds;
 
-std::map<std::string, int> CallCount;
+std::unordered_map<std::string, int> CallCount;
 
 void RemoveDeadCodeAndMergeBlocks(std::vector<std::unique_ptr<TACFunction>>& TAC)
 {
