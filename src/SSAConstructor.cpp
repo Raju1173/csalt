@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <ostream>
+#include <print>
 #include <set>
 #include <stack>
 #include <string>
@@ -242,11 +244,16 @@ void RenameNode(Node* node, std::vector<std::string>& pushed, bool definition = 
         RenameNode(node->children[0].get(), pushed, true);
     }
 
+    else if (definition && node->type == NodeType::EXPR)
+    {
+        RenameNode(node->children[0].get(), pushed, true);
+    }
+
     else
     {
         for (size_t i = 0; i < node->children.size(); i++)
         {
-            RenameNode(node->children[i].get(), pushed, definition);
+            RenameNode(node->children[i].get(), pushed, false);
         }
     }
 }
@@ -266,7 +273,7 @@ void RenameBlock(CFGBlock* Block)
 
     for (auto& s : Block->Statements)
     {
-        RenameNode(s.get(), pushed, s->type == NodeType::VAR || s->type == NodeType::EXPR ? true : false);
+        RenameNode(s.get(), pushed, (s->type == NodeType::VAR || s->type == NodeType::EXPR) ? true : false);
     }
 
     if (Block->Condition != nullptr)

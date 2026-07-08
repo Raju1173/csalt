@@ -163,6 +163,10 @@ void ComputeTACDominatorTree(std::vector<std::unique_ptr<TACFunction>>& TAC)
 
 void WalkTACDomTree(TACBlock* block)
 {
+    std::vector<TACValue> addedCopies;
+    std::vector<ExpressionKey> addedExpressions;
+    std::vector<FunctionCallKey> addedCalls;
+
     for (auto& inst : block->Instructions)
     {
         if (auto assign = dynamic_cast<TACAssign*>(inst.get()))
@@ -173,6 +177,8 @@ void WalkTACDomTree(TACBlock* block)
             }
 
             Copies[assign->dest] = assign->source;
+
+            addedCopies.push_back(assign->dest);
         }
 
         else if (auto binary = dynamic_cast<TACBinaryOp*>(inst.get()))
@@ -195,6 +201,9 @@ void WalkTACDomTree(TACBlock* block)
                     assignInst->dest = binary->dest;
                     assignInst->source = Expressions[key1];
 
+                    Copies[assignInst->dest] = assignInst->source;
+                    addedCopies.push_back(assignInst->dest);
+
                     inst = std::move(assignInst);
                 }
 
@@ -205,12 +214,17 @@ void WalkTACDomTree(TACBlock* block)
                     assignInst->dest = binary->dest;
                     assignInst->source = Expressions[key2];
 
+                    Copies[assignInst->dest] = assignInst->source;
+                    addedCopies.push_back(assignInst->dest);
+
                     inst = std::move(assignInst);
                 }
 
                 else
                 {
                     Expressions[key1] = binary->dest;
+
+                    addedExpressions.push_back(key1);
                 }
             }
 
@@ -218,36 +232,61 @@ void WalkTACDomTree(TACBlock* block)
             {
                 if (Expressions.contains(key1))
                 {
+                    auto assignInst = std::make_unique<TACAssign>();
+
+                    assignInst->dest = binary->dest;
+                    assignInst->source = Expressions[key1];
+
+                    Copies[assignInst->dest] = assignInst->source;
+                    addedCopies.push_back(assignInst->dest);
+
+                    inst = std::move(assignInst);
+                }
+
+                else
+                {
                     Expressions[key1] = binary->dest;
+
+                    addedExpressions.push_back(key1);
                 }
             }
         }
 
         else if (auto call = dynamic_cast<TACCall*>(inst.get()))
         {
-            for (size_t i = 0; i < call->args.size(); i++)
+            if (call->dest.has_value())
             {
-                if (Copies.contains(call->args[i]))
+                for (size_t i = 0; i < call->args.size(); i++)
                 {
-                    call->args[i] = Copies[call->args[i]];
+                    if (Copies.contains(call->args[i]))
+                    {
+                        call->args[i] = Copies[call->args[i]];
+                    }
+                }
+
+                FunctionCallKey key = {call->functionName, call->args};
+
+                auto currentDest = call->dest.value();
+
+                if (Calls.contains(key))
+                {
+                    auto assignInst = std::make_unique<TACAssign>();
+
+                    assignInst->dest = call->dest.value();
+                    assignInst->source = Calls[key];
+
+                    Copies[assignInst->dest] = assignInst->source;
+                    addedCopies.push_back(assignInst->dest);
+
+                    inst = std::move(assignInst);
+                }
+
+                else
+                {
+                    Calls[key] = currentDest;
+                    addedCalls.push_back(key);
                 }
             }
-
-            FunctionCallKey key = {call->functionName, call->args};
-
-            auto currentDest = call->dest.value();
-
-            if (Calls.contains(key))
-            {
-                auto assignInst = std::make_unique<TACAssign>();
-
-                assignInst->dest = call->dest.value();
-                assignInst->source = Calls[key];
-
-                inst = std::move(assignInst);
-            }
-
-            Calls[key] = currentDest;
         }
 
         else if (auto branch = dynamic_cast<TACBranch*>(inst.get()))
@@ -272,6 +311,13 @@ void WalkTACDomTree(TACBlock* block)
     {
         WalkTACDomTree(domChild);
     }
+
+    for (const auto& key : addedCopies)
+        Copies.erase(key);
+    for (const auto& key : addedExpressions)
+        Expressions.erase(key);
+    for (const auto& key : addedCalls)
+        Calls.erase(key);
 }
 
 void GVN(std::vector<std::unique_ptr<TACFunction>>& TAC)

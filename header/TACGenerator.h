@@ -48,6 +48,8 @@ struct TACValue
     std::string value;
 
     bool neg = false;
+
+    auto operator<=>(const TACValue&) const = default;
 };
 
 class TACBinaryOp : public TACInstruction
