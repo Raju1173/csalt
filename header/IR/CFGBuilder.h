@@ -3,6 +3,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -47,7 +48,7 @@ struct CFGFunction
 
     std::vector<std::string> Parameters;
 
-    std::vector<CFGBlock> Blocks;
+    std::vector<std::unique_ptr<CFGBlock>> Blocks;
 };
 
 struct CFGDominatorInfo
@@ -118,10 +119,14 @@ public:
         return MetaData[FuncName].FrontierInfo;
     }
 
-    CFGDominatorInfo& computeDominators();
-    CFGDominatorTreeInfo& computeDominatorTree();
-    CFGFrontierInfo& computeFrontiers();
-    CFGDefBlocksInfo& computeDefBlocks();
+    CFGDominatorInfo& computeDominators(CFGFunction& CFGFunc);
+    void computeDominators();
+
+    CFGDominatorTreeInfo& computeDominatorTree(CFGFunction& CFGFunc);
+    void computeDominatorTree();
+
+    CFGFrontierInfo& computeFrontiers(CFGFunction& CFGFunc, bool ComputeWeakFrontiers = false);
+    void computeFrontiers();
 
     size_t size() const
     {
@@ -140,12 +145,12 @@ public:
 
     void push_back(CFGFunction& CFGFunction)
     {
-        Functions.push_back(CFGFunction);
+        Functions.push_back(std::move(CFGFunction));
     }
 
     void push_back(CFGFunction&& CFGFunction)
     {
-        Functions.push_back(CFGFunction);
+        Functions.push_back(std::move(CFGFunction));
     }
 
     CFGFunction& back()
@@ -165,6 +170,6 @@ public:
     auto end() const { return Functions.end(); }
 };
 
-CFG constructCFG(const Node& AST);
+CFG ConstructCFG(const Node& AST);
 
-void printCFG(const CFG& CFG);
+void PrintCFG(const CFG& CFG);

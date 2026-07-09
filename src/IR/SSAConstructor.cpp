@@ -2,174 +2,13 @@
 #include "CFGBuilder.h"
 #include "lexer.h"
 #include "parser.h"
-#include <algorithm>
 #include <cstddef>
-#include <iterator>
 #include <print>
 #include <unordered_set>
 #include <stack>
 #include <string>
 #include <utility>
 #include <vector>
-
-void ComputeDominators(CFG& CFG)
-{
-    for (const CFGFunction& CFGFunc : CFG)
-    {
-        if (CFGFunc.Blocks.empty())
-            continue;
-
-        std::unordered_map<CFGBlock*, std::unordered_set<CFGBlock*>>& Dominators = CFG.getDominatorInfo(CFGFunc.FunctionName).Dominators;
-
-        std::vector<CFGBlock> Blocks = CFGFunc.Blocks;
-
-        CFGBlock& entryBlock = Blocks[0];
-
-        std::unordered_set<CFGBlock*> universalSet;
-
-        for (CFGBlock& block : Blocks)
-        {
-            universalSet.insert(&block);
-        }
-
-        Dominators[&entryBlock] = {&entryBlock};
-
-        for (size_t j = 1; j < Blocks.size(); ++j)
-        {
-            Dominators[&Blocks[j]] = universalSet;
-        }
-
-        bool changed = true;
-
-        while (changed)
-        {
-            changed = false;
-
-            for (size_t j = 0; j < Blocks.size(); j++)
-            {
-                CFGBlock& curBlock = Blocks[j];
-
-                if (&curBlock == &entryBlock)
-                    continue;
-
-                std::unordered_set<CFGBlock*> NewDominators;
-
-                if (!curBlock.Parents.empty())
-                {
-                    NewDominators = CFG.getDominatorInfo(CFGFunc.FunctionName).Dominators[curBlock.Parents[0]];
-
-                    for (size_t k = 1; k < curBlock.Parents.size(); k++)
-                    {
-                        if (NewDominators.empty())
-                            break;
-
-                        std::unordered_set<CFGBlock*> currentIntersection;
-
-                        std::set_intersection(NewDominators.begin(), NewDominators.end(), Dominators[curBlock.Parents[k]].begin(), Dominators[curBlock.Parents[k]].end(), std::inserter(currentIntersection, currentIntersection.begin()));
-
-                        NewDominators = std::move(currentIntersection);
-                    }
-                }
-
-                NewDominators.insert(&curBlock);
-
-                if (NewDominators != Dominators[&curBlock])
-                {
-                    Dominators[&curBlock] = std::move(NewDominators);
-                    changed = true;
-                }
-            }
-        }
-    }
-}
-
-void ComputeDominatorTree(CFG& CFG)
-{
-    CFGBlock* nearestDominator = nullptr;
-    size_t maxSize = 0;
-
-    for (CFGFunction& CFGFunc : CFG)
-    {
-        std::unordered_map<CFGBlock*, std::unordered_set<CFGBlock*>>& Dominators = CFG.getDominatorInfo(CFGFunc.FunctionName).Dominators;
-        std::unordered_map<CFGBlock*, std::vector<CFGBlock*>>& DominatorTree = CFG.getDominatorTreeInfo(CFGFunc.FunctionName).DominatorTree;
-
-        for (CFGBlock& block : CFGFunc.Blocks)
-        {
-            for (CFGBlock* dom : Dominators[&block])
-            {
-                if (dom == &block)
-                    continue;
-
-                size_t size = Dominators[dom].size();
-
-                if (size > maxSize)
-                {
-                    maxSize = size;
-
-                    nearestDominator = dom;
-                }
-            }
-
-            if (nearestDominator != nullptr)
-            {
-                DominatorTree[nearestDominator].push_back(&block);
-
-                nearestDominator = nullptr;
-                maxSize = 0;
-            }
-        }
-    }
-}
-
-//ComputeWeakFrontiers is an experimental argument and has no known use cases, so avoid enabling it unless you understand what it does...
-
-void ComputeBlockFrontiers(CFGBlock& Block, CFGDominatorInfo& DomInfo, CFGDominatorTreeInfo& DomTreeInfo, CFGFrontierInfo& FrontierInfo, bool ComputeWeakFrontiers)
-{
-    if (Block.TransitionNext.has_value())
-    {
-        if (!DomInfo.Dominators[Block.TransitionNext.value()].contains(&Block))
-        {
-            FrontierInfo.Frontiers[&Block].push_back(Block.TransitionNext.value());
-        }
-    }
-
-    if (Block.TransitionTrue.has_value())
-    {
-        if (!DomInfo.Dominators[Block.TransitionTrue.value()].contains(&Block))
-        {
-            FrontierInfo.Frontiers[&Block].push_back(Block.TransitionTrue.value());
-        }
-    }
-
-    if (Block.TransitionFalse.has_value())
-    {
-        if (!DomInfo.Dominators[Block.TransitionFalse.value()].contains(&Block))
-        {
-            FrontierInfo.Frontiers[&Block].push_back(Block.TransitionFalse.value());
-        }
-    }
-
-    for (CFGBlock* domChild : DomTreeInfo.DominatorTree[&Block])
-    {
-        ComputeBlockFrontiers(*domChild, DomInfo, DomTreeInfo, FrontierInfo, ComputeWeakFrontiers);
-
-        for (CFGBlock* childFrontier : FrontierInfo.Frontiers[domChild])
-        {
-            if ((!DomInfo.Dominators[childFrontier].contains(&Block) || childFrontier == &Block) || ComputeWeakFrontiers == true)
-            {
-                FrontierInfo.Frontiers[&Block].push_back(childFrontier);
-            }
-        }
-    }
-}
-
-void ComputeFrontiers(CFG& CFG, bool ComputeWeakFrontiers)
-{
-    for (CFGFunction& CFGFunc : CFG)
-    {
-        ComputeBlockFrontiers(CFGFunc.Blocks[0], CFG.getDominatorInfo(CFGFunc.FunctionName), CFG.getDominatorTreeInfo(CFGFunc.FunctionName), CFG.getFrontierInfo(CFGFunc.FunctionName), ComputeWeakFrontiers);
-    }
-}
 
 void InsertPhiNodes(CFG& CFG)
 {
@@ -273,11 +112,11 @@ void RenameNode(Node& node, std::vector<std::string>& pushed, bool definition = 
     }
 }
 
-void RenameBlock(CFGBlock& Block, CFGDominatorTreeInfo& DomTreeInfo)
+void RenameBlock(CFGBlock* Block, CFGDominatorTreeInfo& DomTreeInfo)
 {
     std::vector<std::string> pushed;
 
-    for (PhiNode& phi : Block.PhiNodes)
+    for (PhiNode& phi : Block->PhiNodes)
     {
         phi.version = VarStacks[phi.variable].second++;
 
@@ -286,43 +125,43 @@ void RenameBlock(CFGBlock& Block, CFGDominatorTreeInfo& DomTreeInfo)
         pushed.push_back(phi.variable);
     }
 
-    for (Node& s : Block.Statements)
+    for (Node& s : Block->Statements)
     {
         RenameNode(s, pushed, (s.type == NodeType::VAR || s.type == NodeType::EXPR) ? true : false);
     }
 
-    if (Block.Condition.has_value())
-        RenameNode(Block.Condition.value(), pushed);
+    if (Block->Condition.has_value())
+        RenameNode(Block->Condition.value(), pushed);
 
-    if (Block.TransitionNext.has_value())
+    if (Block->TransitionNext.has_value())
     {
-        for (PhiNode& phi : Block.TransitionNext.value()->PhiNodes)
+        for (PhiNode& phi : Block->TransitionNext.value()->PhiNodes)
         {
             if (!VarStacks[phi.variable].first.empty())
-                phi.arguments.push_back(PhiArgument{Block.ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+                phi.arguments.push_back(PhiArgument{Block->ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
         }
     }
 
-    if (Block.TransitionTrue.has_value())
+    if (Block->TransitionTrue.has_value())
     {
-        for (PhiNode& phi : Block.TransitionTrue.value()->PhiNodes)
+        for (PhiNode& phi : Block->TransitionTrue.value()->PhiNodes)
         {
             if (!VarStacks[phi.variable].first.empty())
-                phi.arguments.push_back(PhiArgument{Block.ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+                phi.arguments.push_back(PhiArgument{Block->ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
         }
     }
 
-    if (Block.TransitionFalse.has_value())
+    if (Block->TransitionFalse.has_value())
     {
-        for (PhiNode& phi : Block.TransitionFalse.value()->PhiNodes)
+        for (PhiNode& phi : Block->TransitionFalse.value()->PhiNodes)
         {
             if (!VarStacks[phi.variable].first.empty())
-                phi.arguments.push_back(PhiArgument{Block.ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
+                phi.arguments.push_back(PhiArgument{Block->ID, phi.variable + std::to_string(VarStacks[phi.variable].first.top())});
         }
     }
 
-    for (size_t i = 0; i < DomTreeInfo.DominatorTree[&Block].size(); i++)
-        RenameBlock(*(DomTreeInfo.DominatorTree[&Block][i]), DomTreeInfo);
+    for (size_t i = 0; i < DomTreeInfo.DominatorTree[Block].size(); i++)
+        RenameBlock(DomTreeInfo.DominatorTree[Block][i], DomTreeInfo);
 
     for (std::string var : pushed)
     {
@@ -334,7 +173,9 @@ void RenameVariables(CFG& CFG)
 {
     for (CFGFunction& CFGFunc : CFG)
     {
-        RenameBlock(CFGFunc.Blocks[0], CFG.getDominatorTreeInfo(CFGFunc.FunctionName));
+        CFG.getDefBlocksInfo(CFGFunc.FunctionName).isValid = false;
+
+        RenameBlock(CFGFunc.Blocks[0].get(), CFG.getDominatorTreeInfo(CFGFunc.FunctionName));
 
         VarStacks.clear();
     }

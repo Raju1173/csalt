@@ -80,10 +80,16 @@ struct Token
 
 class TokenStream
 {
-public:
+private:
     std::vector<Token> Tokens;
 
+public:
     TokenStream(std::vector<Token>& tokenStream) : Tokens(tokenStream){};
+
+    std::vector<Token>& getTokens()
+    {
+        return Tokens;
+    }
 
     size_t size() const
     {
@@ -107,6 +113,6 @@ public:
     auto end() const { return Tokens.end(); }
 };
 
-TokenStream tokenize(std::string_view source);
+TokenStream Tokenize(std::string_view source);
 
-void printTokens(const TokenStream& TokenStream);
+void PrintTokens(const TokenStream& TokenStream);

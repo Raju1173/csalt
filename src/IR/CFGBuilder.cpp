@@ -3,6 +3,8 @@
 #include "parser.h"
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
+#include <memory>
 #include <optional>
 #include <print>
 #include <utility>
@@ -10,7 +12,7 @@
 
 size_t NextBlockID = 1;
 
-CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc, size_t offset = 0, std::optional<CFGBlock> exitTarget = std::nullopt)
+CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc, size_t offset = 0, std::optional<CFGBlock*> exitTarget = std::nullopt)
 {
     CFGBlock block = CFGBlock{NextBlockID++};
 
@@ -22,16 +24,16 @@ CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc
         {
             block.Condition = cur.children[0];
 
-            CFGBlock continuation = constructBlock(CFG, ASTBlockNode, CFGFunc, i + 1, exitTarget);
+            auto continuation = std::make_unique<CFGBlock>(constructBlock(CFG, ASTBlockNode, CFGFunc, i + 1, exitTarget));
 
-            CFGFunc.Blocks.push_back(continuation);
+            CFGFunc.Blocks.push_back(std::move(continuation));
 
-            block.TransitionFalse = &continuation;
-            continuation.Parents.push_back(&block);
+            block.TransitionFalse = continuation.get();
+            continuation->Parents.push_back(&block);
 
-            CFGBlock trueBranch = constructBlock(CFG, cur.children[1], CFGFunc, 0, continuation);
-            block.TransitionTrue = &trueBranch;
-            trueBranch.Parents.push_back(&block);
+            auto trueBranch = std::make_unique<CFGBlock>(constructBlock(CFG, cur.children[1], CFGFunc, 0, continuation.get()));
+            block.TransitionTrue = trueBranch.get();
+            trueBranch->Parents.push_back(&block);
 
             CFGFunc.Blocks.push_back(std::move(trueBranch));
             break;
@@ -39,24 +41,24 @@ CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc
 
         else if (cur.type == NodeType::WHILE)
         {
-            CFGBlock loopHeader = CFGBlock{NextBlockID++};
+            auto loopHeader = std::make_unique<CFGBlock>(CFGBlock{NextBlockID++});
 
-            block.TransitionNext = &loopHeader;
-            loopHeader.Parents.push_back(&block);
+            block.TransitionNext = loopHeader.get();
+            loopHeader->Parents.push_back(&block);
 
-            loopHeader.Condition = std::move(cur.children[0]);
+            loopHeader->Condition = std::move(cur.children[0]);
 
-            CFGBlock continuation = constructBlock(CFG, ASTBlockNode, CFGFunc, i + 1, exitTarget);
+            auto continuation = std::make_unique<CFGBlock>(constructBlock(CFG, ASTBlockNode, CFGFunc, i + 1, exitTarget));
 
-            loopHeader.TransitionFalse = &continuation;
-            continuation.Parents.push_back(&loopHeader);
+            loopHeader->TransitionFalse = continuation.get();
+            continuation->Parents.push_back(loopHeader.get());
             CFGFunc.Blocks.push_back(std::move(continuation));
 
-            CFGBlock trueBranch = constructBlock(CFG, cur.children[1], CFGFunc, 0, loopHeader);
+            auto trueBranch = std::make_unique<CFGBlock>(constructBlock(CFG, cur.children[1], CFGFunc, 0, loopHeader.get()));
 
-            loopHeader.TransitionTrue = &trueBranch;
-            trueBranch.Parents.push_back(&loopHeader);
-            CFGFunc.Blocks.push_back(trueBranch);
+            loopHeader->TransitionTrue = trueBranch.get();
+            trueBranch->Parents.push_back(loopHeader.get());
+            CFGFunc.Blocks.push_back(std::move(trueBranch));
 
             CFGFunc.Blocks.push_back(std::move(loopHeader));
 
@@ -81,16 +83,16 @@ CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc
 
     if (block.Condition.has_value() && block.TransitionNext.has_value())
     {
-        block.TransitionNext = &(exitTarget.value());
+        block.TransitionNext = exitTarget.value();
 
         if (exitTarget.has_value())
-            exitTarget.value().Parents.push_back(&block);
+            exitTarget.value()->Parents.push_back(&block);
     }
 
     return block;
 }
 
-CFG constructCFG(const Node& AST)
+CFG ConstructCFG(const Node& AST)
 {
     CFG CFG;
 
@@ -103,7 +105,7 @@ CFG constructCFG(const Node& AST)
 
         CFG.push_back(newFunc);
 
-        CFGBlock entryBlock = constructBlock(CFG, AST.children[i].children[1], CFG.back());
+        auto entryBlock = std::make_unique<CFGBlock>(constructBlock(CFG, AST.children[i].children[1], CFG.back()));
         CFG.back().Blocks.push_back(std::move(entryBlock));
 
         std::reverse(CFG.back().Blocks.begin(), CFG.back().Blocks.end());
@@ -114,17 +116,223 @@ CFG constructCFG(const Node& AST)
     return CFG;
 }
 
-void printBlock(CFGBlock& Block, CFGDominatorInfo DomInfo, CFGDominatorTreeInfo DomTreeInfo, CFGFrontierInfo FrontierInfo)
+CFGDominatorInfo& CFG::computeDominators(CFGFunction& CFGFunc)
 {
-    if (Block.PhiNodes.size() > 0)
+    CFGDominatorInfo& domInfo = getDominatorInfo(CFGFunc.FunctionName);
+
+    if (!domInfo.isValid)
+    {
+        domInfo.isValid = true;
+
+        domInfo.Dominators.clear();
+
+        if (CFGFunc.Blocks.empty())
+            return domInfo;
+
+
+        std::unordered_map<CFGBlock*, std::unordered_set<CFGBlock*>>& dominators = domInfo.Dominators;
+
+        auto& blocks = CFGFunc.Blocks;
+
+        CFGBlock* entryBlock = blocks[0].get();
+
+        std::unordered_set<CFGBlock*> universalSet;
+
+        for (auto& block : blocks)
+        {
+            universalSet.insert(block.get());
+        }
+
+        dominators[entryBlock] = {entryBlock};
+
+        for (size_t j = 1; j < blocks.size(); ++j)
+        {
+            dominators[blocks[j].get()] = universalSet;
+        }
+
+        bool changed = true;
+
+        while (changed)
+        {
+            changed = false;
+
+            for (size_t j = 0; j < blocks.size(); j++)
+            {
+                CFGBlock* curBlock = blocks[j].get();
+
+                if (&curBlock == &entryBlock)
+                    continue;
+
+                std::unordered_set<CFGBlock*> newDominators;
+
+                if (!curBlock->Parents.empty())
+                {
+                    newDominators = domInfo.Dominators[curBlock->Parents[0]];
+
+                    for (size_t k = 1; k < curBlock->Parents.size(); k++)
+                    {
+                        if (newDominators.empty())
+                            break;
+
+                        std::unordered_set<CFGBlock*> currentIntersection;
+
+                        std::set_intersection(newDominators.begin(), newDominators.end(), dominators[curBlock->Parents[k]].begin(), dominators[curBlock->Parents[k]].end(), std::inserter(currentIntersection, currentIntersection.begin()));
+
+                        newDominators = std::move(currentIntersection);
+                    }
+                }
+
+                newDominators.insert(curBlock);
+
+                if (newDominators != dominators[curBlock])
+                {
+                    dominators[curBlock] = std::move(newDominators);
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    return domInfo;
+}
+
+void CFG::computeDominators()
+{
+    for (CFGFunction& Func : Functions)
+        computeDominators(Func);
+}
+
+CFGDominatorTreeInfo& CFG::computeDominatorTree(CFGFunction& CFGFunc)
+{
+    CFGDominatorInfo& domInfo = getDominatorInfo(CFGFunc.FunctionName);
+    CFGDominatorTreeInfo& domTreeInfo = getDominatorTreeInfo(CFGFunc.FunctionName);
+
+    CFGBlock* nearestDominator = nullptr;
+    size_t maxSize = 0;
+
+    if (!domTreeInfo.isValid)
+    {
+        domTreeInfo.isValid = true;
+
+        domTreeInfo.DominatorTree.clear();
+
+        std::unordered_map<CFGBlock*, std::unordered_set<CFGBlock*>>& dominators = domInfo.Dominators;
+
+        std::unordered_map<CFGBlock*, std::vector<CFGBlock*>>& dominatorTree = domTreeInfo.DominatorTree;
+
+        for (auto& block : CFGFunc.Blocks)
+        {
+            for (CFGBlock* dom : dominators[block.get()])
+            {
+                if (dom == block.get())
+                    continue;
+
+                size_t size = dominators[dom].size();
+
+                if (size > maxSize)
+                {
+                    maxSize = size;
+
+                    nearestDominator = dom;
+                }
+            }
+
+            if (nearestDominator != nullptr)
+            {
+                dominatorTree[nearestDominator].push_back(block.get());
+
+                nearestDominator = nullptr;
+                maxSize = 0;
+            }
+        }
+    }
+
+    return domTreeInfo;
+}
+
+void CFG::computeDominatorTree()
+{
+    for (CFGFunction& Func : Functions)
+        computeDominatorTree(Func);
+}
+
+//ComputeWeakFrontiers is an experimental argument and has no known use cases, so avoid enabling it unless you understand what it does...
+
+void ComputeBlockFrontiers(CFGBlock* Block, CFGDominatorInfo& DomInfo, CFGDominatorTreeInfo& DomTreeInfo, CFGFrontierInfo& FrontierInfo, bool ComputeWeakFrontiers)
+{
+    if (Block->TransitionNext.has_value())
+    {
+        if (!DomInfo.Dominators[Block->TransitionNext.value()].contains(Block))
+        {
+            FrontierInfo.Frontiers[Block].push_back(Block->TransitionNext.value());
+        }
+    }
+
+    if (Block->TransitionTrue.has_value())
+    {
+        if (!DomInfo.Dominators[Block->TransitionTrue.value()].contains(Block))
+        {
+            FrontierInfo.Frontiers[Block].push_back(Block->TransitionTrue.value());
+        }
+    }
+
+    if (Block->TransitionFalse.has_value())
+    {
+        if (!DomInfo.Dominators[Block->TransitionFalse.value()].contains(Block))
+        {
+            FrontierInfo.Frontiers[Block].push_back(Block->TransitionFalse.value());
+        }
+    }
+
+    for (CFGBlock* domChild : DomTreeInfo.DominatorTree[Block])
+    {
+        ComputeBlockFrontiers(domChild, DomInfo, DomTreeInfo, FrontierInfo, ComputeWeakFrontiers);
+
+        for (CFGBlock* childFrontier : FrontierInfo.Frontiers[domChild])
+        {
+            if ((!DomInfo.Dominators[childFrontier].contains(Block) || childFrontier == Block) || ComputeWeakFrontiers == true)
+            {
+                FrontierInfo.Frontiers[Block].push_back(childFrontier);
+            }
+        }
+    }
+}
+
+CFGFrontierInfo& CFG::computeFrontiers(CFGFunction& CFGFunc, bool ComputeWeakFrontiers)
+{
+    CFGDominatorInfo& domInfo = getDominatorInfo(CFGFunc.FunctionName);
+    CFGDominatorTreeInfo& domTreeInfo = getDominatorTreeInfo(CFGFunc.FunctionName);
+    CFGFrontierInfo& frontierInfo = getFrontierInfo(CFGFunc.FunctionName);
+
+    if (!frontierInfo.isValid)
+    {
+        frontierInfo.isValid = true;
+
+        frontierInfo.Frontiers.clear();
+
+        ComputeBlockFrontiers(CFGFunc.Blocks[0].get(), domInfo, domTreeInfo, frontierInfo, ComputeWeakFrontiers);
+    }
+
+    return frontierInfo;
+}
+
+void CFG::computeFrontiers()
+{
+    for (CFGFunction& Func : Functions)
+        computeFrontiers(Func);
+}
+
+void printBlock(CFGBlock* Block, CFGDominatorInfo DomInfo, CFGDominatorTreeInfo DomTreeInfo, CFGFrontierInfo FrontierInfo)
+{
+    if (Block->PhiNodes.size() > 0)
     {
         std::print("|    Phi Nodes :\n");
 
-        for (size_t i = 0; i < Block.PhiNodes.size(); i++)
+        for (size_t i = 0; i < Block->PhiNodes.size(); i++)
         {
-            std::print("|    |    {}{} : {{ ", Block.PhiNodes[i].variable, Block.PhiNodes[i].version);
+            std::print("|    |    {}{} : {{ ", Block->PhiNodes[i].variable, Block->PhiNodes[i].version);
 
-            for (PhiArgument arg : Block.PhiNodes[i].arguments)
+            for (PhiArgument arg : Block->PhiNodes[i].arguments)
             {
                 std::print("{} FROM BLOCK - {}, ", arg.Value, arg.SourceID);
             }
@@ -137,29 +345,29 @@ void printBlock(CFGBlock& Block, CFGDominatorInfo DomInfo, CFGDominatorTreeInfo 
 
     std::print("|    Statements :\n");
 
-    for (size_t i = 0; i < Block.Statements.size(); i++)
+    for (size_t i = 0; i < Block->Statements.size(); i++)
     {
-        printNode(Block.Statements[i], 2);
+        printNode(Block->Statements[i], 2);
     }
 
-    if (Block.Condition.has_value())
+    if (Block->Condition.has_value())
     {
         std::print("\n|    Condition :\n");
-        printNode(*(Block.Condition), 2);
+        printNode(*(Block->Condition), 2);
     }
 
-    if (Block.TransitionNext.has_value())
-        std::print("\n|    Transition Next : Block - {}\n", Block.TransitionNext.value()->ID);
+    if (Block->TransitionNext.has_value())
+        std::print("\n|    Transition Next : Block - {}\n", Block->TransitionNext.value()->ID);
 
-    if (Block.TransitionTrue.has_value())
-        std::print("\n|    Transition True : Block - {}\n", Block.TransitionTrue.value()->ID);
+    if (Block->TransitionTrue.has_value())
+        std::print("\n|    Transition True : Block - {}\n", Block->TransitionTrue.value()->ID);
 
-    if (Block.TransitionFalse.has_value())
-        std::print("\n|    Transition False : Block - {}\n", Block.TransitionFalse.value()->ID);
+    if (Block->TransitionFalse.has_value())
+        std::print("\n|    Transition False : Block - {}\n", Block->TransitionFalse.value()->ID);
 
     std::print("\n|    Dominators : {{ ");
 
-    for (CFGBlock* b : DomInfo.Dominators[&Block])
+    for (CFGBlock* b : DomInfo.Dominators[Block])
     {
         std::print("{}, ", b->ID);
     }
@@ -168,7 +376,7 @@ void printBlock(CFGBlock& Block, CFGDominatorInfo DomInfo, CFGDominatorTreeInfo 
 
     std::print("\n|    Dominator Tree Children : {{ ");
 
-    for (CFGBlock* b : DomTreeInfo.DominatorTree[&Block])
+    for (CFGBlock* b : DomTreeInfo.DominatorTree[Block])
     {
         std::print("{}, ", b->ID);
     }
@@ -177,7 +385,7 @@ void printBlock(CFGBlock& Block, CFGDominatorInfo DomInfo, CFGDominatorTreeInfo 
 
     std::print("\n|    Frontiers : {{ ");
 
-    for (CFGBlock* b : FrontierInfo.Frontiers[&Block])
+    for (CFGBlock* b : FrontierInfo.Frontiers[Block])
     {
         std::print("{}, ", b->ID);
     }
@@ -185,7 +393,7 @@ void printBlock(CFGBlock& Block, CFGDominatorInfo DomInfo, CFGDominatorTreeInfo 
     std::print("}}\n");
 }
 
-void printCFG(CFG& CFG)
+void PrintCFG(CFG& CFG)
 {
     std::print("------CFG-------\n");
 
@@ -205,9 +413,9 @@ void printCFG(CFG& CFG)
 
         for (size_t j = 0; j < CFG[i].Blocks.size(); j++)
         {
-            std::print("\nBlock - {} :\n\n", CFG[i].Blocks[j].ID);
+            std::print("\nBlock - {} :\n\n", CFG[i].Blocks[j]->ID);
 
-            printBlock(CFG[i].Blocks[j], CFG.getDominatorInfo(CFG[i].FunctionName), CFG.getDominatorTreeInfo(CFG[i].FunctionName), CFG.getFrontierInfo(CFG[i].FunctionName));
+            printBlock(CFG[i].Blocks[j].get(), CFG.getDominatorInfo(CFG[i].FunctionName), CFG.getDominatorTreeInfo(CFG[i].FunctionName), CFG.getFrontierInfo(CFG[i].FunctionName));
         }
 
         std::print("\nVariable Definitions :\n\n");

@@ -29,6 +29,27 @@ enum class Register
     RBP
 };
 
+enum class MIRType
+{
+    MOV,
+    ADD,
+    SUB,
+    MUL,
+    DIV,
+    NEG,
+    SHL,
+    SAR,
+    LEA,
+    CMP,
+    JMP,
+    POP,
+    CDQ,
+    RET,
+    PUSH,
+    CJMP,
+    CALL
+};
+
 struct StackOffset
 {
     int Offset;
@@ -44,12 +65,18 @@ using Operand = std::variant<Register, StackOffset, Immediate>;
 class MIRInstruction
 {
 public:
+    MIRType type;
+
+    MIRInstruction(MIRType type) : type(type){};
+
     virtual ~MIRInstruction() = default;
 };
 
 class MIRMov : public MIRInstruction
 {
 public:
+    MIRMov() : MIRInstruction(MIRType::MOV){};
+
     Operand Dest;
     Operand Source;
 };
@@ -57,6 +84,8 @@ public:
 class MIRAdd : public MIRInstruction
 {
 public:
+    MIRAdd() : MIRInstruction(MIRType::ADD) {}
+
     Operand Dest;
     Operand Source;
 };
@@ -64,6 +93,8 @@ public:
 class MIRSub : public MIRInstruction
 {
 public:
+    MIRSub() : MIRInstruction(MIRType::SUB) {}
+
     Operand Dest;
     Operand Source;
 };
@@ -71,6 +102,8 @@ public:
 class MIRImul : public MIRInstruction
 {
 public:
+    MIRImul() : MIRInstruction(MIRType::MUL) {}
+
     Operand Dest;
     Operand Source;
 };
@@ -78,18 +111,24 @@ public:
 class MIRIdiv : public MIRInstruction
 {
 public:
+    MIRIdiv() : MIRInstruction(MIRType::DIV) {}
+
     Operand Divisor;
 };
 
 class MIRNeg : public MIRInstruction
 {
 public:
+    MIRNeg() : MIRInstruction(MIRType::NEG) {}
+
     Operand Dest;
 };
 
 class MIRShl : public MIRInstruction
 {
 public:
+    MIRShl() : MIRInstruction(MIRType::SHL) {}
+
     Operand Dest;
     Operand Count;
 };
@@ -97,6 +136,8 @@ public:
 class MIRSar : public MIRInstruction
 {
 public:
+    MIRSar() : MIRInstruction(MIRType::SAR) {}
+
     Operand Dest;
     Operand Count;
 };
@@ -104,6 +145,8 @@ public:
 class MIRLea : public MIRInstruction
 {
 public:
+    MIRLea() : MIRInstruction(MIRType::LEA) {}
+
     Operand Dest;
     Operand Base;
     Operand Index;
@@ -113,6 +156,8 @@ public:
 class MIRCmp : public MIRInstruction
 {
 public:
+    MIRCmp() : MIRInstruction(MIRType::CMP) {}
+
     Operand Left;
     Operand Right;
 };
@@ -120,18 +165,24 @@ public:
 class MIRJump : public MIRInstruction
 {
 public:
+    MIRJump() : MIRInstruction(MIRType::JMP) {}
+
     int TargetBlock;
 };
 
 class MIRPush : public MIRInstruction
 {
 public:
+    MIRPush() : MIRInstruction(MIRType::PUSH) {}
+
     Operand Source;
 };
 
 class MIRPop : public MIRInstruction
 {
 public:
+    MIRPop() : MIRInstruction(MIRType::POP) {}
+
     Operand Dest;
 };
 
@@ -139,10 +190,8 @@ enum class Condition
 {
     EQUAL,
     NOT_EQUAL,
-
     LESS,
     LESS_EQUAL,
-
     GREATER,
     GREATER_EQUAL
 };
@@ -150,6 +199,8 @@ enum class Condition
 class MIRCondJump : public MIRInstruction
 {
 public:
+    MIRCondJump() : MIRInstruction(MIRType::CJMP) {}
+
     Condition Cond;
     int TargetBlock;
 };
@@ -157,16 +208,22 @@ public:
 class MIRCall : public MIRInstruction
 {
 public:
+    MIRCall() : MIRInstruction(MIRType::CALL) {}
+
     std::string Function;
 };
 
-// clang-format off
+class MIRRet : public MIRInstruction
+{
+public:
+    MIRRet() : MIRInstruction(MIRType::RET) {}
+};
 
-class MIRRet : public MIRInstruction {};
-
-class MIRCdq : public MIRInstruction {};
-
-// clang-format on
+class MIRCdq : public MIRInstruction
+{
+public:
+    MIRCdq() : MIRInstruction(MIRType::CDQ) {}
+};
 
 struct MIRBlock
 {
@@ -181,15 +238,59 @@ struct MIRFunction
 
     std::vector<std::string> Parameters;
 
-    std::vector<std::unique_ptr<MIRBlock>> Blocks;
+    std::vector<MIRBlock> Blocks;
 
     int StackFrameSize = 0;
 };
 
-std::vector<std::unique_ptr<MIRFunction>> GenerateMachineIR(std::vector<std::unique_ptr<TACFunction>>& TAC);
+class MIR
+{
+private:
+    std::vector<MIRFunction> Functions;
 
-void EmitAssembly(const std::vector<std::unique_ptr<MIRFunction>>& MIR, const std::string& filename);
+public:
+    size_t size() const
+    {
+        return Functions.size();
+    }
 
-void EmitExecutable(std::string ASMFilePath, std::string ExecFileName);
+    MIRFunction& operator[](size_t index)
+    {
+        return Functions[index];
+    }
 
-void PrintOutput(std::string ExecFilePath);
+    const MIRFunction& operator[](size_t index) const
+    {
+        return Functions[index];
+    }
+
+    void push_back(MIRFunction& MIRFunction)
+    {
+        Functions.push_back(std::move(MIRFunction));
+    }
+
+    void push_back(MIRFunction&& MIRFunction)
+    {
+        Functions.push_back(std::move(MIRFunction));
+    }
+
+    MIRFunction& back()
+    {
+        return Functions.back();
+    }
+
+    const MIRFunction& back() const
+    {
+        return Functions.back();
+    }
+
+    auto begin() { return Functions.begin(); }
+    auto end() { return Functions.end(); }
+
+    auto begin() const { return Functions.begin(); }
+    auto end() const { return Functions.end(); }
+};
+
+MIR GenerateMachineIR(TAC& TAC);
+
+void PrintMIR(MIR& MIR);

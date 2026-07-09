@@ -3,7 +3,7 @@
 #include <vector>
 #include <print>
 
-TokenStream tokenize(std::string_view source)
+TokenStream Tokenize(std::string_view source)
 {
     std::vector<Token> tokenStream;
 
@@ -193,7 +193,7 @@ TokenStream tokenize(std::string_view source)
     return TokenStream(tokenStream);
 }
 
-void printTokens(const TokenStream& TokenStream)
+void PrintTokens(const TokenStream& TokenStream)
 {
     std::print("------TOKENS-------\n\n");
 

@@ -5,6 +5,7 @@
 #include "ConstantFolding.h"
 #include "AlgebraicSimplification.h"
 #include "BranchSimplification.h"
+#include "ASMGenerator.h"
 #include "GVN.h"
 #include "DCE.h"
 #include "lexer.h"
@@ -13,7 +14,6 @@
 #include <iostream>
 #include <print>
 #include <string>
-#include <vector>
 
 int main(int argc, char** argv)
 {
@@ -83,27 +83,27 @@ int main(int argc, char** argv)
 
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    TokenStream TokenStream = tokenize(source);
+    TokenStream TokenStream = Tokenize(source);
 
     if (dumpTokens)
     {
-        printTokens(TokenStream);
+        PrintTokens(TokenStream);
     }
 
-    Node AST = parse(TokenStream);
+    Node AST = Parse(TokenStream);
 
     if (dumpAST)
     {
-        printAST(AST);
+        PrintAST(AST);
     }
 
-    CFG CFG = constructCFG(AST);
+    CFG CFG = ConstructCFG(AST);
 
-    ComputeDominators(CFG);
+    CFG.computeDominators();
 
-    ComputeDominatorTree(CFG);
+    CFG.computeDominatorTree();
 
-    ComputeFrontiers(CFG);
+    CFG.computeFrontiers();
 
     InsertPhiNodes(CFG);
 
@@ -111,10 +111,10 @@ int main(int argc, char** argv)
 
     if (dumpCFG)
     {
-        printCFG(CFG);
+        PrintCFG(CFG);
     }
 
-    auto TAC = GenerateTAC(CFG);
+    TAC TAC = GenerateTAC(CFG);
 
     ResolvePhiNodes(TAC);
 
@@ -130,8 +130,6 @@ int main(int argc, char** argv)
 
     if (dumpTAC)
     {
-        std::print("\n------TAC-------\n\n");
-
         printTAC(TAC);
     }
 

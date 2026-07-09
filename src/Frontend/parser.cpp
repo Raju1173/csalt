@@ -1,8 +1,6 @@
-#include "CFGBuilder.h"
 #include "lexer.h"
 #include "parser.h"
 #include <cstddef>
-#include <memory>
 #include <print>
 #include <stack>
 #include <utility>
@@ -38,11 +36,11 @@ constexpr int precedence(TokenType op)
     }
 }
 
-// This abomination of a parser was basically my attempt to understand recursive descent and pratt parsing at a deeper level by merging them together into a single loop with a single stack (I dont hate clean code)...
+// This abomination of a parser was basically my attempt to understand recursive descent and pratt parsing at a deeper level by merging them together into a single loop with a stack (I dont hate clean code)...
 
 // To understand how it works, refer to 'parser.md' inside the docs directory...
 
-Node parse(const TokenStream& TokenStream)
+Node Parse(const TokenStream& TokenStream)
 {
     std::stack<Node> nodeStack;
 
@@ -56,7 +54,7 @@ Node parse(const TokenStream& TokenStream)
     };
 
     auto popAndAttach = [&nodeStack]() {
-        auto child = std::move(nodeStack.top());
+        Node child = std::move(nodeStack.top());
         nodeStack.pop();
         nodeStack.top().children.push_back(child);
     };
@@ -376,7 +374,7 @@ Node parse(const TokenStream& TokenStream)
 
                             else
                             {
-                                auto rightChild = std::move(nodeStack.top().children.back());
+                                Node rightChild = std::move(nodeStack.top().children.back());
                                 nodeStack.top().children.pop_back();
 
                                 std::vector<Node> children;
@@ -531,7 +529,7 @@ void printNode(const Node& node, int depth)
         printNode(node.children[i], depth + 1);
 }
 
-void printAST(const Node& root)
+void PrintAST(const Node& root)
 {
     std::print("------AST-------\n\n");
 

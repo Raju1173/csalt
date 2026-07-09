@@ -50,8 +50,8 @@ struct Node
     std::vector<Node> children;
 };
 
-Node parse(TokenStream& TokenStream);
+Node Parse(TokenStream& TokenStream);
 
 void printNode(const Node& node, int depth = 0);
 
-void printAST(const Node& root);
+void PrintAST(const Node& root);

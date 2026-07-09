@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CFGBuilder.h"
-#include "SSAConstructor.h"
 #include <vector>
 #include <memory>
 
@@ -37,9 +36,24 @@ constexpr std::string_view BinaryOpToStr[] = {
     ">",
     ">="};
 
+enum class TACType
+{
+    BINARYOP,
+    ASSIGN,
+    JUMP,
+    PHI,
+    BRANCH,
+    CALL,
+    RETURN
+};
+
 class TACInstruction
 {
 public:
+    const TACType type;
+
+    TACInstruction(TACType type) : type(type){};
+
     virtual ~TACInstruction() = default;
 };
 
@@ -55,6 +69,8 @@ struct TACValue
 class TACBinaryOp : public TACInstruction
 {
 public:
+    TACBinaryOp() : TACInstruction(TACType::BINARYOP){};
+
     TACValue dest;
 
     TACValue left;
@@ -65,6 +81,8 @@ public:
 class TACAssign : public TACInstruction
 {
 public:
+    TACAssign() : TACInstruction(TACType::ASSIGN){};
+
     TACValue dest;
 
     TACValue source;
@@ -73,7 +91,7 @@ public:
 class TACJump : public TACInstruction
 {
 public:
-    TACJump(int target) : TargetBlock(target){};
+    TACJump(int target) : TACInstruction(TACType::JUMP), TargetBlock(target){};
 
     size_t TargetBlock;
 };
@@ -81,7 +99,7 @@ public:
 class TACPhi : public TACInstruction
 {
 public:
-    TACPhi(TACValue var) : variable(std::move(var)){};
+    TACPhi(TACValue var) : TACInstruction(TACType::PHI), variable(std::move(var)){};
 
     TACValue variable;
 
@@ -98,7 +116,7 @@ struct Comparison
 class TACBranch : public TACInstruction
 {
 public:
-    TACBranch(Comparison cond) : cond(cond){};
+    TACBranch(Comparison cond) : TACInstruction(TACType::BRANCH), cond(cond){};
 
     Comparison cond;
 
@@ -109,6 +127,8 @@ public:
 class TACCall : public TACInstruction
 {
 public:
+    TACCall() : TACInstruction(TACType::CALL){};
+
     std::optional<TACValue> dest;
 
     std::string functionName;
@@ -119,11 +139,14 @@ public:
 class TACReturn : public TACInstruction
 {
 public:
+    TACReturn() : TACInstruction(TACType::RETURN){};
+
     TACValue ReturnValue;
 };
 
-struct TACBlock
+class TACBlock
 {
+public:
     size_t ID;
 
     std::vector<std::unique_ptr<TACInstruction>> Instructions;
@@ -131,8 +154,19 @@ struct TACBlock
     std::vector<TACBlock*> Parents;
     std::vector<TACBlock*> Children;
 
-    std::unordered_set<TACBlock*> Dominators;
-    std::vector<TACBlock*> DominatorTreeChildren;
+    TACBlock(size_t ID) : ID(ID){};
+
+    TACBlock(TACBlock&&) noexcept = default;
+    TACBlock& operator=(TACBlock&&) noexcept = default;
+
+    ~TACBlock()
+    {
+        for (TACBlock* p : Parents)
+            std::erase(p->Children, this);
+
+        for (TACBlock* c : Children)
+            std::erase(c->Parents, this);
+    };
 };
 
 struct TACFunction
@@ -144,12 +178,95 @@ struct TACFunction
     std::vector<std::unique_ptr<TACBlock>> Blocks;
 };
 
-class TAC
+struct TACDominatorInfo
 {
+    bool isValid = false;
+
+    std::unordered_map<TACBlock*, std::unordered_set<TACBlock*>> Dominators;
 };
 
-std::vector<std::unique_ptr<TACFunction>> GenerateTAC(std::vector<std::unique_ptr<CFGFunction>>& CFG);
+struct TACDominatorTreeInfo
+{
+    bool isValid = false;
 
-void ResolvePhiNodes(std::vector<std::unique_ptr<TACFunction>>& TAC);
+    std::unordered_map<TACBlock*, std::vector<TACBlock*>> DominatorTree;
+};
 
-void printTAC(std::vector<std::unique_ptr<TACFunction>>& TAC);
+struct TACMetaData
+{
+    TACDominatorInfo DomInfo;
+
+    TACDominatorTreeInfo DomTreeInfo;
+};
+
+class TAC
+{
+private:
+    std::vector<TACFunction> Functions;
+
+    std::unordered_map<std::string, TACMetaData> MetaData;
+
+public:
+    TACDominatorInfo& getDominatorInfo(std::string FuncName)
+    {
+        return MetaData[FuncName].DomInfo;
+    }
+
+    TACDominatorTreeInfo& getDominatorTreeInfo(std::string FuncName)
+    {
+        return MetaData[FuncName].DomTreeInfo;
+    }
+
+    TACDominatorInfo& computeDominators(TACFunction& TACFunc);
+    void computeDominators();
+
+    TACDominatorTreeInfo& computeDominatorTree(TACFunction& TACFunc);
+    void computeDominatorTree();
+
+    size_t size() const
+    {
+        return Functions.size();
+    }
+
+    TACFunction& operator[](size_t index)
+    {
+        return Functions[index];
+    }
+
+    const TACFunction& operator[](size_t index) const
+    {
+        return Functions[index];
+    }
+
+    void push_back(TACFunction& TACFunction)
+    {
+        Functions.push_back(std::move(TACFunction));
+    }
+
+    void push_back(TACFunction&& TACFunction)
+    {
+        Functions.push_back(std::move(TACFunction));
+    }
+
+    TACFunction& back()
+    {
+        return Functions.back();
+    }
+
+    const TACFunction& back() const
+    {
+        return Functions.back();
+    }
+
+    auto begin() { return Functions.begin(); }
+    auto end() { return Functions.end(); }
+
+    auto begin() const { return Functions.begin(); }
+    auto end() const { return Functions.end(); }
+};
+
+TAC GenerateTAC(CFG& CFG);
+
+void ResolvePhiNodes(TAC& TAC);
+
+void printTAC(TAC& TAC);
