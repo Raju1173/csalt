@@ -5,6 +5,7 @@
 #include <variant>
 #include <vector>
 
+
 enum class Register
 {
     EAX,
@@ -28,6 +29,8 @@ enum class Register
     RSP,
     RBP
 };
+
+std::string RegisterName(Register reg);
 
 enum class MIRType
 {
@@ -61,6 +64,8 @@ struct Immediate
 };
 
 using Operand = std::variant<Register, StackOffset, Immediate>;
+
+std::string OperandString(const Operand& op);
 
 class MIRInstruction
 {
@@ -167,7 +172,7 @@ class MIRJump : public MIRInstruction
 public:
     MIRJump() : MIRInstruction(MIRType::JMP) {}
 
-    int TargetBlock;
+    size_t TargetBlock;
 };
 
 class MIRPush : public MIRInstruction
@@ -202,7 +207,7 @@ public:
     MIRCondJump() : MIRInstruction(MIRType::CJMP) {}
 
     Condition Cond;
-    int TargetBlock;
+    size_t TargetBlock;
 };
 
 class MIRCall : public MIRInstruction

@@ -2,12 +2,13 @@
 #include "TACGenerator.h"
 #include <cctype>
 #include <cstddef>
+#include <iostream>
 #include <memory>
+#include <ostream>
 #include <print>
 #include <sys/types.h>
 #include <utility>
 #include <variant>
-
 
 std::unordered_map<std::string, std::variant<Register, StackOffset>> StackSlots;
 
@@ -89,10 +90,11 @@ MIR GenerateMachineIR(TAC& TAC)
 
                             curBlock.Instructions.push_back(std::move(movDest));
                         }
+                        break;
 
                     case TACType::BINARYOP:
                         {
-                            auto binary = dynamic_cast<TACBinaryOp*>(inst.get());
+                            TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
                             if (binary->op == BinaryOp::PLUS || binary->op == BinaryOp::MINUS || binary->op == BinaryOp::MUL)
                             {
@@ -247,6 +249,7 @@ MIR GenerateMachineIR(TAC& TAC)
                                 curBlock.Instructions.push_back(std::move(idivResult));
                             }
                         }
+                        break;
 
                     case TACType::CALL:
                         {
@@ -298,6 +301,7 @@ MIR GenerateMachineIR(TAC& TAC)
 
                             curBlock.Instructions.push_back(std::move(add));
                         }
+                        break;
 
                     case TACType::BRANCH:
                         {
@@ -364,10 +368,11 @@ MIR GenerateMachineIR(TAC& TAC)
 
                             curBlock.Instructions.push_back(std::move(jump));
                         }
+                        break;
 
                     case TACType::JUMP:
                         {
-                            TACJump* jump = dynamic_cast<TACJump*>(inst.get());
+                            TACJump* jump = static_cast<TACJump*>(inst.get());
 
                             auto jmp = std::make_unique<MIRJump>();
 
@@ -375,10 +380,11 @@ MIR GenerateMachineIR(TAC& TAC)
 
                             curBlock.Instructions.push_back(std::move(jmp));
                         }
+                        break;
 
                     case TACType::RETURN:
                         {
-                            TACReturn* ret = dynamic_cast<TACReturn*>(inst.get());
+                            TACReturn* ret = static_cast<TACReturn*>(inst.get());
 
                             if (!ret->ReturnValue.value.empty())
                             {
@@ -405,13 +411,14 @@ MIR GenerateMachineIR(TAC& TAC)
 
                             curBlock.Instructions.push_back(std::make_unique<MIRRet>());
                         }
+                        break;
                 }
             }
         }
 
         auto& exitBlock = MIR.back().Blocks.back();
 
-        if (exitBlock.Instructions.empty() || !dynamic_cast<MIRRet*>(exitBlock.Instructions.back().get()))
+        if (exitBlock.Instructions.empty() || exitBlock.Instructions.back()->type != MIRType::RET)
         {
             auto movRBP = std::make_unique<MIRMov>();
 
@@ -498,7 +505,231 @@ MIR GenerateMachineIR(TAC& TAC)
     return MIR;
 }
 
+std::string RegisterName(Register reg)
+{
+    switch (reg)
+    {
+        case Register::EAX:
+            return "eax";
+
+        case Register::EDI:
+            return "edi";
+        case Register::ESI:
+            return "esi";
+        case Register::EDX:
+            return "edx";
+        case Register::ECX:
+            return "ecx";
+        case Register::R8D:
+            return "r8d";
+        case Register::R9D:
+            return "r9d";
+
+        case Register::R10D:
+            return "r10d";
+        case Register::R11D:
+            return "r11d";
+
+        case Register::EBX:
+            return "ebx";
+        case Register::R12D:
+            return "r12d";
+        case Register::R13D:
+            return "r13d";
+        case Register::R14D:
+            return "r14d";
+        case Register::R15D:
+            return "r15d";
+
+        case Register::RSP:
+            return "rsp";
+        case Register::RBP:
+            return "rbp";
+    }
+
+    return "";
+}
+
+std::string OperandString(const Operand& op)
+{
+    return std::visit([](auto&& value) -> std::string {
+        using T = std::decay_t<decltype(value)>;
+
+        if constexpr (std::is_same_v<T, Register>)
+        {
+            return RegisterName(value);
+        }
+
+        else if constexpr (std::is_same_v<T, StackOffset>)
+        {
+            if (value.Offset < 0)
+                return "DWORD PTR [rbp" + std::to_string(value.Offset) + "]";
+
+            if (value.Offset > 0)
+                return "DWORD PTR [rbp + " + std::to_string(value.Offset) + "]";
+
+            return "DWORD PTR [rbp]";
+        }
+
+        else
+        {
+            return std::to_string(value.Value);
+        }
+    },
+        op);
+}
+
 void PrintMIR(MIR& MIR)
 {
-    //
+    for (const MIRFunction& function : MIR)
+    {
+        std::print("# Function - {}:\n\n", function.FunctionName);
+
+        for (const auto& block : function.Blocks)
+        {
+            std::print("B{}:\n", block.ID);
+
+            for (const auto& inst : block.Instructions)
+            {
+                switch (inst->type)
+                {
+                    case MIRType::MOV:
+                        {
+                            MIRMov* mov = static_cast<MIRMov*>(inst.get());
+
+                            std::print("    mov {}, {}\n", OperandString(mov->Dest), OperandString(mov->Source));
+                        }
+                        break;
+
+                    case MIRType::ADD:
+                        {
+                            MIRAdd* add = static_cast<MIRAdd*>(inst.get());
+
+                            std::print("    add {}, {}\n", OperandString(add->Dest), OperandString(add->Source));
+                        }
+                        break;
+
+                    case MIRType::SUB:
+                        {
+                            MIRSub* sub = static_cast<MIRSub*>(inst.get());
+
+                            std::print("    sub {}, {}\n", OperandString(sub->Dest), OperandString(sub->Source));
+                        }
+                        break;
+
+                    case MIRType::MUL:
+                        {
+                            MIRImul* mul = static_cast<MIRImul*>(inst.get());
+
+                            std::print("    imul {}, {}\n", OperandString(mul->Dest), OperandString(mul->Source));
+                        }
+                        break;
+
+                    case MIRType::DIV:
+                        {
+                            MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
+
+                            std::print("    idiv {}\n", OperandString(div->Divisor));
+                        }
+                        break;
+
+                    case MIRType::NEG:
+                        {
+                            MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
+
+                            std::print("    neg {}\n", OperandString(neg->Dest));
+                        }
+                        break;
+
+                    case MIRType::CMP:
+                        {
+                            MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
+
+                            std::print("    cmp {}, {}\n", OperandString(cmp->Left), OperandString(cmp->Right));
+                        }
+                        break;
+
+                    case MIRType::PUSH:
+                        {
+                            MIRPush* push = static_cast<MIRPush*>(inst.get());
+
+                            std::print("    push {}\n", OperandString(push->Source));
+                        }
+                        break;
+
+                    case MIRType::POP:
+                        {
+                            MIRPop* pop = static_cast<MIRPop*>(inst.get());
+
+                            std::print("    pop {}\n", OperandString(pop->Dest));
+                        }
+                        break;
+
+                    case MIRType::JMP:
+                        {
+                            MIRJump* jump = static_cast<MIRJump*>(inst.get());
+
+                            std::print("    jmp B{}\n", jump->TargetBlock);
+                        }
+                        break;
+
+                    case MIRType::CJMP:
+                        {
+                            MIRCondJump* jump = static_cast<MIRCondJump*>(inst.get());
+
+                            std::print("    ");
+
+                            switch (jump->Cond)
+                            {
+                                case Condition::EQUAL:
+                                    std::print("je ");
+                                    break;
+                                case Condition::NOT_EQUAL:
+                                    std::print("jne ");
+                                    break;
+                                case Condition::LESS:
+                                    std::print("jl ");
+                                    break;
+                                case Condition::LESS_EQUAL:
+                                    std::print("jle ");
+                                    break;
+                                case Condition::GREATER:
+                                    std::print("jg ");
+                                    break;
+                                case Condition::GREATER_EQUAL:
+                                    std::print("jge ");
+                                    break;
+                            }
+
+                            std::print("B{}\n", jump->TargetBlock);
+                        }
+                        break;
+
+                    case MIRType::CALL:
+                        {
+                            MIRCall* call = static_cast<MIRCall*>(inst.get());
+
+                            std::print("    call {}\n", call->Function);
+                        }
+                        break;
+
+                    case MIRType::RET:
+                        {
+                            std::print("    ret\n");
+                        }
+                        break;
+
+                    case MIRType::CDQ:
+                        {
+                            std::print("    cdq\n");
+                        }
+                        break;
+                }
+            }
+
+            std::print("\n");
+        }
+
+        std::print("\n");
+    }
 }

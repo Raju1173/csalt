@@ -40,7 +40,7 @@ constexpr int precedence(TokenType op)
 
 // To understand how it works, refer to 'parser.md' inside the docs directory...
 
-Node Parse(const TokenStream& TokenStream)
+Node Parse(TokenStream& TokenStream)
 {
     std::stack<Node> nodeStack;
 
@@ -62,11 +62,103 @@ Node Parse(const TokenStream& TokenStream)
     while (TokenStream[pos].type != TokenType::END)
     {
         Token cur = TokenStream[pos];
-        Token next = TokenStream[pos + 1];
+        Token next = TokenStream[pos + 1]; // pos + 1 without bound check is safe because of the END token...
         NodeType topType = nodeStack.top().type;
 
         switch (topType)
         {
+            case NodeType::PROGRAM:
+                if (cur.type == TokenType::IDENTIFIER)
+                {
+                    if (next.type == TokenType::LPAREN)
+                    {
+                        pushNode(NodeType::FUNCTION, cur);
+                        pos++;
+                        continue;
+                    }
+                }
+
+                else
+                {
+                    pos++;
+                    continue;
+                }
+                break;
+
+
+            case NodeType::BLOCK:
+                switch (cur.type)
+                {
+                    case TokenType::IF:
+                        pushNode(NodeType::IF);
+                        pos++;
+                        continue;
+                        break;
+
+                    case TokenType::WHILE:
+                        pushNode(NodeType::WHILE);
+                        pos++;
+                        continue;
+                        break;
+
+                    case TokenType::RETURN:
+                        pushNode(NodeType::RETURN);
+                        pos++;
+                        continue;
+                        break;
+
+                    case TokenType::IDENTIFIER:
+                        switch (next.type)
+                        {
+                            case TokenType::LPAREN:
+                                pushNode(NodeType::CALL, cur);
+                                pos += 2;
+                                continue;
+                                break;
+
+                            case TokenType::EQUAL:
+                                // pos - 1 without bound check is safe because in order for the BLOCK node to be at the top of the stack, the node below it must have consumed an LBRACE token
+                                if (TokenStream[pos - 1].type == TokenType::INT)
+                                {
+                                    pushNode(NodeType::VAR, cur);
+                                    pos += 2;
+                                    continue;
+                                }
+
+                                else
+                                {
+                                    pushNode(NodeType::EXPR);
+                                    continue;
+                                }
+                                break;
+
+                            case TokenType::SEMICOLON:
+                                if (TokenStream[pos - 1].type == TokenType::INT)
+                                {
+                                    nodeStack.top().children.push_back(Node{NodeType::VAR, cur, {}});
+                                    pos += 2;
+                                    continue;
+                                }
+                                break;
+
+                            default:
+                                break;
+                        }
+
+                        break;
+
+                    case TokenType::RBRACE:
+                        popAndAttach();
+                        continue;
+                        break;
+
+                    default:
+                        pos++;
+                        continue;
+                        break;
+                }
+                break;
+
             case NodeType::WHILE:
             case NodeType::IF:
                 switch (cur.type)
@@ -425,90 +517,6 @@ Node Parse(const TokenStream& TokenStream)
 
                 break;
         }
-
-        switch (cur.type)
-        {
-            case TokenType::IF:
-                pushNode(NodeType::IF);
-                pos++;
-                continue;
-                break;
-
-            case TokenType::WHILE:
-                pushNode(NodeType::WHILE);
-                pos++;
-                continue;
-                break;
-
-            case TokenType::RETURN:
-                pushNode(NodeType::RETURN);
-                pos++;
-                continue;
-                break;
-
-            case TokenType::IDENTIFIER:
-                // pos + 1 without bound check is safe because of the END token...
-                switch (TokenStream[pos + 1].type)
-                {
-                    case TokenType::LPAREN:
-                        if (topType == NodeType::PROGRAM)
-                        {
-                            pushNode(NodeType::FUNCTION, cur);
-                            pos++;
-                            continue;
-                        }
-
-                        if (topType == NodeType::BLOCK)
-                        {
-                            pushNode(NodeType::CALL, cur);
-                            pos += 2;
-                            continue;
-                        }
-
-                        break;
-
-                    case TokenType::EQUAL:
-                        if (TokenStream[pos - 1].type == TokenType::INT)
-                        {
-                            pushNode(NodeType::VAR, cur);
-                            pos += 2;
-                            continue;
-                        }
-
-                        else
-                        {
-                            pushNode(NodeType::EXPR);
-                            continue;
-                        }
-
-                        break;
-
-                    case TokenType::SEMICOLON:
-                        if (TokenStream[pos - 1].type == TokenType::INT)
-                        {
-                            nodeStack.top().children.push_back(Node{NodeType::VAR, cur, {}});
-                            pos += 2;
-                            continue;
-                        }
-
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case TokenType::RBRACE:
-                if (topType == NodeType::BLOCK)
-                {
-                    popAndAttach();
-                    continue;
-                }
-                break;
-        }
-
-        pos++;
     }
 
     return nodeStack.top();

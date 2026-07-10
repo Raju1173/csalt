@@ -4,7 +4,6 @@
 #include <charconv>
 #include <memory>
 #include <utility>
-#include <vector>
 
 bool isConstant(std::string_view str)
 {
@@ -15,16 +14,18 @@ bool isConstant(std::string_view str)
     return err == std::errc{} && ptr == str.data() + str.size();
 }
 
-void FoldConstants(std::vector<std::unique_ptr<TACFunction>>& TAC)
+void FoldConstants(TAC& TAC)
 {
-    for (auto& Function : TAC)
+    for (TACFunction& Function : TAC)
     {
-        for (auto& block : Function->Blocks)
+        for (auto& block : Function.Blocks)
         {
             for (auto& inst : block->Instructions)
             {
-                if (auto bin = dynamic_cast<TACBinaryOp*>(inst.get()))
+                if (inst->type == TACType::BINARYOP)
                 {
+                    TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
+
                     if (isConstant(bin->left.value) && isConstant(bin->right.value))
                     {
                         int left = std::stoi(bin->left.value);

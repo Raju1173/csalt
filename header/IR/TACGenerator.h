@@ -91,7 +91,7 @@ public:
 class TACJump : public TACInstruction
 {
 public:
-    TACJump(int target) : TACInstruction(TACType::JUMP), TargetBlock(target){};
+    TACJump(size_t target) : TACInstruction(TACType::JUMP), TargetBlock(target){};
 
     size_t TargetBlock;
 };
@@ -192,11 +192,20 @@ struct TACDominatorTreeInfo
     std::unordered_map<TACBlock*, std::vector<TACBlock*>> DominatorTree;
 };
 
+struct TACVarUsesInfo
+{
+    bool isValid = false;
+
+    std::unordered_map<std::string, size_t> VarUses;
+};
+
 struct TACMetaData
 {
     TACDominatorInfo DomInfo;
 
     TACDominatorTreeInfo DomTreeInfo;
+
+    TACVarUsesInfo VarUsesInfo;
 };
 
 class TAC
@@ -217,11 +226,19 @@ public:
         return MetaData[FuncName].DomTreeInfo;
     }
 
+    TACVarUsesInfo& getVarUsesInfo(std::string FuncName)
+    {
+        return MetaData[FuncName].VarUsesInfo;
+    }
+
     TACDominatorInfo& computeDominators(TACFunction& TACFunc);
     void computeDominators();
 
     TACDominatorTreeInfo& computeDominatorTree(TACFunction& TACFunc);
     void computeDominatorTree();
+
+    TACVarUsesInfo& computeVarUses(TACFunction& TACFunc);
+    void computeVarUses();
 
     size_t size() const
     {
@@ -263,6 +280,19 @@ public:
 
     auto begin() const { return Functions.begin(); }
     auto end() const { return Functions.end(); }
+
+    template<typename Predicate> void erase_if(Predicate pred)
+    {
+        std::erase_if(Functions, [&](const auto& TACFunc) {
+            if (pred(TACFunc))
+            {
+                MetaData.erase(TACFunc.Name);
+                return true;
+            }
+
+            return false;
+        });
+    }
 };
 
 TAC GenerateTAC(CFG& CFG);

@@ -31,6 +31,9 @@ AllowShortBlocksOnASingleLine: Never
 AllowShortLambdasOnASingleLine: All
 AllowShortCompoundRequirementOnASingleLine: true
 
+AlwaysBreakTemplateDeclarations: No
+SpaceAfterTemplateKeyword: false
+
 BinPackArguments: false
 BinPackParameters: false
 

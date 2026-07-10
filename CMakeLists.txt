@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(projectConfigs INTERFACE)
 
-target_compile_options(projectConfigs INTERFACE -Wall -Wextra -Wpedantic -stdlib=libc++)
+target_compile_options(projectConfigs INTERFACE -Wall -Wextra -Wpedantic -Wimplicit-fallthrough -Wshadow -Wnon-virtual-dtor -Wconversion -Woverloaded-virtual -stdlib=libc+ -stdlib=libc++)
 
 target_link_options(projectConfigs INTERFACE -stdlib=libc++)
 

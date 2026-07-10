@@ -1,19 +1,19 @@
-#include <variant>
-#include <vector>
 #include <memory>
 #include "TACGenerator.h"
 #include "ConstantFolding.h"
 
-void SimplifyAlgebra(std::vector<std::unique_ptr<TACFunction>>& TAC)
+void SimplifyAlgebra(TAC& TAC)
 {
-    for (auto& Function : TAC)
+    for (TACFunction& Function : TAC)
     {
-        for (auto& block : Function->Blocks)
+        for (auto& block : Function.Blocks)
         {
             for (auto& inst : block->Instructions)
             {
-                if (auto bin = dynamic_cast<TACBinaryOp*>(inst.get()))
+                if (inst->type == TACType::BINARYOP)
                 {
+                    TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
+
                     bool leftConst = isConstant(bin->left.value);
                     bool rightConst = isConstant(bin->right.value);
 

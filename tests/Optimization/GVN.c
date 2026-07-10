@@ -40,5 +40,7 @@ int main()
 
     y = add(2 + 1, 1 - 2);
 
+    y = add(2 + 1, 1 - 2);
+
     return 0 + add(3, 4);
 }

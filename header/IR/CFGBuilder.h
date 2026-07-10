@@ -170,6 +170,6 @@ public:
     auto end() const { return Functions.end(); }
 };
 
-CFG ConstructCFG(const Node& AST);
+CFG ConstructCFG(Node& AST);
 
-void PrintCFG(const CFG& CFG);
+void PrintCFG(CFG& CFG);

@@ -78,6 +78,19 @@ struct Token
     auto operator<=>(const Token&) const = default;
 };
 
+namespace std
+{
+
+template<> struct hash<Token>
+{
+    size_t operator()(const Token& t) const noexcept
+    {
+        return std::hash<std::string_view>{}(t.lexeme) ^ static_cast<size_t>(t.type);
+    }
+};
+
+}
+
 class TokenStream
 {
 private:

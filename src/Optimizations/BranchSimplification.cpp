@@ -1,18 +1,19 @@
-#include <vector>
 #include <memory>
 #include "TACGenerator.h"
 #include "ConstantFolding.h"
 
-void SimplifyBranches(std::vector<std::unique_ptr<TACFunction>>& TAC)
+void SimplifyBranches(TAC& TAC)
 {
-    for (auto& Function : TAC)
+    for (TACFunction& Function : TAC)
     {
-        for (auto& block : Function->Blocks)
+        for (auto& block : Function.Blocks)
         {
             for (auto& inst : block->Instructions)
             {
-                if (auto br = dynamic_cast<TACBranch*>(inst.get()))
+                if (inst->type == TACType::BRANCH)
                 {
+                    TACBranch* br = static_cast<TACBranch*>(inst.get());
+
                     bool leftConst = isConstant(br->cond.Left.value);
                     bool rightConst = isConstant(br->cond.Right.value);
 

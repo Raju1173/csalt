@@ -12,28 +12,28 @@
 
 size_t NextBlockID = 1;
 
-CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc, size_t offset = 0, std::optional<CFGBlock*> exitTarget = std::nullopt)
+std::unique_ptr<CFGBlock> constructBlock(Node& ASTBlockNode, CFGFunction& CFGFunc, CFGDefBlocksInfo& DefBlocksInfo, size_t offset = 0, CFGBlock* exitTarget = nullptr)
 {
-    CFGBlock block = CFGBlock{NextBlockID++};
+    auto block = std::make_unique<CFGBlock>(NextBlockID++);
 
     for (size_t i = offset; i < ASTBlockNode.children.size(); i++)
     {
-        const Node& cur = ASTBlockNode.children[i];
+        Node& cur = ASTBlockNode.children[i];
 
         if (cur.type == NodeType::IF)
         {
-            block.Condition = cur.children[0];
+            block->Condition = std::move(cur.children[0]);
 
-            auto continuation = std::make_unique<CFGBlock>(constructBlock(CFG, ASTBlockNode, CFGFunc, i + 1, exitTarget));
-
+            auto continuation = constructBlock(ASTBlockNode, CFGFunc, DefBlocksInfo, i + 1, exitTarget);
+            CFGBlock* contPtr = continuation.get();
             CFGFunc.Blocks.push_back(std::move(continuation));
 
-            block.TransitionFalse = continuation.get();
-            continuation->Parents.push_back(&block);
+            block->TransitionFalse = contPtr;
+            contPtr->Parents.push_back(block.get());
 
-            auto trueBranch = std::make_unique<CFGBlock>(constructBlock(CFG, cur.children[1], CFGFunc, 0, continuation.get()));
-            block.TransitionTrue = trueBranch.get();
-            trueBranch->Parents.push_back(&block);
+            auto trueBranch = constructBlock(cur.children[1], CFGFunc, DefBlocksInfo, 0, contPtr);
+            block->TransitionTrue = trueBranch.get();
+            trueBranch->Parents.push_back(block.get());
 
             CFGFunc.Blocks.push_back(std::move(trueBranch));
             break;
@@ -41,20 +41,21 @@ CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc
 
         else if (cur.type == NodeType::WHILE)
         {
-            auto loopHeader = std::make_unique<CFGBlock>(CFGBlock{NextBlockID++});
+            auto loopHeader = std::make_unique<CFGBlock>(NextBlockID++);
 
-            block.TransitionNext = loopHeader.get();
-            loopHeader->Parents.push_back(&block);
+            block->TransitionNext = loopHeader.get();
+            loopHeader.get()->Parents.push_back(block.get());
 
             loopHeader->Condition = std::move(cur.children[0]);
 
-            auto continuation = std::make_unique<CFGBlock>(constructBlock(CFG, ASTBlockNode, CFGFunc, i + 1, exitTarget));
+            auto continuation = constructBlock(ASTBlockNode, CFGFunc, DefBlocksInfo, i + 1, exitTarget);
+            CFGBlock* contPtr = continuation.get();
 
-            loopHeader->TransitionFalse = continuation.get();
-            continuation->Parents.push_back(loopHeader.get());
+            loopHeader->TransitionFalse = contPtr;
+            contPtr->Parents.push_back(loopHeader.get());
             CFGFunc.Blocks.push_back(std::move(continuation));
 
-            auto trueBranch = std::make_unique<CFGBlock>(constructBlock(CFG, cur.children[1], CFGFunc, 0, loopHeader.get()));
+            auto trueBranch = constructBlock(cur.children[1], CFGFunc, DefBlocksInfo, 0, loopHeader.get());
 
             loopHeader->TransitionTrue = trueBranch.get();
             trueBranch->Parents.push_back(loopHeader.get());
@@ -67,32 +68,36 @@ CFGBlock constructBlock(CFG& CFG, const Node& ASTBlockNode, CFGFunction& CFGFunc
 
         else if (cur.type == NodeType::EXPR)
         {
-            CFG.getDefBlocksInfo(CFGFunc.FunctionName).DefBlocks[cur.children[0].children[0].token].insert(&block);
+            DefBlocksInfo.DefBlocks[cur.children[0].children[0].token].insert(block.get());
         }
 
         else if (cur.type == NodeType::VAR)
         {
-            CFG.getDefBlocksInfo(CFGFunc.FunctionName).DefBlocks[cur.token].insert(&block);
+            DefBlocksInfo.DefBlocks[cur.token].insert(block.get());
         }
 
-        block.Statements.push_back(ASTBlockNode.children[i]);
+        block->Statements.push_back(std::move(ASTBlockNode.children[i]));
 
         if (cur.type == NodeType::RETURN)
             break;
     }
 
-    if (block.Condition.has_value() && block.TransitionNext.has_value())
+    if (!block->Condition.has_value() && !block->TransitionNext.has_value())
     {
-        block.TransitionNext = exitTarget.value();
+        if (exitTarget != nullptr)
+        {
+            block->TransitionNext = exitTarget;
+            exitTarget->Parents.push_back(block.get());
+        }
 
-        if (exitTarget.has_value())
-            exitTarget.value()->Parents.push_back(&block);
+        else
+            block->TransitionNext = std::nullopt;
     }
 
     return block;
 }
 
-CFG ConstructCFG(const Node& AST)
+CFG ConstructCFG(Node& AST)
 {
     CFG CFG;
 
@@ -100,12 +105,12 @@ CFG ConstructCFG(const Node& AST)
     {
         CFGFunction newFunc = CFGFunction{AST.children[i].token.lexeme};
 
-        for (const Node& arg : AST.children[i].children[0].children)
+        for (auto& arg : AST.children[i].children[0].children)
             newFunc.Parameters.push_back(arg.token.lexeme);
 
-        CFG.push_back(newFunc);
+        CFG.push_back(std::move(newFunc));
 
-        auto entryBlock = std::make_unique<CFGBlock>(constructBlock(CFG, AST.children[i].children[1], CFG.back()));
+        auto entryBlock = constructBlock(AST.children[i].children[1], CFG.back(), CFG.getDefBlocksInfo(CFG.back().FunctionName));
         CFG.back().Blocks.push_back(std::move(entryBlock));
 
         std::reverse(CFG.back().Blocks.begin(), CFG.back().Blocks.end());
@@ -128,7 +133,6 @@ CFGDominatorInfo& CFG::computeDominators(CFGFunction& CFGFunc)
 
         if (CFGFunc.Blocks.empty())
             return domInfo;
-
 
         std::unordered_map<CFGBlock*, std::unordered_set<CFGBlock*>>& dominators = domInfo.Dominators;
 
@@ -176,7 +180,13 @@ CFGDominatorInfo& CFG::computeDominators(CFGFunction& CFGFunc)
 
                         std::unordered_set<CFGBlock*> currentIntersection;
 
-                        std::set_intersection(newDominators.begin(), newDominators.end(), dominators[curBlock->Parents[k]].begin(), dominators[curBlock->Parents[k]].end(), std::inserter(currentIntersection, currentIntersection.begin()));
+                        for (CFGBlock* dom : newDominators)
+                        {
+                            if (dominators[curBlock->Parents[k]].contains(dom))
+                            {
+                                currentIntersection.insert(dom);
+                            }
+                        }
 
                         newDominators = std::move(currentIntersection);
                     }

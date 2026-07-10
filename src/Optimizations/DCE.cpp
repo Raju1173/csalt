@@ -1,150 +1,184 @@
 #include "TACGenerator.h"
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
 
-struct BlockTransitions
-{
-    std::unordered_set<int> parentIDs;
-    std::unordered_set<int> childrenIDs;
-};
-
 std::unordered_map<std::string, int> VarUses;
-std::unordered_map<int, BlockTransitions> BlockPreds;
-
 std::unordered_map<std::string, int> CallCount;
 
-void RemoveDeadCodeAndMergeBlocks(std::vector<std::unique_ptr<TACFunction>>& TAC)
+bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo)
+{
+    bool changed = false;
+
+    for (auto& Block : TACFunc.Blocks)
+    {
+        size_t initialSize = Block->Instructions.size();
+
+        std::erase_if(Block->Instructions, [&VarUsesInfo](const auto& inst) {
+            std::string destVar;
+
+            if (inst->type == TACType::ASSIGN)
+            {
+                TACAssign* assign = static_cast<TACAssign*>(inst.get());
+
+                destVar = assign->dest.value;
+            }
+
+            else if (inst->type == TACType::BINARYOP)
+            {
+                TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
+
+                destVar = binary->dest.value;
+            }
+
+            else if (inst->type == TACType::CALL)
+            {
+                TACCall* call = static_cast<TACCall*>(inst.get());
+
+                if (!call->dest.has_value())
+                    return false;
+
+                destVar = call->dest->value;
+            }
+
+            else
+            {
+                return false;
+            }
+
+            return !VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar] == 0;
+        });
+
+        if (Block->Instructions.size() != initialSize)
+        {
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+bool EliminateUnreachableBlocks(TACFunction& TACFunc)
+{
+    if (TACFunc.Blocks.empty())
+        return false;
+
+    size_t entryBlockID = TACFunc.Blocks.front()->ID;
+    size_t initialBlocks = TACFunc.Blocks.size();
+
+    std::erase_if(TACFunc.Blocks, [entryBlockID](const auto& Block) {
+        if (Block->ID == entryBlockID)
+            return false;
+
+        return Block->Parents.empty();
+    });
+
+    return TACFunc.Blocks.size() != initialBlocks;
+}
+
+bool MergeLinearBlocks(TACFunction& TACFunc)
+{
+    for (size_t i = 0; i < TACFunc.Blocks.size(); ++i)
+    {
+        auto& BlockA = TACFunc.Blocks[i];
+
+        if (BlockA->Instructions.empty())
+            continue;
+
+        if (BlockA->Instructions.back()->type == TACType::JUMP)
+        {
+            auto* jump = static_cast<TACJump*>(BlockA->Instructions.back().get());
+            size_t targetID = jump->TargetBlock;
+
+            auto blockBIt = std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [targetID](const auto& b) { return b->ID == targetID; });
+
+            if (blockBIt != TACFunc.Blocks.end())
+            {
+                auto& BlockB = *blockBIt;
+
+                if (BlockB->Parents.size() == 1 && BlockB->Parents.front() == BlockA.get())
+                {
+                    BlockA->Instructions.pop_back();
+
+                    for (auto& inst : BlockB->Instructions)
+                    {
+                        BlockA->Instructions.push_back(std::move(inst));
+                    }
+
+                    std::erase(BlockA->Children, BlockB.get());
+
+                    for (TACBlock* child : BlockB->Children)
+                    {
+                        BlockA->Children.push_back(child);
+
+                        std::replace(child->Parents.begin(), child->Parents.end(), BlockB.get(), BlockA.get());
+                    }
+
+                    BlockB->Parents.clear();
+                    BlockB->Children.clear();
+
+                    TACFunc.Blocks.erase(blockBIt);
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+void EliminateDeadFunctions(TAC& TAC)
+{
+    std::unordered_map<std::string, size_t> callCounts;
+
+    for (const auto& TACFunc : TAC)
+    {
+        for (const auto& Block : TACFunc.Blocks)
+        {
+            for (const auto& inst : Block->Instructions)
+            {
+                if (inst->type == TACType::CALL)
+                {
+                    TACCall* call = static_cast<TACCall*>(inst.get());
+
+                    callCounts[call->functionName]++;
+                }
+            }
+        }
+    }
+
+    TAC.erase_if([&callCounts](const auto& TACFunc) {
+        return TACFunc.Name != "main" && callCounts[TACFunc.Name] == 0;
+    });
+}
+
+void RemoveDeadCode(TAC& TAC)
 {
     for (auto& TACFunc : TAC)
     {
-        CallCount[TACFunc->Name] = 0;
-
         bool changed = true;
 
         while (changed)
         {
             changed = false;
 
-            VarUses.clear();
-            BlockPreds.clear();
-
-            for (auto& Block : TACFunc->Blocks)
+            if (EliminateDeadInstructions(TACFunc, TAC.computeVarUses(TACFunc)))
             {
-                for (auto& inst : Block->Instructions)
-                {
-                    if (auto assign = dynamic_cast<TACAssign*>(inst.get()))
-                    {
-                        VarUses[assign->dest.value] = 0;
-                        VarUses[assign->source.value]++;
-                    }
+                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
 
-                    else if (auto binary = dynamic_cast<TACBinaryOp*>(inst.get()))
-                    {
-                        VarUses[binary->dest.value] = 0;
-                        VarUses[binary->left.value]++;
-                        VarUses[binary->right.value]++;
-                    }
-
-                    else if (auto call = dynamic_cast<TACCall*>(inst.get()))
-                    {
-                        if (call->dest.has_value())
-                            VarUses[call->dest->value] = 0;
-                    }
-
-                    else if (auto branch = dynamic_cast<TACBranch*>(inst.get()))
-                    {
-                        VarUses[branch->cond.Left.value]++;
-                        VarUses[branch->cond.Right.value]++;
-
-                        BlockPreds[branch->TrueTarget].parentIDs.insert(Block->ID);
-                        BlockPreds[branch->FalseTarget].parentIDs.insert(Block->ID);
-
-                        BlockPreds[Block->ID].childrenIDs.insert(branch->TrueTarget);
-                        BlockPreds[Block->ID].childrenIDs.insert(branch->FalseTarget);
-                    }
-
-                    else if (auto jump = dynamic_cast<TACJump*>(inst.get()))
-                    {
-                        BlockPreds[jump->TargetBlock].parentIDs.insert(Block->ID);
-
-                        BlockPreds[Block->ID].childrenIDs.insert(jump->TargetBlock);
-                    }
-
-                    else if (auto ret = dynamic_cast<TACReturn*>(inst.get()))
-                    {
-                        VarUses[ret->ReturnValue.value]++;
-                    }
-                }
+                changed = true;
             }
 
-            for (auto& Block : TACFunc->Blocks)
+            if (EliminateUnreachableBlocks(TACFunc))
             {
-                size_t initialSize = Block->Instructions.size();
+                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
+                TAC.getDominatorInfo(TACFunc.Name).isValid = false;
+                TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
 
-                std::erase_if(Block->Instructions, [](const auto& inst) {
-                    if (auto assign = dynamic_cast<TACAssign*>(inst.get()))
-                    {
-                        auto var = VarUses.find(assign->dest.value);
-
-                        return (var == VarUses.end() || var->second == 0);
-                    }
-
-                    if (auto binary = dynamic_cast<TACBinaryOp*>(inst.get()))
-                    {
-                        auto var = VarUses.find(binary->dest.value);
-
-                        return (var == VarUses.end() || var->second == 0);
-                    }
-
-                    if (auto call = dynamic_cast<TACCall*>(inst.get()))
-                    {
-                        if (!call->dest.has_value())
-                        {
-                            return true;
-                        }
-
-                        auto var = VarUses.find(call->dest->value);
-
-                        return (var == VarUses.end() || var->second == 0);
-                    }
-
-                    return false;
-                });
-
-                if (Block->Instructions.size() != initialSize)
-                {
-                    changed = true;
-                }
+                changed = true;
             }
-
-            if (TACFunc->Blocks.empty())
-                continue;
-
-            size_t entryBlockID = TACFunc->Blocks.front()->ID;
-
-            std::erase_if(TACFunc->Blocks, [entryBlockID](const auto& Block) {
-                if (Block->ID == entryBlockID)
-                    return false;
-
-                auto it = BlockPreds.find(Block->ID);
-
-                if (it == BlockPreds.end() || it->second.parentIDs.empty())
-                {
-                    if (it != BlockPreds.end())
-                    {
-                        for (int childID : it->second.childrenIDs)
-                        {
-                            BlockPreds[childID].parentIDs.erase(Block->ID);
-                        }
-                    }
-
-                    return true;
-                }
-
-                return false;
-            });
         }
 
         bool blocksChanged = true;
@@ -153,62 +187,16 @@ void RemoveDeadCodeAndMergeBlocks(std::vector<std::unique_ptr<TACFunction>>& TAC
         {
             blocksChanged = false;
 
-            for (size_t i = 0; i < TACFunc->Blocks.size(); ++i)
+            if (MergeLinearBlocks(TACFunc))
             {
-                auto& BlockA = TACFunc->Blocks[i];
+                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
+                TAC.getDominatorInfo(TACFunc.Name).isValid = false;
+                TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
 
-                if (BlockA->Instructions.empty())
-                    continue;
-
-                if (auto jump = dynamic_cast<TACJump*>(BlockA->Instructions.back().get()))
-                {
-                    size_t targetID = jump->TargetBlock;
-
-                    if (BlockPreds[targetID].parentIDs.size() == 1 && BlockPreds[targetID].parentIDs.contains(BlockA->ID))
-                    {
-                        auto blockB = std::find_if(TACFunc->Blocks.begin(), TACFunc->Blocks.end(), [targetID](const auto& b) { return b->ID == targetID; });
-
-                        if (blockB != TACFunc->Blocks.end())
-                        {
-                            auto& BlockB = *blockB;
-
-                            BlockA->Instructions.pop_back();
-
-                            for (auto& inst : BlockB->Instructions)
-                            {
-                                BlockA->Instructions.push_back(std::move(inst));
-                            }
-
-                            BlockPreds[BlockA->ID].childrenIDs = BlockPreds[targetID].childrenIDs;
-
-                            for (int childID : BlockPreds[targetID].childrenIDs)
-                            {
-                                BlockPreds[childID].parentIDs.erase(targetID);
-                                BlockPreds[childID].parentIDs.insert(BlockA->ID);
-                            }
-
-                            TACFunc->Blocks.erase(blockB);
-
-                            blocksChanged = true;
-
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        for (auto& Block : TACFunc->Blocks)
-        {
-            for (auto& inst : Block->Instructions)
-            {
-                if (auto call = dynamic_cast<TACCall*>(inst.get()))
-                {
-                    CallCount[call->functionName]++;
-                }
+                changed = true;
             }
         }
     }
 
-    std::erase_if(TAC, [](const auto& TACFunc) { return TACFunc->Name != "main" && CallCount[TACFunc->Name] == 0; });
+    EliminateDeadFunctions(TAC);
 }

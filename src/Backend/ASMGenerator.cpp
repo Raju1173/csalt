@@ -7,80 +7,6 @@
 #include <unistd.h>
 #include <sys/resource.h>
 
-static std::string RegisterName(Register reg)
-{
-    switch (reg)
-    {
-        case Register::EAX:
-            return "eax";
-
-        case Register::EDI:
-            return "edi";
-        case Register::ESI:
-            return "esi";
-        case Register::EDX:
-            return "edx";
-        case Register::ECX:
-            return "ecx";
-        case Register::R8D:
-            return "r8d";
-        case Register::R9D:
-            return "r9d";
-
-        case Register::R10D:
-            return "r10d";
-        case Register::R11D:
-            return "r11d";
-
-        case Register::EBX:
-            return "ebx";
-        case Register::R12D:
-            return "r12d";
-        case Register::R13D:
-            return "r13d";
-        case Register::R14D:
-            return "r14d";
-        case Register::R15D:
-            return "r15d";
-
-        case Register::RSP:
-            return "rsp";
-        case Register::RBP:
-            return "rbp";
-    }
-
-    return "";
-}
-
-static std::string OperandString(const Operand& op)
-{
-    return std::visit([](auto&& value) -> std::string {
-        using T = std::decay_t<decltype(value)>;
-
-        if constexpr (std::is_same_v<T, Register>)
-        {
-            return RegisterName(value);
-        }
-
-        else if constexpr (std::is_same_v<T, StackOffset>)
-        {
-            if (value.Offset < 0)
-                return "DWORD PTR [rbp" + std::to_string(value.Offset) + "]";
-
-            if (value.Offset > 0)
-                return "DWORD PTR [rbp + " + std::to_string(value.Offset) + "]";
-
-            return "DWORD PTR [rbp]";
-        }
-
-        else
-        {
-            return std::to_string(value.Value);
-        }
-    },
-        op);
-}
-
 void EmitAssembly(MIR& MIR, const std::string& filename)
 {
     std::ofstream out(filename);
@@ -88,7 +14,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
     out << ".intel_syntax noprefix\n";
     out << ".text\n\n";
 
-    for (const auto& function : MIR)
+    for (const MIRFunction& function : MIR)
     {
         if (function.FunctionName == "main")
             out << ".global main\n";
@@ -101,98 +27,139 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 
             for (const auto& inst : block.Instructions)
             {
-                if (auto mov = dynamic_cast<MIRMov*>(inst.get()))
+                switch (inst->type)
                 {
-                    out << "    mov " << OperandString(mov->Dest) << ", " << OperandString(mov->Source) << "\n";
-                }
+                    case MIRType::MOV:
+                        {
+                            MIRMov* mov = static_cast<MIRMov*>(inst.get());
 
-                else if (auto add = dynamic_cast<MIRAdd*>(inst.get()))
-                {
-                    out << "    add " << OperandString(add->Dest) << ", " << OperandString(add->Source) << "\n";
-                }
+                            out << "    mov " << OperandString(mov->Dest) << ", " << OperandString(mov->Source) << "\n";
+                        }
+                        break;
 
-                else if (auto sub = dynamic_cast<MIRSub*>(inst.get()))
-                {
-                    out << "    sub " << OperandString(sub->Dest) << ", " << OperandString(sub->Source) << "\n";
-                }
+                    case MIRType::ADD:
+                        {
+                            MIRAdd* add = static_cast<MIRAdd*>(inst.get());
 
-                else if (auto mul = dynamic_cast<MIRImul*>(inst.get()))
-                {
-                    out << "    imul " << OperandString(mul->Dest) << ", " << OperandString(mul->Source) << "\n";
-                }
+                            out << "    add " << OperandString(add->Dest) << ", " << OperandString(add->Source) << "\n";
+                        }
+                        break;
 
-                else if (auto div = dynamic_cast<MIRIdiv*>(inst.get()))
-                {
-                    out << "    idiv " << OperandString(div->Divisor) << "\n";
-                }
+                    case MIRType::SUB:
+                        {
+                            MIRSub* sub = static_cast<MIRSub*>(inst.get());
 
-                else if (auto neg = dynamic_cast<MIRNeg*>(inst.get()))
-                {
-                    out << "    neg " << OperandString(neg->Dest) << "\n";
-                }
+                            out << "    sub " << OperandString(sub->Dest) << ", " << OperandString(sub->Source) << "\n";
+                        }
+                        break;
 
-                else if (auto cmp = dynamic_cast<MIRCmp*>(inst.get()))
-                {
-                    out << "    cmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
-                }
+                    case MIRType::MUL:
+                        {
+                            MIRImul* mul = static_cast<MIRImul*>(inst.get());
 
-                else if (auto push = dynamic_cast<MIRPush*>(inst.get()))
-                {
-                    out << "    push " << OperandString(push->Source) << "\n";
-                }
+                            out << "    imul " << OperandString(mul->Dest) << ", " << OperandString(mul->Source) << "\n";
+                        }
+                        break;
 
-                else if (auto pop = dynamic_cast<MIRPop*>(inst.get()))
-                {
-                    out << "    pop " << OperandString(pop->Dest) << "\n";
-                }
+                    case MIRType::DIV:
+                        {
+                            MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
 
-                else if (auto jump = dynamic_cast<MIRJump*>(inst.get()))
-                {
-                    out << "    jmp ." << function.FunctionName << "L" << jump->TargetBlock << "\n";
-                }
+                            out << "    idiv " << OperandString(div->Divisor) << "\n";
+                        }
+                        break;
 
-                else if (auto jump = dynamic_cast<MIRCondJump*>(inst.get()))
-                {
-                    out << "    ";
+                    case MIRType::NEG:
+                        {
+                            MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
 
-                    switch (jump->Cond)
-                    {
-                        case Condition::EQUAL:
-                            out << "je ";
-                            break;
-                        case Condition::NOT_EQUAL:
-                            out << "jne ";
-                            break;
-                        case Condition::LESS:
-                            out << "jl ";
-                            break;
-                        case Condition::LESS_EQUAL:
-                            out << "jle ";
-                            break;
-                        case Condition::GREATER:
-                            out << "jg ";
-                            break;
-                        case Condition::GREATER_EQUAL:
-                            out << "jge ";
-                            break;
-                    }
+                            out << "    neg " << OperandString(neg->Dest) << "\n";
+                        }
+                        break;
 
-                    out << "." << function.FunctionName << "L" << jump->TargetBlock << "\n";
-                }
+                    case MIRType::CMP:
+                        {
+                            MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
 
-                else if (auto call = dynamic_cast<MIRCall*>(inst.get()))
-                {
-                    out << "    call " << call->Function << "\n";
-                }
+                            out << "    cmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
+                        }
+                        break;
 
-                else if (dynamic_cast<MIRRet*>(inst.get()))
-                {
-                    out << "    ret\n";
-                }
+                    case MIRType::PUSH:
+                        {
+                            MIRPush* push = static_cast<MIRPush*>(inst.get());
 
-                else if (dynamic_cast<MIRCdq*>(inst.get()))
-                {
-                    out << "    cdq\n";
+                            out << "    push " << OperandString(push->Source) << "\n";
+                        }
+                        break;
+
+                    case MIRType::POP:
+                        {
+                            MIRPop* pop = static_cast<MIRPop*>(inst.get());
+
+                            out << "    pop " << OperandString(pop->Dest) << "\n";
+                        }
+                        break;
+
+                    case MIRType::JMP:
+                        {
+                            MIRJump* jump = static_cast<MIRJump*>(inst.get());
+
+                            out << "    jmp ." << function.FunctionName << "L" << jump->TargetBlock << "\n";
+                        }
+                        break;
+
+                    case MIRType::CJMP:
+                        {
+                            MIRCondJump* jump = static_cast<MIRCondJump*>(inst.get());
+
+                            out << "    ";
+
+                            switch (jump->Cond)
+                            {
+                                case Condition::EQUAL:
+                                    out << "je ";
+                                    break;
+                                case Condition::NOT_EQUAL:
+                                    out << "jne ";
+                                    break;
+                                case Condition::LESS:
+                                    out << "jl ";
+                                    break;
+                                case Condition::LESS_EQUAL:
+                                    out << "jle ";
+                                    break;
+                                case Condition::GREATER:
+                                    out << "jg ";
+                                    break;
+                                case Condition::GREATER_EQUAL:
+                                    out << "jge ";
+                                    break;
+                            }
+
+                            out << "." << function.FunctionName << "L" << jump->TargetBlock << "\n";
+                        }
+                        break;
+
+                    case MIRType::CALL:
+                        {
+                            MIRCall* call = static_cast<MIRCall*>(inst.get());
+
+                            out << "    call " << call->Function << "\n";
+                        }
+                        break;
+
+                    case MIRType::RET:
+                        {
+                            out << "    ret\n";
+                        }
+                        break;
+
+                    case MIRType::CDQ:
+                        {
+                            out << "    cdq\n";
+                        }
+                        break;
                 }
             }
 
@@ -207,7 +174,19 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 
 void PrintASM(std::string AssemblyFilePath)
 {
-    //
+    std::print("------ASSEMBLY-----\n\n");
+
+    std::ifstream AsmFile(AssemblyFilePath, std::ios::in | std::ios::binary | std::ios::ate);
+
+    std::streamsize size = AsmFile.tellg();
+
+    AsmFile.seekg(0, std::ios::beg);
+
+    std::string AsmOutput(size, '\0');
+
+    AsmFile.read(AsmOutput.data(), size);
+
+    std::print("{}\n", AsmOutput);
 }
 
 

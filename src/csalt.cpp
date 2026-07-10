@@ -11,7 +11,6 @@
 #include "lexer.h"
 #include "parser.h"
 #include <fstream>
-#include <iostream>
 #include <print>
 #include <string>
 
@@ -28,6 +27,7 @@ int main(int argc, char** argv)
     bool dumpAST = false;
     bool dumpCFG = false;
     bool dumpTAC = false;
+    bool dumpMIR = false;
     bool dumpASM = false;
 
     for (int i = 1; i < argc - 1; i++)
@@ -50,6 +50,11 @@ int main(int argc, char** argv)
         else if (std::string(argv[i]) == "dump-tac")
         {
             dumpTAC = true;
+        }
+
+        else if (std::string(argv[i]) == "dump-mir")
+        {
+            dumpMIR = true;
         }
 
         else if (std::string(argv[i]) == "dump-asm")
@@ -118,22 +123,27 @@ int main(int argc, char** argv)
 
     ResolvePhiNodes(TAC);
 
-    //FoldConstants(TAC);
+    FoldConstants(TAC);
 
-    //SimplifyAlgebra(TAC);
+    SimplifyAlgebra(TAC);
 
-    //SimplifyBranches(TAC);
+    SimplifyBranches(TAC);
 
-    //RemoveDeadCodeAndMergeBlocks(TAC);
+    RemoveDeadCode(TAC);
 
-    //GVN(TAC);
+    GVN(TAC);
 
     if (dumpTAC)
     {
         printTAC(TAC);
     }
 
-    auto MIR = GenerateMachineIR(TAC);
+    MIR MIR = GenerateMachineIR(TAC);
+
+    if (dumpMIR)
+    {
+        PrintMIR(MIR);
+    }
 
     std::string AssemblyFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "s";
 
@@ -141,19 +151,7 @@ int main(int argc, char** argv)
 
     if (dumpASM)
     {
-        std::print("\n------ASSEMBLY-----\n\n");
-
-        std::ifstream AsmFile(AssemblyFilePath, std::ios::in | std::ios::binary | std::ios::ate);
-
-        std::streamsize size = AsmFile.tellg();
-
-        AsmFile.seekg(0, std::ios::beg);
-
-        std::string AsmOutput(size, '\0');
-
-        AsmFile.read(AsmOutput.data(), size);
-
-        std::print("{}", AsmOutput);
+        PrintASM(AssemblyFilePath);
     }
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 2);
