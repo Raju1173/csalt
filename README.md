@@ -31,14 +31,15 @@ Keeping the fronted super small *(like a grain of sea salt)* makes implementing 
 
 # Unsupported Features
 
-- Unary operators *(use '(0 - x)' for negation)*
+- Variable shadowing *(important)*
+- else blocks *(important, use consequent if blocks)*
+- Unary operators *(important, use '(0 - x)' for negation)*
 - Structs
 - Unions
 - Arrays
 - Pointers
 - Any other keyword except int, if, while or return
 - Preprocessor statements
-- Variable shadowing *(important)*
 - Other fancy C features like "int x, y;", etc.
 
 # Architecture

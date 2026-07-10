@@ -2,9 +2,7 @@
 #include "TACGenerator.h"
 #include <cctype>
 #include <cstddef>
-#include <iostream>
 #include <memory>
-#include <ostream>
 #include <print>
 #include <sys/types.h>
 #include <utility>

@@ -6,6 +6,7 @@
 #include "AlgebraicSimplification.h"
 #include "BranchSimplification.h"
 #include "ASMGenerator.h"
+#include "PassManager.h"
 #include "GVN.h"
 #include "DCE.h"
 #include "lexer.h"
@@ -23,18 +24,24 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    bool dumpTokens = false;
+    bool dumpTOK = false;
     bool dumpAST = false;
     bool dumpCFG = false;
     bool dumpTAC = false;
     bool dumpMIR = false;
     bool dumpASM = false;
 
+    bool disableFolding = false;
+    bool disableAlgSimp = false;
+    bool disableBrnSimp = false;
+    bool disableDCE = false;
+    bool disableGVN = false;
+
     for (int i = 1; i < argc - 1; i++)
     {
         if (std::string(argv[i]) == "dump-tok")
         {
-            dumpTokens = true;
+            dumpTOK = true;
         }
 
         else if (std::string(argv[i]) == "dump-ast")
@@ -64,11 +71,70 @@ int main(int argc, char** argv)
 
         else if (std::string(argv[i]) == "dump-all")
         {
-            dumpTokens = true;
+            dumpTOK = true;
             dumpAST = true;
             dumpCFG = true;
             dumpTAC = true;
             dumpASM = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-folding")
+        {
+            disableFolding = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-algsimp")
+        {
+            disableAlgSimp = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-brnsimp")
+        {
+            disableBrnSimp = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-dce")
+        {
+            disableDCE = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-gvn")
+        {
+            disableGVN = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-all")
+        {
+            disableFolding = true;
+            disableAlgSimp = true;
+            disableBrnSimp = true;
+            disableDCE = true;
+            disableGVN = true;
+        }
+
+        else if (std::string(argv[i]) == "enable-folding")
+        {
+            disableFolding = false;
+        }
+
+        else if (std::string(argv[i]) == "enable-algsimp")
+        {
+            disableAlgSimp = false;
+        }
+
+        else if (std::string(argv[i]) == "enable-brnsimp")
+        {
+            disableBrnSimp = false;
+        }
+
+        else if (std::string(argv[i]) == "enable-dce")
+        {
+            disableDCE = false;
+        }
+
+        else if (std::string(argv[i]) == "enable-gvn")
+        {
+            disableGVN = false;
         }
 
         else
@@ -90,7 +156,7 @@ int main(int argc, char** argv)
 
     TokenStream TokenStream = Tokenize(source);
 
-    if (dumpTokens)
+    if (dumpTOK)
     {
         PrintTokens(TokenStream);
     }
@@ -122,6 +188,8 @@ int main(int argc, char** argv)
     TAC TAC = GenerateTAC(CFG);
 
     ResolvePhiNodes(TAC);
+
+    //PassManager PM({PassGroup{true, {Pass{"Constant Folding", disableFolding, false, FoldConstants}}}});
 
     FoldConstants(TAC);
 
