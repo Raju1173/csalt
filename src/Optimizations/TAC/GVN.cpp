@@ -24,8 +24,10 @@ std::map<TACValue, TACValue> Copies;
 std::map<ExpressionKey, TACValue> Expressions;
 std::map<FunctionCallKey, TACValue> Calls; // All functions are guaranteed to be pure...
 
-void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
+bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 {
+    bool changed = false;
+
     std::vector<TACValue> addedCopies;
     std::vector<ExpressionKey> addedExpressions;
     std::vector<FunctionCallKey> addedCalls;
@@ -41,6 +43,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                     if (Copies.contains(assign->source))
                     {
                         assign->source = Copies[assign->source];
+
+                        changed = true;
                     }
 
                     Copies[assign->dest] = assign->source;
@@ -54,10 +58,18 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                     TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
                     if (Copies.contains(binary->left))
+                    {
                         binary->left = Copies[binary->left];
 
+                        changed = true;
+                    }
+
                     if (Copies.contains(binary->right))
+                    {
                         binary->right = Copies[binary->right];
+
+                        changed = true;
+                    }
 
                     ExpressionKey key1 = {binary->op, binary->left, binary->right};
                     ExpressionKey key2 = {binary->op, binary->right, binary->left};
@@ -75,6 +87,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                             addedCopies.push_back(assignInst->dest);
 
                             inst = std::move(assignInst);
+
+                            changed = true;
                         }
 
                         else if (Expressions.contains(key2))
@@ -88,6 +102,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                             addedCopies.push_back(assignInst->dest);
 
                             inst = std::move(assignInst);
+
+                            changed = true;
                         }
 
                         else
@@ -111,6 +127,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                             addedCopies.push_back(assignInst->dest);
 
                             inst = std::move(assignInst);
+
+                            changed = true;
                         }
 
                         else
@@ -134,6 +152,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                             if (Copies.contains(call->args[i]))
                             {
                                 call->args[i] = Copies[call->args[i]];
+
+                                changed = true;
                             }
                         }
 
@@ -152,6 +172,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                             addedCopies.push_back(assignInst->dest);
 
                             inst = std::move(assignInst);
+
+                            changed = true;
                         }
 
                         else
@@ -168,10 +190,18 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                     TACBranch* branch = static_cast<TACBranch*>(inst.get());
 
                     if (Copies.contains(branch->cond.Left))
+                    {
                         branch->cond.Left = Copies[branch->cond.Left];
 
+                        changed = true;
+                    }
+
                     if (Copies.contains(branch->cond.Right))
+                    {
                         branch->cond.Right = Copies[branch->cond.Right];
+
+                        changed = true;
+                    }
                 }
                 break;
 
@@ -182,6 +212,8 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                     if (Copies.contains(ret->ReturnValue))
                     {
                         ret->ReturnValue = Copies[ret->ReturnValue];
+
+                        changed = true;
                     }
                 }
                 break;
@@ -190,7 +222,7 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 
     for (auto domChild : DomTreeInfo.DominatorTree[block])
     {
-        WalkTACDomTree(domChild, DomTreeInfo);
+        changed = WalkTACDomTree(domChild, DomTreeInfo);
     }
 
     for (const auto& key : addedCopies)
@@ -199,10 +231,14 @@ void WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
         Expressions.erase(key);
     for (const auto& key : addedCalls)
         Calls.erase(key);
+
+    return changed;
 }
 
-void GVN(TAC& TAC)
+bool GVN(TAC& TAC)
 {
+    bool changed = false;
+
     TAC.computeDominators();
 
     for (TACFunction& TACFunc : TAC)
@@ -213,9 +249,12 @@ void GVN(TAC& TAC)
 
         if (!TACFunc.Blocks.empty())
         {
-            WalkTACDomTree(TACFunc.Blocks[0].get(), TAC.computeDominatorTree(TACFunc));
+            changed = WalkTACDomTree(TACFunc.Blocks[0].get(), TAC.computeDominatorTree(TACFunc));
         }
 
-        TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
+        if (changed)
+            TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
     }
+
+    return changed;
 }

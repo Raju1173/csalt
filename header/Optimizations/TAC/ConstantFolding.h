@@ -3,4 +3,4 @@
 
 bool isConstant(std::string_view str);
 
-void FoldConstants(TAC& TAC);
+bool FoldConstants(TAC& TAC);

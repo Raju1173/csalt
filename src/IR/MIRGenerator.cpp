@@ -326,8 +326,17 @@ MIR GenerateMachineIR(TAC& TAC)
 
                             else
                             {
-                                CMP->Left = left;
-                                CMP->Right = right;
+                                if (left.index() != 2)
+                                {
+                                    CMP->Left = left;
+                                    CMP->Right = right;
+                                }
+
+                                else
+                                {
+                                    CMP->Left = right;
+                                    CMP->Right = left;
+                                }
                             }
 
                             curBlock.Instructions.push_back(std::move(CMP));

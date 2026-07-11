@@ -478,6 +478,15 @@ TACVarUsesInfo& TAC::computeVarUses(TACFunction& TACFunc)
             {
                 switch (inst->type)
                 {
+                    case TACType::PHI:
+                        {
+                            TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                            for (PhiArgument& arg : phi->args)
+                                VarUsesInfo.VarUses[arg.Value]++;
+                        }
+                        break;
+
                     case TACType::ASSIGN:
                         {
                             TACAssign* assign = static_cast<TACAssign*>(inst.get());

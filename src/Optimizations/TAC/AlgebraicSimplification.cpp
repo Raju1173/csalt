@@ -2,8 +2,10 @@
 #include "TACGenerator.h"
 #include "ConstantFolding.h"
 
-void SimplifyAlgebra(TAC& TAC)
+bool SimplifyAlgebra(TAC& TAC)
 {
+    bool changed = false;
+
     for (TACFunction& Function : TAC)
     {
         for (auto& block : Function.Blocks)
@@ -27,12 +29,14 @@ void SimplifyAlgebra(TAC& TAC)
                             {
                                 result = bin->right;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (rightConst && std::stoi(bin->right.value) == 0)
                             {
                                 result = bin->left;
                                 replaceInst = true;
+                                changed = true;
                             }
                             break;
 
@@ -41,6 +45,7 @@ void SimplifyAlgebra(TAC& TAC)
                             {
                                 result = bin->left;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (leftConst && std::stoi(bin->left.value) == 0 && !rightConst)
@@ -48,12 +53,14 @@ void SimplifyAlgebra(TAC& TAC)
                                 result = bin->right;
                                 result.neg = !result.neg;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (leftConst && rightConst && bin->left.value == bin->right.value && bin->left.neg == bin->right.neg)
                             {
                                 result = TACValue{"0"};
                                 replaceInst = true;
+                                changed = true;
                             }
                             break;
 
@@ -62,18 +69,21 @@ void SimplifyAlgebra(TAC& TAC)
                             {
                                 result = TACValue{"0"};
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (leftConst && std::stoi(bin->left.value) == 1)
                             {
                                 result = bin->right;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (rightConst && std::stoi(bin->right.value) == 1)
                             {
                                 result = bin->left;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (leftConst && std::stoi(bin->left.value) == -1 && !rightConst)
@@ -81,6 +91,7 @@ void SimplifyAlgebra(TAC& TAC)
                                 result = bin->right;
                                 result.neg = !result.neg;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (rightConst && std::stoi(bin->right.value) == -1 && !leftConst)
@@ -88,12 +99,14 @@ void SimplifyAlgebra(TAC& TAC)
                                 result = bin->left;
                                 result.neg = !result.neg;
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (bin->left.neg && bin->right.neg)
                             {
                                 bin->left.neg = false;
                                 bin->right.neg = false;
+                                changed = true;
                             }
                             break;
 
@@ -104,6 +117,7 @@ void SimplifyAlgebra(TAC& TAC)
                                 {
                                     result = bin->left;
                                     replaceInst = true;
+                                    changed = true;
                                 }
 
                                 else if (std::stoi(bin->right.value) == -1 && !leftConst)
@@ -111,6 +125,7 @@ void SimplifyAlgebra(TAC& TAC)
                                     result = bin->left;
                                     result.neg = !result.neg;
                                     replaceInst = true;
+                                    changed = true;
                                 }
                             }
 
@@ -118,6 +133,7 @@ void SimplifyAlgebra(TAC& TAC)
                             {
                                 result = TACValue{"0"};
                                 replaceInst = true;
+                                changed = true;
                             }
 
                             else if (!leftConst && !rightConst)
@@ -126,6 +142,7 @@ void SimplifyAlgebra(TAC& TAC)
                                 {
                                     result = TACValue{"1"};
                                     replaceInst = true;
+                                    changed = true;
                                 }
                             }
 
@@ -133,6 +150,7 @@ void SimplifyAlgebra(TAC& TAC)
                             {
                                 bin->left.neg = false;
                                 bin->right.neg = false;
+                                changed = true;
                             }
                             break;
 
@@ -151,4 +169,6 @@ void SimplifyAlgebra(TAC& TAC)
             }
         }
     }
+
+    return changed;
 }

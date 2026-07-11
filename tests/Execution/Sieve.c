@@ -43,5 +43,5 @@ int getLastPrime(int maxLimit)
 
 int main()
 {
-    return getLastPrime(9);
+    return getLastPrime(40);
 }

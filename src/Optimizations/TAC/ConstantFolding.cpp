@@ -14,8 +14,10 @@ bool isConstant(std::string_view str)
     return err == std::errc{} && ptr == str.data() + str.size();
 }
 
-void FoldConstants(TAC& TAC)
+bool FoldConstants(TAC& TAC)
 {
+    bool changed = false;
+
     for (TACFunction& Function : TAC)
     {
         for (auto& block : Function.Blocks)
@@ -73,9 +75,13 @@ void FoldConstants(TAC& TAC)
                         assignInst->source = TACValue{std::to_string(result)};
 
                         inst = std::move(assignInst);
+
+                        changed = true;
                     }
                 }
             }
         }
     }
+
+    return changed;
 }

@@ -1,6 +1,16 @@
+#include "MIRGenerator.h"
 #include "TACGenerator.h"
+#include <optional>
 #include <string>
 #include <vector>
+
+union PassFuncUnion
+{
+    void (*RunTAC)(TAC&);
+    bool (*RunTACIter)(TAC&);
+    void (*RunMIR)(MIR&);
+    bool (*RunMIRIter)(MIR&);
+};
 
 struct Pass
 {
@@ -10,7 +20,7 @@ struct Pass
 
     bool PrintDiff = false;
 
-    bool (*Run)(TAC&);
+    PassFuncUnion Func;
 };
 
 struct PassGroup
@@ -26,5 +36,5 @@ public:
 
     PassManager(std::vector<PassGroup> OptimizationPipeline) : OptimizationPipeline(OptimizationPipeline){};
 
-    void RunOptimizations(TAC& TAC);
+    void RunOptimizations(TAC* TAC, MIR* MIR);
 };

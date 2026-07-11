@@ -5,6 +5,8 @@
 #include "ConstantFolding.h"
 #include "AlgebraicSimplification.h"
 #include "BranchSimplification.h"
+#include "ControlFlowSimplification.h"
+#include "FramePointerOmission.h"
 #include "ASMGenerator.h"
 #include "PassManager.h"
 #include "GVN.h"
@@ -35,7 +37,10 @@ int main(int argc, char** argv)
     bool disableAlgSimp = false;
     bool disableBrnSimp = false;
     bool disableDCE = false;
+    bool disableCFGSimp = false;
     bool disableGVN = false;
+
+    bool disableFPO = false;
 
     for (int i = 1; i < argc - 1; i++)
     {
@@ -98,9 +103,19 @@ int main(int argc, char** argv)
             disableDCE = true;
         }
 
+        else if (std::string(argv[i]) == "disable-cfgsimp")
+        {
+            disableCFGSimp = true;
+        }
+
         else if (std::string(argv[i]) == "disable-gvn")
         {
             disableGVN = true;
+        }
+
+        else if (std::string(argv[i]) == "disable-fpo")
+        {
+            disableFPO = true;
         }
 
         else if (std::string(argv[i]) == "disable-all")
@@ -109,7 +124,10 @@ int main(int argc, char** argv)
             disableAlgSimp = true;
             disableBrnSimp = true;
             disableDCE = true;
+            disableCFGSimp = true;
             disableGVN = true;
+
+            disableFPO = true;
         }
 
         else if (std::string(argv[i]) == "enable-folding")
@@ -132,9 +150,19 @@ int main(int argc, char** argv)
             disableDCE = false;
         }
 
+        else if (std::string(argv[i]) == "enable-cfgsimp")
+        {
+            disableCFGSimp = false;
+        }
+
         else if (std::string(argv[i]) == "enable-gvn")
         {
             disableGVN = false;
+        }
+
+        else if (std::string(argv[i]) == "enable-fpo")
+        {
+            disableFPO = false;
         }
 
         else
@@ -187,19 +215,25 @@ int main(int argc, char** argv)
 
     TAC TAC = GenerateTAC(CFG);
 
+    PassManager TACPassManager({PassGroup{
+        .IterateToFixedPoint = true,
+        .Passes = {
+            {Pass{"Constant Folding", !disableFolding, false, {.RunTACIter = FoldConstants}}},
+            {Pass{"Algebraic Simplification", !disableAlgSimp, false, {.RunTACIter = SimplifyAlgebra}}},
+            {Pass{"Branch Simplification", !disableBrnSimp, false, {.RunTACIter = SimplifyBranches}}},
+            {Pass{"Dead Code Elimination", !disableDCE, false, {.RunTACIter = RemoveDeadCode}}},
+            {Pass{"Control Flow Simplification", !disableCFGSimp, false, {.RunTACIter = SimplifyControlFlow}}},
+            {Pass{"Global Value Numbering", !disableGVN, false, {.RunTACIter = GVN}}},
+        }}});
+
+    TACPassManager.RunOptimizations(&TAC, nullptr);
+
+    if (dumpTAC)
+    {
+        printTAC(TAC);
+    }
+
     ResolvePhiNodes(TAC);
-
-    //PassManager PM({PassGroup{true, {Pass{"Constant Folding", disableFolding, false, FoldConstants}}}});
-
-    FoldConstants(TAC);
-
-    SimplifyAlgebra(TAC);
-
-    SimplifyBranches(TAC);
-
-    RemoveDeadCode(TAC);
-
-    GVN(TAC);
 
     if (dumpTAC)
     {
@@ -207,6 +241,12 @@ int main(int argc, char** argv)
     }
 
     MIR MIR = GenerateMachineIR(TAC);
+
+    PassManager MIRPassManager({PassGroup{
+        .IterateToFixedPoint = false,
+        .Passes = {
+            {Pass{"Frame Pointer Omission", !disableFPO, false, {.RunMIR = OmitFramePointers}}},
+        }}});
 
     if (dumpMIR)
     {

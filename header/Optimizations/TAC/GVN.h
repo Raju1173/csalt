@@ -1,3 +1,3 @@
 #include "TACGenerator.h"
 
-void GVN(TAC& TAC);
+bool GVN(TAC& TAC);

@@ -1,6 +1,6 @@
 #include "PassManager.h"
 
-void PassManager::RunOptimizations(TAC& TAC)
+void PassManager::RunOptimizations(TAC* TAC, MIR* MIR)
 {
     for (PassGroup& passGroup : OptimizationPipeline)
     {
@@ -10,9 +10,41 @@ void PassManager::RunOptimizations(TAC& TAC)
 
             while (changed)
             {
+                changed = false;
+
                 for (Pass& pass : passGroup.Passes)
                 {
-                    changed |= pass.Run(TAC);
+                    if (pass.Enabled)
+                    {
+                        if (TAC != nullptr)
+                        {
+                            changed |= pass.Func.RunTACIter(*TAC);
+                        }
+
+                        else
+                        {
+                            changed |= pass.Func.RunMIRIter(*MIR);
+                        }
+                    }
+                }
+            }
+        }
+
+        else
+        {
+            for (Pass& pass : passGroup.Passes)
+            {
+                if (pass.Enabled)
+                {
+                    if (TAC != nullptr)
+                    {
+                        pass.Func.RunTAC(*TAC);
+                    }
+
+                    else
+                    {
+                        pass.Func.RunMIR(*MIR);
+                    }
                 }
             }
         }

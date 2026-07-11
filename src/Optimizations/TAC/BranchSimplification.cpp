@@ -2,8 +2,10 @@
 #include "TACGenerator.h"
 #include "ConstantFolding.h"
 
-void SimplifyBranches(TAC& TAC)
+bool SimplifyBranches(TAC& TAC)
 {
+    bool changed = false;
+
     for (TACFunction& Function : TAC)
     {
         for (auto& block : Function.Blocks)
@@ -54,14 +56,37 @@ void SimplifyBranches(TAC& TAC)
                         std::unique_ptr<TACJump> jumpInst;
 
                         if (result)
+                        {
                             jumpInst = std::make_unique<TACJump>(br->TrueTarget);
+
+                            auto& jumpBlock = *(std::find_if(Function.Blocks.begin(), Function.Blocks.end(), [br](const auto& b) { return b->ID == br->FalseTarget; }));
+
+                            std::erase(jumpBlock->Parents, block.get());
+                        }
                         else
+                        {
                             jumpInst = std::make_unique<TACJump>(br->FalseTarget);
 
+                            auto& jumpBlock = *(std::find_if(Function.Blocks.begin(), Function.Blocks.end(), [br](const auto& b) { return b->ID == br->TrueTarget; }));
+
+                            std::erase(jumpBlock->Parents, block.get());
+                        }
+
                         inst = std::move(jumpInst);
+
+                        changed = true;
+                    }
+
+                    else if (br->TrueTarget == br->FalseTarget)
+                    {
+                        inst = std::make_unique<TACJump>(br->TrueTarget);
+
+                        changed = true;
                     }
                 }
             }
         }
     }
+
+    return changed;
 }

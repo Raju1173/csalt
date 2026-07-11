@@ -1,12 +1,8 @@
 #include "TACGenerator.h"
-#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
-
-std::unordered_map<std::string, int> VarUses;
-std::unordered_map<std::string, int> CallCount;
 
 bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo)
 {
@@ -19,7 +15,14 @@ bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo
         std::erase_if(Block->Instructions, [&VarUsesInfo](const auto& inst) {
             std::string destVar;
 
-            if (inst->type == TACType::ASSIGN)
+            if (inst->type == TACType::PHI)
+            {
+                TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                destVar = phi->variable.value;
+            }
+
+            else if (inst->type == TACType::ASSIGN)
             {
                 TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
@@ -38,7 +41,7 @@ bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo
                 TACCall* call = static_cast<TACCall*>(inst.get());
 
                 if (!call->dest.has_value())
-                    return false;
+                    return true;
 
                 destVar = call->dest->value;
             }
@@ -78,60 +81,11 @@ bool EliminateUnreachableBlocks(TACFunction& TACFunc)
     return TACFunc.Blocks.size() != initialBlocks;
 }
 
-bool MergeLinearBlocks(TACFunction& TACFunc)
-{
-    for (size_t i = 0; i < TACFunc.Blocks.size(); ++i)
-    {
-        auto& BlockA = TACFunc.Blocks[i];
-
-        if (BlockA->Instructions.empty())
-            continue;
-
-        if (BlockA->Instructions.back()->type == TACType::JUMP)
-        {
-            auto* jump = static_cast<TACJump*>(BlockA->Instructions.back().get());
-            size_t targetID = jump->TargetBlock;
-
-            auto blockBIt = std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [targetID](const auto& b) { return b->ID == targetID; });
-
-            if (blockBIt != TACFunc.Blocks.end())
-            {
-                auto& BlockB = *blockBIt;
-
-                if (BlockB->Parents.size() == 1 && BlockB->Parents.front() == BlockA.get())
-                {
-                    BlockA->Instructions.pop_back();
-
-                    for (auto& inst : BlockB->Instructions)
-                    {
-                        BlockA->Instructions.push_back(std::move(inst));
-                    }
-
-                    std::erase(BlockA->Children, BlockB.get());
-
-                    for (TACBlock* child : BlockB->Children)
-                    {
-                        BlockA->Children.push_back(child);
-
-                        std::replace(child->Parents.begin(), child->Parents.end(), BlockB.get(), BlockA.get());
-                    }
-
-                    BlockB->Parents.clear();
-                    BlockB->Children.clear();
-
-                    TACFunc.Blocks.erase(blockBIt);
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
-}
-
-void EliminateDeadFunctions(TAC& TAC)
+bool EliminateDeadFunctions(TAC& TAC)
 {
     std::unordered_map<std::string, size_t> callCounts;
+
+    size_t initialFuncCount = TAC.size();
 
     for (const auto& TACFunc : TAC)
     {
@@ -152,10 +106,14 @@ void EliminateDeadFunctions(TAC& TAC)
     TAC.erase_if([&callCounts](const auto& TACFunc) {
         return TACFunc.Name != "main" && callCounts[TACFunc.Name] == 0;
     });
+
+    return initialFuncCount != TAC.size();
 }
 
-void RemoveDeadCode(TAC& TAC)
+bool RemoveDeadCode(TAC& TAC)
 {
+    bool globalChanged = false;
+
     for (auto& TACFunc : TAC)
     {
         bool changed = true;
@@ -169,6 +127,7 @@ void RemoveDeadCode(TAC& TAC)
                 TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
 
                 changed = true;
+                globalChanged = true;
             }
 
             if (EliminateUnreachableBlocks(TACFunc))
@@ -178,25 +137,10 @@ void RemoveDeadCode(TAC& TAC)
                 TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
 
                 changed = true;
-            }
-        }
-
-        bool blocksChanged = true;
-
-        while (blocksChanged)
-        {
-            blocksChanged = false;
-
-            if (MergeLinearBlocks(TACFunc))
-            {
-                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
-
-                changed = true;
+                globalChanged = true;
             }
         }
     }
 
-    EliminateDeadFunctions(TAC);
+    return globalChanged || EliminateDeadFunctions(TAC);
 }
