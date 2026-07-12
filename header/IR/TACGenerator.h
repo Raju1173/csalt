@@ -299,4 +299,4 @@ TAC GenerateTAC(CFG& CFG);
 
 void ResolvePhiNodes(TAC& TAC);
 
-void printTAC(TAC& TAC);
+void PrintTAC(TAC& TAC);

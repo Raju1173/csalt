@@ -12,6 +12,12 @@ std::unordered_map<std::string, std::variant<Register, StackOffset>> StackSlots;
 
 int NextOffset = -4;
 
+struct PendingOutgoingArg
+{
+    MIRMov* Instruction;
+    int ArgIndex;
+};
+
 Operand GetOperand(const TACValue& TACVal, MIRFunction& CurFunc)
 {
     if ((TACVal.value[0] >= '0' && TACVal.value[0] <= '9') || TACVal.value[0] == '-')
@@ -50,6 +56,9 @@ MIR GenerateMachineIR(TAC& TAC)
         MIR.back().StackFrameSize += 4;
         int TempOffset = -4;
         NextOffset = -8;
+
+        int MaxOutgoingArgs = 0;
+        std::vector<PendingOutgoingArg> PendingOutgoingArgs;
 
         for (auto& TACBlock : TACFunc.Blocks)
         {
@@ -251,7 +260,14 @@ MIR GenerateMachineIR(TAC& TAC)
 
                     case TACType::CALL:
                         {
+                            MIR.back().IsLeaf = false;
+
                             TACCall* call = static_cast<TACCall*>(inst.get());
+
+                            int extraArgs = call->args.size() - 6;
+
+                            if (extraArgs > MaxOutgoingArgs)
+                                MaxOutgoingArgs = extraArgs;
 
                             for (size_t i = 0; i < call->args.size(); i++)
                             {
@@ -260,7 +276,6 @@ MIR GenerateMachineIR(TAC& TAC)
                                     auto movArgument = std::make_unique<MIRMov>();
 
                                     movArgument->Dest = ArgRegs[i];
-
                                     movArgument->Source = GetOperand(call->args[i], MIR.back());
 
                                     curBlock.Instructions.push_back(std::move(movArgument));
@@ -268,11 +283,13 @@ MIR GenerateMachineIR(TAC& TAC)
 
                                 else
                                 {
-                                    auto pushArg = std::make_unique<MIRPush>();
+                                    auto movArgument = std::make_unique<MIRMov>();
 
-                                    pushArg->Source = GetOperand(call->args[call->args.size() - 1 - (i - 6)], MIR.back());
+                                    movArgument->Source = GetOperand(call->args[i], MIR.back());
 
-                                    curBlock.Instructions.push_back(std::move(pushArg));
+                                    PendingOutgoingArgs.push_back({movArgument.get(), static_cast<int>(i - 6)});
+
+                                    curBlock.Instructions.push_back(std::move(movArgument));
                                 }
                             }
 
@@ -291,13 +308,6 @@ MIR GenerateMachineIR(TAC& TAC)
 
                                 curBlock.Instructions.push_back(std::move(movReturnVal));
                             }
-
-                            auto add = std::make_unique<MIRAdd>();
-
-                            add->Dest = Register::RSP;
-                            add->Source = Immediate{std::max(0, static_cast<int>(call->args.size()) - 6) * 4};
-
-                            curBlock.Instructions.push_back(std::move(add));
                         }
                         break;
 
@@ -484,6 +494,17 @@ MIR GenerateMachineIR(TAC& TAC)
 
         entryBlock.Instructions.insert(entryBlock.Instructions.begin(), std::make_move_iterator(MovParameterInstructions.begin()), std::make_move_iterator(MovParameterInstructions.end()));
 
+        if (MaxOutgoingArgs > 0)
+        {
+            MIR.back().StackFrameSize += MaxOutgoingArgs * 8;
+
+            for (auto& pending : PendingOutgoingArgs)
+            {
+                int offset = -MIR.back().StackFrameSize + pending.ArgIndex * 8;
+                pending.Instruction->Dest = StackOffset{offset};
+            }
+        }
+
         std::vector<std::unique_ptr<MIRInstruction>> PrologueInstructions;
 
         auto pushRBP = std::make_unique<MIRPush>();
@@ -557,9 +578,9 @@ std::string RegisterName(Register reg)
     return "";
 }
 
-std::string OperandString(const Operand& op)
+std::string OperandString(const Operand& op, bool UseRSP)
 {
-    return std::visit([](auto&& value) -> std::string {
+    return std::visit([UseRSP](auto&& value) -> std::string {
         using T = std::decay_t<decltype(value)>;
 
         if constexpr (std::is_same_v<T, Register>)
@@ -569,13 +590,14 @@ std::string OperandString(const Operand& op)
 
         else if constexpr (std::is_same_v<T, StackOffset>)
         {
+            std::string base = UseRSP ? "rsp" : "rbp";
+
             if (value.Offset < 0)
-                return "DWORD PTR [rbp" + std::to_string(value.Offset) + "]";
-
+                return "DWORD PTR [" + base + std::to_string(value.Offset) + "]";
             if (value.Offset > 0)
-                return "DWORD PTR [rbp + " + std::to_string(value.Offset) + "]";
+                return "DWORD PTR [" + base + " + " + std::to_string(value.Offset) + "]";
 
-            return "DWORD PTR [rbp]";
+            return "DWORD PTR [" + base + "]";
         }
 
         else
@@ -590,11 +612,11 @@ void PrintMIR(MIR& MIR)
 {
     for (const MIRFunction& function : MIR)
     {
-        std::print("# Function - {}:\n\n", function.FunctionName);
+        std::print("# Function - {} :\n\n", function.FunctionName);
 
         for (const auto& block : function.Blocks)
         {
-            std::print("B{}:\n", block.ID);
+            std::print("Block - {} :\n", block.ID);
 
             for (const auto& inst : block.Instructions)
             {
@@ -604,7 +626,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRMov* mov = static_cast<MIRMov*>(inst.get());
 
-                            std::print("    mov {}, {}\n", OperandString(mov->Dest), OperandString(mov->Source));
+                            std::print("    mov {}, {}\n", OperandString(mov->Dest, function.OmitFramePtr), OperandString(mov->Source, function.OmitFramePtr));
                         }
                         break;
 
@@ -612,7 +634,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRAdd* add = static_cast<MIRAdd*>(inst.get());
 
-                            std::print("    add {}, {}\n", OperandString(add->Dest), OperandString(add->Source));
+                            std::print("    add {}, {}\n", OperandString(add->Dest, function.OmitFramePtr), OperandString(add->Source, function.OmitFramePtr));
                         }
                         break;
 
@@ -620,7 +642,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRSub* sub = static_cast<MIRSub*>(inst.get());
 
-                            std::print("    sub {}, {}\n", OperandString(sub->Dest), OperandString(sub->Source));
+                            std::print("    sub {}, {}\n", OperandString(sub->Dest, function.OmitFramePtr), OperandString(sub->Source, function.OmitFramePtr));
                         }
                         break;
 
@@ -628,7 +650,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRImul* mul = static_cast<MIRImul*>(inst.get());
 
-                            std::print("    imul {}, {}\n", OperandString(mul->Dest), OperandString(mul->Source));
+                            std::print("    imul {}, {}\n", OperandString(mul->Dest, function.OmitFramePtr), OperandString(mul->Source, function.OmitFramePtr));
                         }
                         break;
 
@@ -636,7 +658,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
 
-                            std::print("    idiv {}\n", OperandString(div->Divisor));
+                            std::print("    idiv {}\n", OperandString(div->Divisor, function.OmitFramePtr));
                         }
                         break;
 
@@ -644,7 +666,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
 
-                            std::print("    neg {}\n", OperandString(neg->Dest));
+                            std::print("    neg {}\n", OperandString(neg->Dest, function.OmitFramePtr));
                         }
                         break;
 
@@ -652,7 +674,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
 
-                            std::print("    cmp {}, {}\n", OperandString(cmp->Left), OperandString(cmp->Right));
+                            std::print("    cmp {}, {}\n", OperandString(cmp->Left, function.OmitFramePtr), OperandString(cmp->Right, function.OmitFramePtr));
                         }
                         break;
 
@@ -660,7 +682,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRPush* push = static_cast<MIRPush*>(inst.get());
 
-                            std::print("    push {}\n", OperandString(push->Source));
+                            std::print("    push {}\n", OperandString(push->Source, function.OmitFramePtr));
                         }
                         break;
 
@@ -668,7 +690,7 @@ void PrintMIR(MIR& MIR)
                         {
                             MIRPop* pop = static_cast<MIRPop*>(inst.get());
 
-                            std::print("    pop {}\n", OperandString(pop->Dest));
+                            std::print("    pop {}\n", OperandString(pop->Dest, function.OmitFramePtr));
                         }
                         break;
 

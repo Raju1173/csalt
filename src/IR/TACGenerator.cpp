@@ -545,7 +545,7 @@ void TAC::computeVarUses()
         computeVarUses(Func);
 }
 
-void printTAC(TAC& TAC)
+void PrintTAC(TAC& TAC)
 {
     std::print("------TAC-------\n\n");
 

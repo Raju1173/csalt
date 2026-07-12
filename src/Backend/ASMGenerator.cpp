@@ -33,7 +33,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRMov* mov = static_cast<MIRMov*>(inst.get());
 
-                            out << "    mov " << OperandString(mov->Dest) << ", " << OperandString(mov->Source) << "\n";
+                            out << "    mov " << OperandString(mov->Dest, function.OmitFramePtr) << ", " << OperandString(mov->Source, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -41,7 +41,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRAdd* add = static_cast<MIRAdd*>(inst.get());
 
-                            out << "    add " << OperandString(add->Dest) << ", " << OperandString(add->Source) << "\n";
+                            out << "    add " << OperandString(add->Dest, function.OmitFramePtr) << ", " << OperandString(add->Source, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -49,7 +49,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRSub* sub = static_cast<MIRSub*>(inst.get());
 
-                            out << "    sub " << OperandString(sub->Dest) << ", " << OperandString(sub->Source) << "\n";
+                            out << "    sub " << OperandString(sub->Dest, function.OmitFramePtr) << ", " << OperandString(sub->Source, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -57,7 +57,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRImul* mul = static_cast<MIRImul*>(inst.get());
 
-                            out << "    imul " << OperandString(mul->Dest) << ", " << OperandString(mul->Source) << "\n";
+                            out << "    imul " << OperandString(mul->Dest, function.OmitFramePtr) << ", " << OperandString(mul->Source, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -65,7 +65,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
 
-                            out << "    idiv " << OperandString(div->Divisor) << "\n";
+                            out << "    idiv " << OperandString(div->Divisor, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -73,7 +73,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
 
-                            out << "    neg " << OperandString(neg->Dest) << "\n";
+                            out << "    neg " << OperandString(neg->Dest, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -81,7 +81,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
 
-                            out << "    cmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
+                            out << "    cmp " << OperandString(cmp->Left, function.OmitFramePtr) << ", " << OperandString(cmp->Right, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -89,7 +89,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRPush* push = static_cast<MIRPush*>(inst.get());
 
-                            out << "    push " << OperandString(push->Source) << "\n";
+                            out << "    push " << OperandString(push->Source, function.OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -97,7 +97,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRPop* pop = static_cast<MIRPop*>(inst.get());
 
-                            out << "    pop " << OperandString(pop->Dest) << "\n";
+                            out << "    pop " << OperandString(pop->Dest, function.OmitFramePtr) << "\n";
                         }
                         break;
 

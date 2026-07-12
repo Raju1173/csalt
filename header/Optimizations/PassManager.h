@@ -1,18 +1,13 @@
-#include "MIRGenerator.h"
-#include "TACGenerator.h"
-#include <optional>
 #include <string>
 #include <vector>
 
-union PassFuncUnion
+template<typename T> union PassFuncUnion
 {
-    void (*RunTAC)(TAC&);
-    bool (*RunTACIter)(TAC&);
-    void (*RunMIR)(MIR&);
-    bool (*RunMIRIter)(MIR&);
+    void (*Run)(T&);
+    bool (*RunIter)(T&);
 };
 
-struct Pass
+template<typename T> struct Pass
 {
     std::string Name;
 
@@ -20,21 +15,54 @@ struct Pass
 
     bool PrintDiff = false;
 
-    PassFuncUnion Func;
+    PassFuncUnion<T> Func;
 };
 
-struct PassGroup
+template<typename T> struct PassGroup
 {
     bool IterateToFixedPoint = false;
-    std::vector<Pass> Passes;
+    std::vector<Pass<T>> Passes;
 };
 
-class PassManager
+template<typename T> class PassManager
 {
 public:
-    std::vector<PassGroup> OptimizationPipeline;
+    std::vector<PassGroup<T>> OptimizationPipeline;
 
-    PassManager(std::vector<PassGroup> OptimizationPipeline) : OptimizationPipeline(OptimizationPipeline){};
+    PassManager(std::vector<PassGroup<T>> OptimizationPipeline) : OptimizationPipeline(OptimizationPipeline){};
 
-    void RunOptimizations(TAC* TAC, MIR* MIR);
+    template<typename R> void RunOptimizations(R& IR)
+    {
+        for (PassGroup passGroup : OptimizationPipeline)
+        {
+            if (passGroup.IterateToFixedPoint)
+            {
+                bool changed = true;
+
+                while (changed)
+                {
+                    changed = false;
+
+                    for (Pass pass : passGroup.Passes)
+                    {
+                        if (pass.Enabled)
+                        {
+                            changed |= pass.Func.RunIter(IR);
+                        }
+                    }
+                }
+            }
+
+            else
+            {
+                for (Pass pass : passGroup.Passes)
+                {
+                    if (pass.Enabled)
+                    {
+                        pass.Func.Run(IR);
+                    }
+                }
+            }
+        }
+    };
 };

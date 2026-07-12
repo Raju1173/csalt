@@ -65,7 +65,7 @@ struct Immediate
 
 using Operand = std::variant<Register, StackOffset, Immediate>;
 
-std::string OperandString(const Operand& op);
+std::string OperandString(const Operand& op, bool UseRSP);
 
 class MIRInstruction
 {
@@ -246,6 +246,11 @@ struct MIRFunction
     std::vector<MIRBlock> Blocks;
 
     int StackFrameSize = 0;
+
+    bool OmitFramePtr = false;
+
+    // gets flipped during MIRgeneration...
+    bool IsLeaf = true;
 };
 
 class MIR

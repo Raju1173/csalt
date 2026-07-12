@@ -1,168 +1,21 @@
-#include "MIRGenerator.h"
-#include "CFGBuilder.h"
-#include "SSAConstructor.h"
+#include "csalt.h"
 #include "TACGenerator.h"
-#include "ConstantFolding.h"
-#include "AlgebraicSimplification.h"
-#include "BranchSimplification.h"
-#include "ControlFlowSimplification.h"
-#include "FramePointerOmission.h"
-#include "ASMGenerator.h"
-#include "PassManager.h"
-#include "GVN.h"
-#include "DCE.h"
-#include "lexer.h"
-#include "parser.h"
-#include <fstream>
-#include <print>
-#include <string>
 
 int main(int argc, char** argv)
 {
     if (argc < 2)
     {
         std::print("Error : Exactly one file name expected\n");
-
         return 1;
     }
 
-    bool dumpTOK = false;
-    bool dumpAST = false;
-    bool dumpCFG = false;
-    bool dumpTAC = false;
-    bool dumpMIR = false;
-    bool dumpASM = false;
-
-    bool disableFolding = false;
-    bool disableAlgSimp = false;
-    bool disableBrnSimp = false;
-    bool disableDCE = false;
-    bool disableCFGSimp = false;
-    bool disableGVN = false;
-
-    bool disableFPO = false;
-
     for (int i = 1; i < argc - 1; i++)
     {
-        if (std::string(argv[i]) == "dump-tok")
-        {
-            dumpTOK = true;
-        }
+        std::string arg(argv[i]);
 
-        else if (std::string(argv[i]) == "dump-ast")
+        if (auto opt = argHandlers.find(arg); opt != argHandlers.end())
         {
-            dumpAST = true;
-        }
-
-        else if (std::string(argv[i]) == "dump-cfg")
-        {
-            dumpCFG = true;
-        }
-
-        else if (std::string(argv[i]) == "dump-tac")
-        {
-            dumpTAC = true;
-        }
-
-        else if (std::string(argv[i]) == "dump-mir")
-        {
-            dumpMIR = true;
-        }
-
-        else if (std::string(argv[i]) == "dump-asm")
-        {
-            dumpASM = true;
-        }
-
-        else if (std::string(argv[i]) == "dump-all")
-        {
-            dumpTOK = true;
-            dumpAST = true;
-            dumpCFG = true;
-            dumpTAC = true;
-            dumpASM = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-folding")
-        {
-            disableFolding = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-algsimp")
-        {
-            disableAlgSimp = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-brnsimp")
-        {
-            disableBrnSimp = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-dce")
-        {
-            disableDCE = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-cfgsimp")
-        {
-            disableCFGSimp = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-gvn")
-        {
-            disableGVN = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-fpo")
-        {
-            disableFPO = true;
-        }
-
-        else if (std::string(argv[i]) == "disable-all")
-        {
-            disableFolding = true;
-            disableAlgSimp = true;
-            disableBrnSimp = true;
-            disableDCE = true;
-            disableCFGSimp = true;
-            disableGVN = true;
-
-            disableFPO = true;
-        }
-
-        else if (std::string(argv[i]) == "enable-folding")
-        {
-            disableFolding = false;
-        }
-
-        else if (std::string(argv[i]) == "enable-algsimp")
-        {
-            disableAlgSimp = false;
-        }
-
-        else if (std::string(argv[i]) == "enable-brnsimp")
-        {
-            disableBrnSimp = false;
-        }
-
-        else if (std::string(argv[i]) == "enable-dce")
-        {
-            disableDCE = false;
-        }
-
-        else if (std::string(argv[i]) == "enable-cfgsimp")
-        {
-            disableCFGSimp = false;
-        }
-
-        else if (std::string(argv[i]) == "enable-gvn")
-        {
-            disableGVN = false;
-        }
-
-        else if (std::string(argv[i]) == "enable-fpo")
-        {
-            disableFPO = false;
+            opt->second();
         }
 
         else
@@ -183,84 +36,76 @@ int main(int argc, char** argv)
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     TokenStream TokenStream = Tokenize(source);
-
-    if (dumpTOK)
-    {
-        PrintTokens(TokenStream);
-    }
+    DumpIf(opts.dumpTOK, TokenStream);
 
     Node AST = Parse(TokenStream);
-
-    if (dumpAST)
-    {
-        PrintAST(AST);
-    }
+    DumpIf(opts.dumpAST, AST);
 
     CFG CFG = ConstructCFG(AST);
+    DumpIf(opts.dumpCFGConst, CFG);
 
     CFG.computeDominators();
+    DumpIf(opts.dumpCFGDom, CFG);
 
     CFG.computeDominatorTree();
+    DumpIf(opts.dumpCFGDomTree, CFG);
 
     CFG.computeFrontiers();
+    DumpIf(opts.dumpCFGFront, CFG);
 
     InsertPhiNodes(CFG);
+    DumpIf(opts.dumpCFGPhi, CFG);
 
     RenameVariables(CFG);
-
-    if (dumpCFG)
-    {
-        PrintCFG(CFG);
-    }
+    DumpIf(opts.dumpCFGRename, CFG);
 
     TAC TAC = GenerateTAC(CFG);
+    DumpIf(opts.dumpTACConst, TAC);
 
-    PassManager TACPassManager({PassGroup{
-        .IterateToFixedPoint = true,
-        .Passes = {
-            {Pass{"Constant Folding", !disableFolding, false, {.RunTACIter = FoldConstants}}},
-            {Pass{"Algebraic Simplification", !disableAlgSimp, false, {.RunTACIter = SimplifyAlgebra}}},
-            {Pass{"Branch Simplification", !disableBrnSimp, false, {.RunTACIter = SimplifyBranches}}},
-            {Pass{"Dead Code Elimination", !disableDCE, false, {.RunTACIter = RemoveDeadCode}}},
-            {Pass{"Control Flow Simplification", !disableCFGSimp, false, {.RunTACIter = SimplifyControlFlow}}},
-            {Pass{"Global Value Numbering", !disableGVN, false, {.RunTACIter = GVN}}},
-        }}});
+    // clang-format off
+    PassManager<::TAC> TACPassManager(
+        {
+            PassGroup<::TAC>{
+                .IterateToFixedPoint = true,
+                .Passes = {
+                    {Pass<::TAC>{"Constant Folding", !opts.disableFolding, false, {.RunIter = FoldConstants}}},
+                    {Pass<::TAC>{"Algebraic Simplification", !opts.disableAlgSimp, false, {.RunIter = SimplifyAlgebra}}},
+                    {Pass<::TAC>{"Branch Simplification", !opts.disableBrnSimp, false, {.RunIter = SimplifyBranches}}},
+                    {Pass<::TAC>{"Dead Code Elimination", !opts.disableDCE, false, {.RunIter = RemoveDeadCode}}},
+                    {Pass<::TAC>{"Control Flow Simplification", !opts.disableCFGSimp, false, {.RunIter = SimplifyControlFlow}}},
+                    {Pass<::TAC>{"Global Value Numbering", !opts.disableGVN, false, {.RunIter = GVN}}},
+                }},
 
-    TACPassManager.RunOptimizations(&TAC, nullptr);
+            PassGroup<::TAC>{
+                .IterateToFixedPoint = false,
+                .Passes = {
+                    {Pass<::TAC>{"Sibling Call Optimization", !opts.disableSCO, false, {.Run = OptimizeSiblingCalls}}},
+                }},
+        });
+    // clang-format on
 
-    if (dumpTAC)
-    {
-        printTAC(TAC);
-    }
+    TACPassManager.RunOptimizations(TAC);
+    DumpIf(opts.dumpTACOpt, TAC);
 
     ResolvePhiNodes(TAC);
-
-    if (dumpTAC)
-    {
-        printTAC(TAC);
-    }
+    DumpIf(opts.dumpTAC || opts.dumpTACPhiRes, TAC);
 
     MIR MIR = GenerateMachineIR(TAC);
+    DumpIf(opts.dumpMIRConst, MIR);
 
-    PassManager MIRPassManager({PassGroup{
+    PassManager<::MIR> MIRPassManager({PassGroup<::MIR>{
         .IterateToFixedPoint = false,
         .Passes = {
-            {Pass{"Frame Pointer Omission", !disableFPO, false, {.RunMIR = OmitFramePointers}}},
+            {Pass<::MIR>{"Frame Pointer Omission", !opts.disableFPO, false, {.Run = OmitFramePointers}}},
         }}});
 
-    if (dumpMIR)
-    {
-        PrintMIR(MIR);
-    }
+    MIRPassManager.RunOptimizations(MIR);
+    DumpIf(opts.dumpMIR || opts.dumpMIROpt, MIR);
 
     std::string AssemblyFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "s";
 
     EmitAssembly(MIR, AssemblyFilePath);
-
-    if (dumpASM)
-    {
-        PrintASM(AssemblyFilePath);
-    }
+    DumpIf(opts.dumpASM, AssemblyFilePath);
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 2);
 
