@@ -3,6 +3,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include <algorithm>
+#include <charconv>
 #include <cstddef>
 #include <iterator>
 #include <memory>
@@ -662,4 +663,13 @@ void PrintTAC(TAC& TAC)
     }
 
     std::print("\n");
+}
+
+bool isConstant(std::string str)
+{
+    int value;
+
+    auto [ptr, err] = std::from_chars(str.data(), str.data() + str.size(), value);
+
+    return err == std::errc{} && ptr == str.data() + str.size();
 }

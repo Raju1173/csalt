@@ -1,18 +1,8 @@
 #include "ConstantFolding.h"
 #include "TACGenerator.h"
 #include <cctype>
-#include <charconv>
 #include <memory>
 #include <utility>
-
-bool isConstant(std::string_view str)
-{
-    int value;
-
-    auto [ptr, err] = std::from_chars(str.data(), str.data() + str.size(), value);
-
-    return err == std::errc{} && ptr == str.data() + str.size();
-}
 
 bool FoldConstants(TAC& TAC)
 {

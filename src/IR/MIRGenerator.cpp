@@ -463,7 +463,7 @@ MIR GenerateMachineIR(TAC& TAC)
             {
                 auto movParameter = std::make_unique<MIRMov>();
 
-                movParameter->Dest = GetOperand(TACValue{MIR.back().Parameters[i] + "0"}, MIR.back());
+                movParameter->Dest = GetOperand(TACValue{MIR.back().Parameters[i]}, MIR.back());
 
                 movParameter->Source = ArgRegs[i];
 

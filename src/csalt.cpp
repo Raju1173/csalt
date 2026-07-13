@@ -1,5 +1,4 @@
 #include "csalt.h"
-#include "TACGenerator.h"
 
 int main(int argc, char** argv)
 {
@@ -57,7 +56,7 @@ int main(int argc, char** argv)
     DumpIf(opts.dumpCFGPhi, CFG);
 
     RenameVariables(CFG);
-    DumpIf(opts.dumpCFGRename, CFG);
+    DumpIf(opts.dumpCFG || opts.dumpCFGRename, CFG);
 
     TAC TAC = GenerateTAC(CFG);
     DumpIf(opts.dumpTACConst, TAC);
@@ -65,6 +64,12 @@ int main(int argc, char** argv)
     // clang-format off
     PassManager<::TAC> TACPassManager(
         {
+            PassGroup<::TAC>{
+                .IterateToFixedPoint = false,
+                .Passes = {
+                    {Pass<::TAC>{"Compile Time Function Execution", !opts.disableCTFE, false, {.Run = EvaluateConstantFunctions}}},
+                }},
+
             PassGroup<::TAC>{
                 .IterateToFixedPoint = true,
                 .Passes = {

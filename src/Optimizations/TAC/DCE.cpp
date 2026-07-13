@@ -103,7 +103,7 @@ bool EliminateDeadFunctions(TAC& TAC)
         }
     }
 
-    TAC.erase_if([&callCounts](const auto& TACFunc) {
+    TAC.eraseFuncIf([&callCounts](const auto& TACFunc) {
         return TACFunc.Name != "main" && callCounts[TACFunc.Name] == 0;
     });
 

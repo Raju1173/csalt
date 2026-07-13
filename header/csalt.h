@@ -8,6 +8,7 @@
 #include "ControlFlowSimplification.h"
 #include "FramePointerOmission.h"
 #include "SCO.h"
+#include "CTFE.h"
 #include "ASMGenerator.h"
 #include "PassManager.h"
 #include "GVN.h"
@@ -55,6 +56,7 @@ struct CompilerOptions
 
     bool disableFPO = false;
     bool disableSCO = false;
+    bool disableCTFE = false;
 };
 
 inline void PrintIR(TokenStream& tokenStream) { PrintTokens(tokenStream); }
@@ -105,8 +107,9 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"disable-gvn", []() { opts.disableGVN = true; }},
     {"disable-fpo", []() { opts.disableFPO = true; }},
     {"disable-sco", []() { opts.disableSCO = true; }},
+    {"disable-ctfe", []() { opts.disableCTFE = true; }},
     {"disable-all", []() {
-         opts.disableFolding = opts.disableAlgSimp = opts.disableBrnSimp = opts.disableDCE = opts.disableCFGSimp = opts.disableGVN = opts.disableFPO = opts.disableSCO = true;
+         opts.disableFolding = opts.disableAlgSimp = opts.disableBrnSimp = opts.disableDCE = opts.disableCFGSimp = opts.disableGVN = opts.disableFPO = opts.disableSCO = opts.disableCTFE = true;
      }},
 
     {"enable-folding", []() { opts.disableFolding = false; }},
@@ -116,4 +119,5 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"enable-cfgsimp", []() { opts.disableCFGSimp = false; }},
     {"enable-gvn", []() { opts.disableGVN = false; }},
     {"enable-fpo", []() { opts.disableFPO = false; }},
-    {"enable-sco", []() { opts.disableSCO = false; }}};
+    {"enable-sco", []() { opts.disableSCO = false; }},
+    {"enable-ctfe", []() { opts.disableCTFE = false; }}};

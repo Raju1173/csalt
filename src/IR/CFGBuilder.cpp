@@ -1,4 +1,5 @@
 #include "CFGBuilder.h"
+#include "TACGenerator.h"
 #include "lexer.h"
 #include "parser.h"
 #include <algorithm>
@@ -104,12 +105,16 @@ CFG ConstructCFG(Node& AST)
     {
         CFGFunction newFunc = CFGFunction{AST.children[i].token.lexeme};
 
-        for (auto& arg : AST.children[i].children[0].children)
-            newFunc.Parameters.push_back(arg.token.lexeme);
+        auto entryBlock = constructBlock(AST.children[i].children[1], newFunc, CFG.getDefBlocksInfo(newFunc.FunctionName));
+
+        for (Node& param : AST.children[i].children[0].children)
+        {
+            newFunc.Parameters.push_back(param.token.lexeme);
+
+            entryBlock->Statements.insert(entryBlock->Statements.begin(), Node{NodeType::EXPR, {}, {Node{NodeType::BINARY_OP, Token{TokenType::EQUAL, "="}, {Node{NodeType::IDENTIFIER, Token{TokenType::IDENTIFIER, param.token.lexeme}, {}}, Node{NodeType::IDENTIFIER, Token{TokenType::IDENTIFIER, param.token.lexeme}, {}}}}}});
+        }
 
         CFG.push_back(std::move(newFunc));
-
-        auto entryBlock = constructBlock(AST.children[i].children[1], CFG.back(), CFG.getDefBlocksInfo(CFG.back().FunctionName));
         CFG.back().Blocks.push_back(std::move(entryBlock));
 
         std::reverse(CFG.back().Blocks.begin(), CFG.back().Blocks.end());

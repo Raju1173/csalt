@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CFGBuilder.h"
+#include <algorithm>
 #include <vector>
 #include <memory>
 
@@ -281,7 +282,7 @@ public:
     auto begin() const { return Functions.begin(); }
     auto end() const { return Functions.end(); }
 
-    template<typename Predicate> void erase_if(Predicate pred)
+    template<typename Predicate> void eraseFuncIf(Predicate pred)
     {
         std::erase_if(Functions, [&](const auto& TACFunc) {
             if (pred(TACFunc))
@@ -293,6 +294,11 @@ public:
             return false;
         });
     }
+
+    TACFunction& findFuncByName(std::string targetName)
+    {
+        return *std::ranges::find_if(Functions, [&targetName](std::string& name) { return name == targetName; }, &TACFunction::Name);
+    }
 };
 
 TAC GenerateTAC(CFG& CFG);
@@ -300,3 +306,5 @@ TAC GenerateTAC(CFG& CFG);
 void ResolvePhiNodes(TAC& TAC);
 
 void PrintTAC(TAC& TAC);
+
+bool isConstant(std::string str);
