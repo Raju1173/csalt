@@ -1,7 +1,7 @@
 #pragma once
 
-#include "CFGBuilder.h"
+#include "TACGenerator.h"
 
-void InsertPhiNodes(CFG& CFG);
+void InsertPhiNodes(TAC& TAC);
 
-void RenameVariables(CFG& CFG);
+void RenameVariables(TAC& TAC);

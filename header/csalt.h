@@ -9,6 +9,7 @@
 #include "FramePointerOmission.h"
 #include "SCO.h"
 #include "CTFE.h"
+#include "LICM.h"
 #include "ASMGenerator.h"
 #include "PassManager.h"
 #include "GVN.h"
@@ -33,14 +34,9 @@ struct CompilerOptions
     bool dumpMIR = false;
     bool dumpASM = false;
 
-    bool dumpCFGConst = false;
-    bool dumpCFGDom = false;
-    bool dumpCFGDomTree = false;
-    bool dumpCFGFront = false;
-    bool dumpCFGPhi = false;
-    bool dumpCFGRename = false;
-
     bool dumpTACConst = false;
+    bool dumpTACPhiIns = false;
+    bool dumpTACRename = false;
     bool dumpTACOpt = false;
     bool dumpTACPhiRes = false;
 
@@ -56,7 +52,9 @@ struct CompilerOptions
 
     bool disableFPO = false;
     bool disableSCO = false;
-    bool disableCTFE = false;
+    bool disableCTFE = true;
+
+    bool disableLICM = false;
 };
 
 inline void PrintIR(TokenStream& tokenStream) { PrintTokens(tokenStream); }
@@ -85,14 +83,9 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"dump-asm", []() { opts.dumpASM = true; }},
     {"dump-all", []() { opts.dumpTOK = opts.dumpAST = opts.dumpCFG = opts.dumpTAC = opts.dumpASM = true; }},
 
-    {"dump-cfg-const", []() { opts.dumpCFGConst = true; }},
-    {"dump-cfg-dom", []() { opts.dumpCFGDom = true; }},
-    {"dump-cfg-domtree", []() { opts.dumpCFGDomTree = true; }},
-    {"dump-cfg-front", []() { opts.dumpCFGFront = true; }},
-    {"dump-cfg-phi", []() { opts.dumpCFGPhi = true; }},
-    {"dump-cfg-rename", []() { opts.dumpCFGRename = true; }},
-
     {"dump-tac-const", []() { opts.dumpTACConst = true; }},
+    {"dump-tac-const", []() { opts.dumpTACPhiIns = true; }},
+    {"dump-tac-const", []() { opts.dumpTACRename = true; }},
     {"dump-tac-opt", []() { opts.dumpTACOpt = true; }},
     {"dump-tac-phires", []() { opts.dumpTACPhiRes = true; }},
 
@@ -108,8 +101,9 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"disable-fpo", []() { opts.disableFPO = true; }},
     {"disable-sco", []() { opts.disableSCO = true; }},
     {"disable-ctfe", []() { opts.disableCTFE = true; }},
+    {"disable-licm", []() { opts.disableLICM = true; }},
     {"disable-all", []() {
-         opts.disableFolding = opts.disableAlgSimp = opts.disableBrnSimp = opts.disableDCE = opts.disableCFGSimp = opts.disableGVN = opts.disableFPO = opts.disableSCO = opts.disableCTFE = true;
+         opts.disableFolding = opts.disableAlgSimp = opts.disableBrnSimp = opts.disableDCE = opts.disableCFGSimp = opts.disableGVN = opts.disableFPO = opts.disableSCO = opts.disableCTFE = opts.disableLICM = true;
      }},
 
     {"enable-folding", []() { opts.disableFolding = false; }},
@@ -120,4 +114,5 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"enable-gvn", []() { opts.disableGVN = false; }},
     {"enable-fpo", []() { opts.disableFPO = false; }},
     {"enable-sco", []() { opts.disableSCO = false; }},
-    {"enable-ctfe", []() { opts.disableCTFE = false; }}};
+    {"enable-ctfe", []() { opts.disableCTFE = false; }},
+    {"enable-licm", []() { opts.disableLICM = false; }}};

@@ -10,5 +10,10 @@ int fib(int n)
 
 int main()
 {
-    return fib(20);
+    int a = -2;
+
+    if (-a - 1 + -2 + -(3 + 4) == 0)
+    {
+        return -fib(20);
+    }
 }

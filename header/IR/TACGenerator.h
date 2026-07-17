@@ -1,7 +1,9 @@
 #pragma once
 
 #include "CFGBuilder.h"
-#include <algorithm>
+#include <optional>
+#include <unordered_set>
+#include <variant>
 #include <vector>
 #include <memory>
 
@@ -43,9 +45,67 @@ enum class TACType
     ASSIGN,
     JUMP,
     PHI,
+    NEG,
     BRANCH,
+    SELECT,
     CALL,
     RETURN
+};
+
+enum class TACPass
+{
+    CONSTANT_FOLDING,
+    ALGEBRAIC_SIMPLIFICATION,
+    BRANCH_SIMPLIFICATION,
+    CONTROL_FLOW_SIMPLIFICATION,
+    DCE,
+    GVN,
+    LICM,
+    CTFE
+};
+
+enum class InstTransformType
+{
+    DELETED,
+
+    MOVED,
+    CLONED,
+
+    REPLACED,
+    REPLACED_OPERAND,
+    SIMPLIFIED,
+
+    RENAMED
+};
+
+std::string TransformationToStr(InstTransformType op)
+{
+    switch (op)
+    {
+        case InstTransformType::MOVED:
+            return "MOVED";
+        case InstTransformType::CLONED:
+            return "CLONED";
+        case InstTransformType::REPLACED:
+            return "REPLACED";
+        case InstTransformType::REPLACED_OPERAND:
+            return "REPLACED_OP";
+        case InstTransformType::SIMPLIFIED:
+            return "SIMPLIFIED";
+        case InstTransformType::DELETED:
+            return "DELETED";
+        case InstTransformType::RENAMED:
+            return "RENAMED";
+    }
+}
+
+class TACBlock;
+
+struct Message
+{
+    TACPass Pass;
+    InstTransformType TranformationType;
+    std::string Info;
 };
 
 class TACInstruction
@@ -53,19 +113,33 @@ class TACInstruction
 public:
     const TACType type;
 
+    bool dead = false;
+
+    std::vector<Message> History;
+
     TACInstruction(TACType type) : type(type){};
 
     virtual ~TACInstruction() = default;
 };
 
-struct TACValue
+struct TACVariable
 {
-    std::string value;
-
-    bool neg = false;
-
-    auto operator<=>(const TACValue&) const = default;
+    std::string OriginalName;
+    std::string SSAName = this->OriginalName;
 };
+
+using TACValue = std::variant<int, TACVariable>;
+
+inline std::string TACValToStr(const TACValue& val)
+{
+    if (val.index() == 0)
+    {
+        return std::to_string(std::get<int>(val));
+    }
+
+    const auto& var = std::get<TACVariable>(val);
+    return var.SSAName.empty() ? var.OriginalName : var.SSAName;
+}
 
 class TACBinaryOp : public TACInstruction
 {
@@ -77,6 +151,16 @@ public:
     TACValue left;
     BinaryOp op;
     TACValue right;
+};
+
+class TACNeg : public TACInstruction
+{
+public:
+    TACNeg() : TACInstruction(TACType::NEG){};
+
+    TACValue dest;
+
+    TACValue source;
 };
 
 class TACAssign : public TACInstruction
@@ -92,9 +176,15 @@ public:
 class TACJump : public TACInstruction
 {
 public:
-    TACJump(size_t target) : TACInstruction(TACType::JUMP), TargetBlock(target){};
+    TACJump() : TACInstruction(TACType::JUMP), TargetBlock(){};
 
-    size_t TargetBlock;
+    TACBlock* TargetBlock;
+};
+
+struct PhiArgument
+{
+    size_t SourceID;
+    TACValue Value;
 };
 
 class TACPhi : public TACInstruction
@@ -121,8 +211,20 @@ public:
 
     Comparison cond;
 
-    size_t TrueTarget;
-    size_t FalseTarget;
+    TACBlock* TrueTarget;
+    TACBlock* FalseTarget;
+};
+
+class TACSelect : public TACInstruction
+{
+public:
+    TACSelect() : TACInstruction(TACType::SELECT){};
+
+    TACValue dest;
+
+    Comparison cond;
+    TACValue TrueVal;
+    TACValue FalseVal;
 };
 
 class TACCall : public TACInstruction
@@ -142,41 +244,24 @@ class TACReturn : public TACInstruction
 public:
     TACReturn() : TACInstruction(TACType::RETURN){};
 
-    TACValue ReturnValue;
+    std::optional<TACValue> ReturnValue = std::nullopt;
 };
+
+class TACFunction;
 
 class TACBlock
 {
 public:
     size_t ID;
 
+    TACFunction* Function;
+
     std::vector<std::unique_ptr<TACInstruction>> Instructions;
 
     std::vector<TACBlock*> Parents;
     std::vector<TACBlock*> Children;
 
-    TACBlock(size_t ID) : ID(ID){};
-
-    TACBlock(TACBlock&&) noexcept = default;
-    TACBlock& operator=(TACBlock&&) noexcept = default;
-
-    ~TACBlock()
-    {
-        for (TACBlock* p : Parents)
-            std::erase(p->Children, this);
-
-        for (TACBlock* c : Children)
-            std::erase(c->Parents, this);
-    };
-};
-
-struct TACFunction
-{
-    std::string Name;
-
-    std::vector<std::string> Parameters;
-
-    std::vector<std::unique_ptr<TACBlock>> Blocks;
+    TACBlock(size_t ID, TACFunction* function) : ID(ID), Function(function){};
 };
 
 struct TACDominatorInfo
@@ -193,11 +278,39 @@ struct TACDominatorTreeInfo
     std::unordered_map<TACBlock*, std::vector<TACBlock*>> DominatorTree;
 };
 
+struct TACFrontierInfo
+{
+    bool isValid = false;
+
+    std::unordered_map<TACBlock*, std::vector<TACBlock*>> Frontiers;
+};
+
 struct TACVarUsesInfo
 {
     bool isValid = false;
 
-    std::unordered_map<std::string, size_t> VarUses;
+    std::unordered_map<TACValue, size_t> VarUses;
+};
+
+struct TACLoop
+{
+    TACBlock* Header;
+    TACBlock* End;
+    std::unordered_set<TACBlock*> Blocks;
+};
+
+struct TACDefBlocksInfo
+{
+    bool isValid = false;
+
+    std::unordered_map<TACValue, std::unordered_set<TACBlock*>> DefBlocks;
+};
+
+struct TACLoopInfo
+{
+    bool isValid = false;
+
+    std::vector<TACLoop> Loops;
 };
 
 struct TACMetaData
@@ -206,105 +319,47 @@ struct TACMetaData
 
     TACDominatorTreeInfo DomTreeInfo;
 
+    TACFrontierInfo FrontierInfo;
+
     TACVarUsesInfo VarUsesInfo;
+
+    TACDefBlocksInfo DefBlocksInfo;
+
+    TACLoopInfo LoopInfo;
 };
 
-class TAC
+class TACFunction
 {
-private:
-    std::vector<TACFunction> Functions;
+public:
+    std::string Name;
 
-    std::unordered_map<std::string, TACMetaData> MetaData;
+    std::vector<std::string> Parameters;
+
+    std::vector<std::unique_ptr<TACBlock>> Blocks;
+
+    TACFunction(std::string name, std::vector<std::string> parameters) : Name(name), Parameters(parameters){};
+
+private:
+    TACMetaData Metadata;
 
 public:
-    TACDominatorInfo& getDominatorInfo(std::string FuncName)
-    {
-        return MetaData[FuncName].DomInfo;
-    }
+    TACDominatorInfo& getDominatorInfo();
 
-    TACDominatorTreeInfo& getDominatorTreeInfo(std::string FuncName)
-    {
-        return MetaData[FuncName].DomTreeInfo;
-    }
+    TACDominatorTreeInfo& getDominatorTreeInfo();
 
-    TACVarUsesInfo& getVarUsesInfo(std::string FuncName)
-    {
-        return MetaData[FuncName].VarUsesInfo;
-    }
+    TACFrontierInfo& getFrontierInfo();
 
-    TACDominatorInfo& computeDominators(TACFunction& TACFunc);
-    void computeDominators();
+    TACVarUsesInfo& getVarUsesInfo();
 
-    TACDominatorTreeInfo& computeDominatorTree(TACFunction& TACFunc);
-    void computeDominatorTree();
+    TACDefBlocksInfo& getDefBlocksInfo();
 
-    TACVarUsesInfo& computeVarUses(TACFunction& TACFunc);
-    void computeVarUses();
-
-    size_t size() const
-    {
-        return Functions.size();
-    }
-
-    TACFunction& operator[](size_t index)
-    {
-        return Functions[index];
-    }
-
-    const TACFunction& operator[](size_t index) const
-    {
-        return Functions[index];
-    }
-
-    void push_back(TACFunction& TACFunction)
-    {
-        Functions.push_back(std::move(TACFunction));
-    }
-
-    void push_back(TACFunction&& TACFunction)
-    {
-        Functions.push_back(std::move(TACFunction));
-    }
-
-    TACFunction& back()
-    {
-        return Functions.back();
-    }
-
-    const TACFunction& back() const
-    {
-        return Functions.back();
-    }
-
-    auto begin() { return Functions.begin(); }
-    auto end() { return Functions.end(); }
-
-    auto begin() const { return Functions.begin(); }
-    auto end() const { return Functions.end(); }
-
-    template<typename Predicate> void eraseFuncIf(Predicate pred)
-    {
-        std::erase_if(Functions, [&](const auto& TACFunc) {
-            if (pred(TACFunc))
-            {
-                MetaData.erase(TACFunc.Name);
-                return true;
-            }
-
-            return false;
-        });
-    }
-
-    TACFunction& findFuncByName(std::string targetName)
-    {
-        return *std::ranges::find_if(Functions, [&targetName](std::string& name) { return name == targetName; }, &TACFunction::Name);
-    }
+    TACLoopInfo& getLoopInfo();
 };
+
+using TAC = std::vector<std::unique_ptr<TACFunction>>;
 
 TAC GenerateTAC(CFG& CFG);
 
 void ResolvePhiNodes(TAC& TAC);
 
 void PrintTAC(TAC& TAC);
-
-bool isConstant(std::string str);

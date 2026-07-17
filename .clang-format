@@ -62,6 +62,7 @@ AlignConsecutiveMacros: None
 AlignAfterOpenBracket: DontAlign
 AlignOperands: DontAlign
 AlignArrayOfStructures: None
+AlignTrailingComments: false
 
 SpaceBeforeParens: ControlStatements
 SpaceBeforeCpp11BracedList: false

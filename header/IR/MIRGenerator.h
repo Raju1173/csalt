@@ -230,9 +230,13 @@ public:
     MIRCdq() : MIRInstruction(MIRType::CDQ) {}
 };
 
+struct MIRFunction;
+
 struct MIRBlock
 {
     size_t ID;
+
+    MIRFunction* Function;
 
     std::vector<std::unique_ptr<MIRInstruction>> Instructions;
 };
@@ -253,53 +257,7 @@ struct MIRFunction
     bool IsLeaf = true;
 };
 
-class MIR
-{
-private:
-    std::vector<MIRFunction> Functions;
-
-public:
-    size_t size() const
-    {
-        return Functions.size();
-    }
-
-    MIRFunction& operator[](size_t index)
-    {
-        return Functions[index];
-    }
-
-    const MIRFunction& operator[](size_t index) const
-    {
-        return Functions[index];
-    }
-
-    void push_back(MIRFunction& MIRFunction)
-    {
-        Functions.push_back(std::move(MIRFunction));
-    }
-
-    void push_back(MIRFunction&& MIRFunction)
-    {
-        Functions.push_back(std::move(MIRFunction));
-    }
-
-    MIRFunction& back()
-    {
-        return Functions.back();
-    }
-
-    const MIRFunction& back() const
-    {
-        return Functions.back();
-    }
-
-    auto begin() { return Functions.begin(); }
-    auto end() { return Functions.end(); }
-
-    auto begin() const { return Functions.begin(); }
-    auto end() const { return Functions.end(); }
-};
+using MIR = std::vector<std::unique_ptr<MIRFunction>>;
 
 MIR GenerateMachineIR(TAC& TAC);
 

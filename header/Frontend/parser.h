@@ -1,8 +1,6 @@
 #pragma once
 
 #include "lexer.h"
-#include <memory>
-#include <optional>
 #include <vector>
 
 enum class NodeType
@@ -23,6 +21,7 @@ enum class NodeType
     IDENTIFIER,
     NUMBER,
     BINARY_OP,
+    UNARY_OP
 };
 
 constexpr std::string_view NodeNames[] = {
@@ -38,9 +37,8 @@ constexpr std::string_view NodeNames[] = {
     "EXPR",
     "IDENTIFIER",
     "NUMBER",
-    "BINARY_OP"};
-
-struct CFGBlock;
+    "BINARY_OP",
+    "UNARY_OP"};
 
 struct Node
 {

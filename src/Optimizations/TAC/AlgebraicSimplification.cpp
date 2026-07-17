@@ -16,8 +16,8 @@ bool SimplifyAlgebra(TAC& TAC)
                 {
                     TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
 
-                    bool leftConst = isConstant(bin->left.value);
-                    bool rightConst = isConstant(bin->right.value);
+                    bool leftConst = isConstant(bin->left);
+                    bool rightConst = isConstant(bin->right);
 
                     bool replaceInst = false;
                     TACValue result;
@@ -25,14 +25,14 @@ bool SimplifyAlgebra(TAC& TAC)
                     switch (bin->op)
                     {
                         case BinaryOp::PLUS:
-                            if (leftConst && std::stoi(bin->left.value) == 0)
+                            if (leftConst && std::get<int>(bin->left.value) == 0)
                             {
                                 result = bin->right;
                                 replaceInst = true;
                                 changed = true;
                             }
 
-                            else if (rightConst && std::stoi(bin->right.value) == 0)
+                            else if (rightConst && std::get<int>(bin->right.value) == 0)
                             {
                                 result = bin->left;
                                 replaceInst = true;
@@ -41,14 +41,14 @@ bool SimplifyAlgebra(TAC& TAC)
                             break;
 
                         case BinaryOp::MINUS:
-                            if (rightConst && std::stoi(bin->right.value) == 0)
+                            if (rightConst && std::get<int>(bin->right.value) == 0)
                             {
                                 result = bin->left;
                                 replaceInst = true;
                                 changed = true;
                             }
 
-                            else if (leftConst && std::stoi(bin->left.value) == 0 && !rightConst)
+                            else if (leftConst && std::get<int>(bin->left.value) == 0 && !rightConst)
                             {
                                 result = bin->right;
                                 result.neg = !result.neg;
@@ -58,35 +58,35 @@ bool SimplifyAlgebra(TAC& TAC)
 
                             else if (leftConst && rightConst && bin->left.value == bin->right.value && bin->left.neg == bin->right.neg)
                             {
-                                result = TACValue{"0"};
+                                result = TACValue{0};
                                 replaceInst = true;
                                 changed = true;
                             }
                             break;
 
                         case BinaryOp::MUL:
-                            if ((leftConst && std::stoi(bin->left.value) == 0) || (rightConst && std::stoi(bin->right.value) == 0))
+                            if ((leftConst && std::get<int>(bin->left.value) == 0) || (rightConst && std::get<int>(bin->right.value) == 0))
                             {
-                                result = TACValue{"0"};
+                                result = TACValue{0};
                                 replaceInst = true;
                                 changed = true;
                             }
 
-                            else if (leftConst && std::stoi(bin->left.value) == 1)
+                            else if (leftConst && std::get<int>(bin->left.value) == 1)
                             {
                                 result = bin->right;
                                 replaceInst = true;
                                 changed = true;
                             }
 
-                            else if (rightConst && std::stoi(bin->right.value) == 1)
+                            else if (rightConst && std::get<int>(bin->right.value) == 1)
                             {
                                 result = bin->left;
                                 replaceInst = true;
                                 changed = true;
                             }
 
-                            else if (leftConst && std::stoi(bin->left.value) == -1 && !rightConst)
+                            else if (leftConst && std::get<int>(bin->left.value) == -1 && !rightConst)
                             {
                                 result = bin->right;
                                 result.neg = !result.neg;
@@ -94,7 +94,7 @@ bool SimplifyAlgebra(TAC& TAC)
                                 changed = true;
                             }
 
-                            else if (rightConst && std::stoi(bin->right.value) == -1 && !leftConst)
+                            else if (rightConst && std::get<int>(bin->right.value) == -1 && !leftConst)
                             {
                                 result = bin->left;
                                 result.neg = !result.neg;
@@ -113,14 +113,14 @@ bool SimplifyAlgebra(TAC& TAC)
                         case BinaryOp::DIV:
                             if (rightConst)
                             {
-                                if (std::stoi(bin->right.value) == 1)
+                                if (std::get<int>(bin->right.value) == 1)
                                 {
                                     result = bin->left;
                                     replaceInst = true;
                                     changed = true;
                                 }
 
-                                else if (std::stoi(bin->right.value) == -1 && !leftConst)
+                                else if (std::get<int>(bin->right.value) == -1 && !leftConst)
                                 {
                                     result = bin->left;
                                     result.neg = !result.neg;
@@ -129,9 +129,9 @@ bool SimplifyAlgebra(TAC& TAC)
                                 }
                             }
 
-                            else if (leftConst && std::stoi(bin->left.value) == 0)
+                            else if (leftConst && std::get<int>(bin->left.value) == 0)
                             {
-                                result = TACValue{"0"};
+                                result = TACValue{0};
                                 replaceInst = true;
                                 changed = true;
                             }
@@ -140,7 +140,7 @@ bool SimplifyAlgebra(TAC& TAC)
                             {
                                 if (bin->left.value == bin->right.value && bin->left.neg == bin->right.neg)
                                 {
-                                    result = TACValue{"1"};
+                                    result = TACValue{1};
                                     replaceInst = true;
                                     changed = true;
                                 }

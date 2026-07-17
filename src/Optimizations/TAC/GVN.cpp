@@ -1,3 +1,4 @@
+#include "CFGBuilder.h"
 #include "TACGenerator.h"
 #include <map>
 #include <memory>
@@ -23,6 +24,16 @@ struct FunctionCallKey
 std::map<TACValue, TACValue> Copies;
 std::map<ExpressionKey, TACValue> Expressions;
 std::map<FunctionCallKey, TACValue> Calls; // All functions are guaranteed to be pure...
+std::unordered_map<std::string, std::string> CanonicalValue; // For phi simplification...
+
+std::string FindCanonical(std::string var)
+{
+    if (!CanonicalValue.contains(var))
+        return var;
+    if (CanonicalValue[var] == var)
+        return var;
+    return CanonicalValue[var] = FindCanonical(CanonicalValue[var]);
+}
 
 bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 {
@@ -36,6 +47,54 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
     {
         switch (inst->type)
         {
+            case TACType::PHI:
+                {
+                    TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                    for (auto& arg : phi->args)
+                    {
+                        arg.Value = FindCanonical(arg.Value);
+                    }
+
+                    std::string commonValue = "";
+                    bool isReducible = true;
+
+                    for (PhiArgument& arg : phi->args)
+                    {
+                        if (arg.Value == phi->variable.value)
+                        {
+                            continue;
+                        }
+
+                        if (commonValue == "")
+                        {
+                            commonValue = arg.Value;
+                        }
+
+                        else if (arg.Value != commonValue)
+                        {
+                            isReducible = false;
+                            break;
+                        }
+                    }
+
+                    if (isReducible && !commonValue.empty())
+                    {
+                        CanonicalValue[phi->variable.value] = commonValue;
+
+                        auto assign = std::make_unique<TACAssign>();
+                        assign->dest = phi->variable;
+                        assign->source = TACValue{commonValue};
+
+                        Copies[assign->dest] = assign->source;
+                        addedCopies.push_back(assign->dest);
+
+                        inst = std::move(assign);
+                        changed = true;
+                    }
+                }
+                break;
+
             case TACType::ASSIGN:
                 {
                     TACAssign* assign = static_cast<TACAssign*>(inst.get());
@@ -48,8 +107,9 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                     }
 
                     Copies[assign->dest] = assign->source;
-
                     addedCopies.push_back(assign->dest);
+
+                    CanonicalValue[assign->dest.value] = FindCanonical(assign->source.value);
                 }
                 break;
 
@@ -237,24 +297,37 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 
 bool GVN(TAC& TAC)
 {
-    bool changed = false;
-
-    TAC.computeDominators();
+    bool globalChanged = false;
+    bool localChanged = true;
 
     for (TACFunction& TACFunc : TAC)
     {
-        Copies.clear();
-        Expressions.clear();
-        Calls.clear();
+        localChanged = true;
 
-        if (!TACFunc.Blocks.empty())
+        CanonicalValue.clear();
+
+        while (localChanged)
         {
-            changed = WalkTACDomTree(TACFunc.Blocks[0].get(), TAC.computeDominatorTree(TACFunc));
+            localChanged = false;
+
+            Copies.clear();
+            Expressions.clear();
+            Calls.clear();
+
+            if (!TACFunc.Blocks.empty())
+            {
+                localChanged = WalkTACDomTree(TACFunc.Blocks[0].get(), TAC.getDominatorTreeInfo(TACFunc));
+            }
+
+            if (localChanged)
+            {
+                globalChanged = true;
+            }
         }
 
-        if (changed)
-            TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
+        if (globalChanged)
+            TAC.getVarUsesInfo(TACFunc).isValid = false;
     }
 
-    return changed;
+    return globalChanged;
 }

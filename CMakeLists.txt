@@ -26,14 +26,14 @@ add_library(FRONTEND STATIC src/Frontend/lexer.cpp src/Frontend/parser.cpp)
 
 target_link_libraries(FRONTEND PUBLIC projectConfigs)
 
-add_library(IR STATIC src/IR/CFGBuilder.cpp src/IR/SSAConstructor.cpp src/IR/TACGenerator.cpp src/IR/MIRGenerator.cpp)
+#add_library(IR STATIC src/IR/CFGBuilder.cpp src/IR/SSAConstructor.cpp src/IR/TACGenerator.cpp src/IR/MIRGenerator.cpp)
 
-target_link_libraries(IR PUBLIC FRONTEND projectConfigs)
+#target_link_libraries(IR PUBLIC FRONTEND projectConfigs)
 
 set(TAC src/Optimizations/TAC)
 set(MIR src/Optimizations/MIR)
 
-add_library(OPTIMIZATIONS STATIC
+#[[add_library(OPTIMIZATIONS STATIC
     ${TAC}/ConstantFolding.cpp
     ${TAC}/BranchSimplification.cpp
     ${TAC}/AlgebraicSimplification.cpp
@@ -42,15 +42,16 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/GVN.cpp
     ${TAC}/SCO.cpp
     ${TAC}/CTFE.cpp
+    ${TAC}/LICM.cpp
     ${MIR}/FramePointerOmission.cpp
-)
+)]]
 
-target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)
+#target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)
 
-add_library(BACKEND STATIC src/Backend/ASMGenerator.cpp)
+#add_library(BACKEND STATIC src/Backend/ASMGenerator.cpp)
 
-target_link_libraries(BACKEND PUBLIC OPTIMIZATIONS projectConfigs)
+#target_link_libraries(BACKEND PUBLIC OPTIMIZATIONS projectConfigs)
 
 add_executable(csalt src/csalt.cpp)
 
-target_link_libraries(csalt PRIVATE BACKEND)
+target_link_libraries(csalt PRIVATE FRONTEND)

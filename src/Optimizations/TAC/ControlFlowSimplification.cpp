@@ -186,8 +186,8 @@ bool SimplifyControlFlow(TAC& TAC)
 
             if (MergeLinearBlocks(TACFunc))
             {
-                TAC.getDominatorInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
+                TAC.getDominatorInfo(TACFunc).isValid = false;
+                TAC.getDominatorTreeInfo(TACFunc).isValid = false;
 
                 blocksChanged = true;
                 globalChanged = true;
@@ -195,9 +195,9 @@ bool SimplifyControlFlow(TAC& TAC)
 
             if (EliminateEmptyJumpBlocks(TACFunc))
             {
-                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
+                TAC.getVarUsesInfo(TACFunc).isValid = false;
+                TAC.getDominatorInfo(TACFunc).isValid = false;
+                TAC.getDominatorTreeInfo(TACFunc).isValid = false;
 
                 blocksChanged = true;
                 globalChanged = true;

@@ -3,9 +3,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include <algorithm>
-#include <charconv>
 #include <cstddef>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -51,12 +49,13 @@ BinaryOp TokenOpToBinaryOp(TokenType op)
     }
 }
 
-TACValue MakeTemp()
+TACValue GetTemp()
 {
-    return TACValue{"t" + std::to_string(NextTemp++)};
+    return TACVariable{"t", "t" + std::to_string(NextTemp++)};
 }
 
 TACValue flattenBinaryOpNode(Node& BinaryOpNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions);
+TACValue flattenUnaryOpNode(Node& BinaryOpNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions);
 
 std::optional<TACValue> flattenCallNode(Node& CallNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions, bool hasValue = true)
 {
@@ -69,14 +68,17 @@ std::optional<TACValue> flattenCallNode(Node& CallNode, std::vector<std::unique_
         if (child.children[0].type == NodeType::BINARY_OP)
             call->args.push_back(flattenBinaryOpNode(child.children[0], Instructions));
 
+        else if (child.children[0].type == NodeType::UNARY_OP)
+            call->args.push_back(flattenUnaryOpNode(child.children[0], Instructions));
+
         else if (child.children[0].type == NodeType::CALL)
             call->args.push_back(flattenCallNode(child.children[0], Instructions, true).value());
 
         else
-            call->args.push_back(TACValue{child.children[0].token.lexeme});
+            call->args.push_back(TACVariable{child.children[0].token.lexeme});
     }
 
-    std::optional<TACValue> returnVal = hasValue ? std::optional<TACValue>{MakeTemp()} : std::nullopt;
+    std::optional<TACValue> returnVal = hasValue ? std::optional<TACValue>{GetTemp()} : std::nullopt;
 
     call->dest = returnVal;
 
@@ -92,28 +94,59 @@ TACValue flattenBinaryOpNode(Node& BinaryOpNode, std::vector<std::unique_ptr<TAC
     if (BinaryOpNode.children[0].type == NodeType::BINARY_OP)
         binaryOp->left = flattenBinaryOpNode(BinaryOpNode.children[0], Instructions);
 
+    else if (BinaryOpNode.children[0].type == NodeType::UNARY_OP)
+        binaryOp->left = flattenUnaryOpNode(BinaryOpNode.children[0], Instructions);
+
     else if (BinaryOpNode.children[0].type == NodeType::CALL)
-        binaryOp->left = flattenCallNode(BinaryOpNode.children[0], Instructions).value();
+        binaryOp->left = flattenCallNode(BinaryOpNode.children[0], Instructions, true).value();
 
     else
-        binaryOp->left = TACValue{BinaryOpNode.children[0].token.lexeme};
+        binaryOp->left = TACVariable{BinaryOpNode.children[0].token.lexeme};
 
     binaryOp->op = TokenOpToBinaryOp(BinaryOpNode.token.type);
 
     if (BinaryOpNode.children[1].type == NodeType::BINARY_OP)
         binaryOp->right = flattenBinaryOpNode(BinaryOpNode.children[1], Instructions);
 
+    else if (BinaryOpNode.children[0].type == NodeType::UNARY_OP)
+        binaryOp->right = flattenUnaryOpNode(BinaryOpNode.children[0], Instructions);
+
     else if (BinaryOpNode.children[1].type == NodeType::CALL)
         binaryOp->right = flattenCallNode(BinaryOpNode.children[1], Instructions).value();
 
     else
-        binaryOp->right = TACValue{BinaryOpNode.children[1].token.lexeme};
+        binaryOp->right = TACVariable{BinaryOpNode.children[1].token.lexeme};
 
-    TACValue returnVal = MakeTemp();
+    TACValue returnVal = GetTemp();
 
     binaryOp->dest = returnVal;
 
     Instructions.push_back(std::move(binaryOp));
+
+    return returnVal;
+}
+
+TACValue flattenUnaryOpNode(Node& UnaryOpNode, std::vector<std::unique_ptr<TACInstruction>>& Instructions)
+{
+    auto neg = std::make_unique<TACNeg>();
+
+    if (UnaryOpNode.children[0].type == NodeType::BINARY_OP)
+        neg->source = flattenBinaryOpNode(UnaryOpNode.children[0], Instructions);
+
+    else if (UnaryOpNode.children[0].type == NodeType::UNARY_OP)
+        neg->source = flattenUnaryOpNode(UnaryOpNode.children[0], Instructions);
+
+    else if (UnaryOpNode.children[0].type == NodeType::CALL)
+        neg->source = flattenCallNode(UnaryOpNode.children[0], Instructions, true).value();
+
+    else
+        neg->source = TACVariable{UnaryOpNode.children[0].token.lexeme};
+
+    TACValue returnVal = GetTemp();
+
+    neg->dest = returnVal;
+
+    Instructions.push_back(std::move(neg));
 
     return returnVal;
 }
@@ -124,22 +157,13 @@ TAC GenerateTAC(CFG& CFG)
 
     for (CFGFunction& CFGFunc : CFG)
     {
-        TAC.push_back(TACFunction{CFGFunc.FunctionName, CFGFunc.Parameters});
+        TAC.push_back(std::make_unique<TACFunction>(CFGFunc.FunctionName, CFGFunc.Parameters));
 
         for (auto& CFGBlock : CFGFunc.Blocks)
         {
-            TAC.back().Blocks.push_back(std::make_unique<TACBlock>(CFGBlock->ID));
+            TAC.back()->Blocks.push_back(std::make_unique<TACBlock>(CFGBlock->ID, TAC.back().get()));
 
-            TACBlock* curBlock = TAC.back().Blocks.back().get();
-
-            for (PhiNode phi : CFGBlock->PhiNodes)
-            {
-                auto phiInst = std::make_unique<TACPhi>(TACValue{phi.variable + std::to_string(phi.version)});
-
-                phiInst->args = phi.arguments;
-
-                curBlock->Instructions.push_back(std::move(phiInst));
-            }
+            TACBlock* curBlock = TAC.back()->Blocks.back().get();
 
             for (Node& statement : CFGBlock->Statements)
             {
@@ -149,7 +173,7 @@ TAC GenerateTAC(CFG& CFG)
                         {
                             auto assign = std::make_unique<TACAssign>();
 
-                            assign->dest = TACValue{statement.token.lexeme};
+                            assign->dest = TACVariable{statement.token.lexeme};
 
                             if (statement.children.size() != 0)
                             {
@@ -160,12 +184,12 @@ TAC GenerateTAC(CFG& CFG)
                                     assign->source = flattenCallNode(statement.children[0].children[0], curBlock->Instructions).value();
 
                                 else
-                                    assign->source = TACValue{statement.children[0].children[0].token.lexeme};
+                                    assign->source = TACVariable{statement.children[0].children[0].token.lexeme};
                             }
 
                             else
                             {
-                                assign->source = TACValue{"0"};
+                                assign->source = 0;
                             }
 
                             curBlock->Instructions.push_back(std::move(assign));
@@ -176,7 +200,7 @@ TAC GenerateTAC(CFG& CFG)
                         {
                             auto assign = std::make_unique<TACAssign>();
 
-                            assign->dest = TACValue{statement.children[0].children[0].token.lexeme};
+                            assign->dest = TACVariable{statement.children[0].children[0].token.lexeme};
 
                             if (statement.children[0].children[1].type == NodeType::BINARY_OP)
                                 assign->source = flattenBinaryOpNode(statement.children[0].children[1], curBlock->Instructions);
@@ -185,7 +209,7 @@ TAC GenerateTAC(CFG& CFG)
                                 assign->source = flattenCallNode(statement.children[0].children[1], curBlock->Instructions).value();
 
                             else
-                                assign->source = TACValue{statement.children[0].children[1].token.lexeme};
+                                assign->source = TACVariable{statement.children[0].children[1].token.lexeme};
 
                             curBlock->Instructions.push_back(std::move(assign));
                         }
@@ -208,11 +232,11 @@ TAC GenerateTAC(CFG& CFG)
                                     ret->ReturnValue = flattenCallNode(statement.children[0].children[0], curBlock->Instructions).value();
 
                                 else
-                                    ret->ReturnValue = TACValue{statement.children[0].children[0].token.lexeme};
+                                    ret->ReturnValue = TACVariable{statement.children[0].children[0].token.lexeme};
                             }
 
                             else
-                                ret->ReturnValue = TACValue{""};
+                                ret->ReturnValue = std::nullopt;
 
                             curBlock->Instructions.push_back(std::move(ret));
                         }
@@ -230,53 +254,34 @@ TAC GenerateTAC(CFG& CFG)
 
                 curBlock->Instructions.pop_back();
 
-                branch->TrueTarget = CFGBlock->TransitionTrue.value()->ID;
-                branch->FalseTarget = CFGBlock->TransitionFalse.value()->ID;
+                branch->TrueTarget = std::find_if(TAC.back()->Blocks.begin(), TAC.back()->Blocks.end(), [&CFGBlock](auto& TACBlock) { return TACBlock->ID == CFGBlock->TransitionTrue.value()->ID; })->get();
+                branch->FalseTarget = std::find_if(TAC.back()->Blocks.begin(), TAC.back()->Blocks.end(), [&CFGBlock](auto& TACBlock) { return TACBlock->ID == CFGBlock->TransitionFalse.value()->ID; })->get();
+
+                curBlock->Children.push_back(branch->TrueTarget);
+                curBlock->Children.push_back(branch->FalseTarget);
+
+                branch->TrueTarget->Parents.push_back(curBlock);
+                branch->FalseTarget->Parents.push_back(curBlock);
 
                 curBlock->Instructions.push_back(std::move(branch));
             }
 
             else if (CFGBlock->TransitionNext.has_value())
             {
-                curBlock->Instructions.push_back(std::make_unique<TACJump>(CFGBlock->TransitionNext.value()->ID));
+                auto jump = std::make_unique<TACJump>();
+
+                TACBlock* targetBlock = std::find_if(TAC.back()->Blocks.begin(), TAC.back()->Blocks.end(), [&CFGBlock](auto& TACBlock) { return TACBlock->ID == CFGBlock->TransitionFalse.value()->ID; })->get();
+
+                jump->TargetBlock = targetBlock;
+
+                curBlock->Children.push_back(targetBlock);
+                targetBlock->Parents.push_back(curBlock);
+
+                curBlock->Instructions.push_back(std::move(jump));
             }
         }
 
         NextTemp = 0;
-    }
-
-    for (TACFunction& TACFunc : TAC)
-    {
-        for (auto& block : TACFunc.Blocks)
-        {
-            for (auto& inst : block->Instructions)
-            {
-                if (inst->type == TACType::BRANCH)
-                {
-                    TACBranch* branch = static_cast<TACBranch*>(inst.get());
-
-                    TACBlock* trueTarget = (*(std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [&branch](const auto& b) { return b->ID == branch->TrueTarget; }))).get();
-                    TACBlock* falseTarget = (*(std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [&branch](const auto& b) { return b->ID == branch->FalseTarget; }))).get();
-
-                    block->Children.push_back(trueTarget);
-                    block->Children.push_back(falseTarget);
-
-                    trueTarget->Parents.push_back(block.get());
-                    falseTarget->Parents.push_back(block.get());
-                }
-
-                else if (inst->type == TACType::JUMP)
-                {
-                    TACJump* jump = static_cast<TACJump*>(inst.get());
-
-                    TACBlock* target = (*(std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [&jump](const auto& b) { return b->ID == jump->TargetBlock; }))).get();
-
-                    block->Children.push_back(target);
-
-                    target->Parents.push_back(block.get());
-                }
-            }
-        }
     }
 
     return TAC;
@@ -284,9 +289,9 @@ TAC GenerateTAC(CFG& CFG)
 
 void ResolvePhiNodes(TAC& TAC)
 {
-    for (TACFunction& TACFunc : TAC)
+    for (auto& TACFunc : TAC)
     {
-        for (auto& block : TACFunc.Blocks)
+        for (auto& block : TACFunc->Blocks)
         {
             for (auto& inst : block->Instructions)
             {
@@ -296,7 +301,7 @@ void ResolvePhiNodes(TAC& TAC)
 
                     for (PhiArgument& arg : phi->args)
                     {
-                        for (auto& sourceBlock : TACFunc.Blocks)
+                        for (auto& sourceBlock : TACFunc->Blocks)
                         {
                             if (sourceBlock->ID == arg.SourceID)
                             {
@@ -304,7 +309,7 @@ void ResolvePhiNodes(TAC& TAC)
 
                                 assign->dest = phi->variable;
 
-                                assign->source = TACValue{arg.Value};
+                                assign->source = arg.Value;
 
                                 if (sourceBlock->Instructions.size() >= 1)
                                     sourceBlock->Instructions.insert(sourceBlock->Instructions.end() - 1, std::move(assign));
@@ -324,247 +329,25 @@ void ResolvePhiNodes(TAC& TAC)
     }
 }
 
-TACDominatorInfo& TAC::computeDominators(TACFunction& TACFunc)
-{
-    TACDominatorInfo& DomInfo = getDominatorInfo(TACFunc.Name);
-
-    if (!DomInfo.isValid)
-    {
-        DomInfo.isValid = true;
-
-        DomInfo.Dominators.clear();
-
-        if (TACFunc.Blocks.empty())
-            return DomInfo;
-
-        auto& Blocks = TACFunc.Blocks;
-
-        TACBlock* entryBlock = Blocks[0].get();
-
-        std::unordered_set<TACBlock*> universalSet;
-
-        for (auto& block : Blocks)
-        {
-            universalSet.insert(block.get());
-        }
-
-        DomInfo.Dominators[entryBlock] = {entryBlock};
-
-        for (size_t j = 1; j < Blocks.size(); ++j)
-        {
-            DomInfo.Dominators[Blocks[j].get()] = universalSet;
-        }
-
-        bool changed = true;
-
-        while (changed)
-        {
-            changed = false;
-
-            for (size_t j = 0; j < Blocks.size(); j++)
-            {
-                TACBlock* curBlock = Blocks[j].get();
-
-                if (&curBlock == &entryBlock)
-                    continue;
-
-                std::unordered_set<TACBlock*> NewDominators;
-
-                if (!curBlock->Parents.empty())
-                {
-                    NewDominators = DomInfo.Dominators[curBlock->Parents[0]];
-
-                    for (size_t k = 1; k < curBlock->Parents.size(); k++)
-                    {
-                        if (NewDominators.empty())
-                            break;
-
-                        std::unordered_set<TACBlock*> currentIntersection;
-
-                        for (TACBlock* dom : NewDominators)
-                        {
-                            if (DomInfo.Dominators[curBlock->Parents[k]].contains(dom))
-                            {
-                                currentIntersection.insert(dom);
-                            }
-                        }
-
-                        NewDominators = std::move(currentIntersection);
-                    }
-                }
-
-                NewDominators.insert(curBlock);
-
-                if (NewDominators != DomInfo.Dominators[curBlock])
-                {
-                    DomInfo.Dominators[curBlock] = std::move(NewDominators);
-                    changed = true;
-                }
-            }
-        }
-    }
-
-    return DomInfo;
-}
-
-void TAC::computeDominators()
-{
-    for (TACFunction& Func : Functions)
-        computeDominators(Func);
-}
-
-TACDominatorTreeInfo& TAC::computeDominatorTree(TACFunction& TACFunc)
-{
-    TACDominatorInfo& DomInfo = getDominatorInfo(TACFunc.Name);
-    TACDominatorTreeInfo& DomTreeInfo = getDominatorTreeInfo(TACFunc.Name);
-
-    TACBlock* nearestDominator = nullptr;
-    size_t maxSize = 0;
-
-    if (!DomTreeInfo.isValid)
-    {
-        DomTreeInfo.isValid = true;
-
-        DomTreeInfo.DominatorTree.clear();
-
-        for (auto& block : TACFunc.Blocks)
-        {
-            for (TACBlock* dom : DomInfo.Dominators[block.get()])
-            {
-                if (dom == block.get())
-                    continue;
-
-                size_t size = DomInfo.Dominators[dom].size();
-
-                if (size > maxSize)
-                {
-                    maxSize = size;
-
-                    nearestDominator = dom;
-                }
-            }
-
-            if (nearestDominator != nullptr)
-            {
-                DomTreeInfo.DominatorTree[nearestDominator].push_back(block.get());
-
-                nearestDominator = nullptr;
-                maxSize = 0;
-            }
-        }
-    }
-
-    return DomTreeInfo;
-}
-
-void TAC::computeDominatorTree()
-{
-    for (TACFunction& Func : Functions)
-        computeDominatorTree(Func);
-}
-
-TACVarUsesInfo& TAC::computeVarUses(TACFunction& TACFunc)
-{
-    TACVarUsesInfo& VarUsesInfo = getVarUsesInfo(TACFunc.Name);
-
-    if (!VarUsesInfo.isValid)
-    {
-        VarUsesInfo.isValid = true;
-
-        VarUsesInfo.VarUses.clear();
-
-        for (const auto& Block : TACFunc.Blocks)
-        {
-            for (const auto& inst : Block->Instructions)
-            {
-                switch (inst->type)
-                {
-                    case TACType::PHI:
-                        {
-                            TACPhi* phi = static_cast<TACPhi*>(inst.get());
-
-                            for (PhiArgument& arg : phi->args)
-                                VarUsesInfo.VarUses[arg.Value]++;
-                        }
-                        break;
-
-                    case TACType::ASSIGN:
-                        {
-                            TACAssign* assign = static_cast<TACAssign*>(inst.get());
-
-                            VarUsesInfo.VarUses[assign->source.value]++;
-                        }
-                        break;
-
-                    case TACType::BINARYOP:
-                        {
-                            TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
-
-                            VarUsesInfo.VarUses[binary->left.value]++;
-                            VarUsesInfo.VarUses[binary->right.value]++;
-                        }
-                        break;
-
-                    case TACType::CALL:
-                        {
-                            TACCall* call = static_cast<TACCall*>(inst.get());
-
-                            for (const auto& arg : call->args)
-                            {
-                                VarUsesInfo.VarUses[arg.value]++;
-                            }
-                        }
-                        break;
-
-                    case TACType::BRANCH:
-                        {
-                            TACBranch* branch = static_cast<TACBranch*>(inst.get());
-
-                            VarUsesInfo.VarUses[branch->cond.Left.value]++;
-                            VarUsesInfo.VarUses[branch->cond.Right.value]++;
-                        }
-                        break;
-
-                    case TACType::RETURN:
-                        {
-                            TACReturn* ret = static_cast<TACReturn*>(inst.get());
-
-                            VarUsesInfo.VarUses[ret->ReturnValue.value]++;
-                        }
-                        break;
-                }
-            }
-        }
-    }
-
-    return VarUsesInfo;
-}
-
-void TAC::computeVarUses()
-{
-    for (TACFunction& Func : Functions)
-        computeVarUses(Func);
-}
-
 void PrintTAC(TAC& TAC)
 {
     std::print("------TAC-------\n\n");
 
-    for (TACFunction& func : TAC)
+    for (auto& func : TAC)
     {
         std::print("# Function(");
 
-        for (size_t j = 0; j < func.Parameters.size(); ++j)
+        for (size_t j = 0; j < func->Parameters.size(); ++j)
         {
             if (j != 0)
                 std::print(", ");
 
-            std::print("{}", func.Parameters[j]);
+            std::print("{}", func->Parameters[j]);
         }
 
-        std::print(") - {} :\n", func.Name);
+        std::print(") - {} :\n", func->Name);
 
-        for (auto& block : func.Blocks)
+        for (auto& block : func->Blocks)
         {
             std::print("\nBlock - {} :\n", block->ID);
 
@@ -576,11 +359,11 @@ void PrintTAC(TAC& TAC)
                         {
                             TACPhi* phi = static_cast<TACPhi*>(inst.get());
 
-                            std::print("    {} = phi(", phi->variable.value);
+                            std::print("    {} = phi(", TACValToStr(phi->variable));
 
                             for (size_t i = 0; i < phi->args.size(); i++)
                             {
-                                std::print("{} from B{}", phi->args[i].Value, phi->args[i].SourceID);
+                                std::print("{} from B{}", TACValToStr(phi->args[i].Value), phi->args[i].SourceID);
 
                                 if (i + 1 != phi->args.size())
                                     std::print(", ");
@@ -594,7 +377,15 @@ void PrintTAC(TAC& TAC)
                         {
                             TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
-                            std::print("    {} = {}\n", assign->dest.value, (assign->source.neg ? "-" : "") + assign->source.value);
+                            std::print("    {} = {}\n", TACValToStr(assign->dest), TACValToStr(assign->source));
+                        }
+                        break;
+
+                    case TACType::NEG:
+                        {
+                            TACNeg* neg = static_cast<TACNeg*>(inst.get());
+
+                            std::print("    {} = neg {}\n", TACValToStr(neg->dest), TACValToStr(neg->source));
                         }
                         break;
 
@@ -602,7 +393,7 @@ void PrintTAC(TAC& TAC)
                         {
                             TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
-                            std::print("    {} = {} {} {}\n", binary->dest.value, binary->left.value, BinaryOpToStr[std::to_underlying(binary->op)], binary->right.value);
+                            std::print("    {} = {} {} {}\n", TACValToStr(binary->dest), TACValToStr(binary->left), BinaryOpToStr[std::to_underlying(binary->op)], TACValToStr(binary->right));
                         }
                         break;
 
@@ -611,7 +402,7 @@ void PrintTAC(TAC& TAC)
                             TACCall* call = static_cast<TACCall*>(inst.get());
 
                             if (call->dest.has_value())
-                                std::print("    {} = ", call->dest->value);
+                                std::print("    {} = ", TACValToStr(call->dest.value()));
                             else
                                 std::print("    ");
 
@@ -619,7 +410,7 @@ void PrintTAC(TAC& TAC)
 
                             for (size_t i = 0; i < call->args.size(); i++)
                             {
-                                std::print("{}", call->args[i].value);
+                                std::print("{}", TACValToStr(call->args[i]));
 
                                 if (i + 1 != call->args.size())
                                     std::print(", ");
@@ -633,7 +424,15 @@ void PrintTAC(TAC& TAC)
                         {
                             TACBranch* branch = static_cast<TACBranch*>(inst.get());
 
-                            std::print("    branch ({} {} {}) ? B{} : B{}\n", branch->cond.Left.value, BinaryOpToStr[std::to_underlying(branch->cond.Op)], branch->cond.Right.value, branch->TrueTarget, branch->FalseTarget);
+                            std::print("    branch ({} {} {}) ? B{} : B{}\n", TACValToStr(branch->cond.Left), BinaryOpToStr[std::to_underlying(branch->cond.Op)], TACValToStr(branch->cond.Right), branch->TrueTarget->ID, branch->FalseTarget->ID);
+                        }
+                        break;
+
+                    case TACType::SELECT:
+                        {
+                            TACSelect* select = static_cast<TACSelect*>(inst.get());
+
+                            std::print("    {} = select ({} {} {}) ? {} : {}\n", TACValToStr(select->dest), TACValToStr(select->cond.Left), BinaryOpToStr[std::to_underlying(select->cond.Op)], TACValToStr(select->cond.Right), TACValToStr(select->TrueVal), TACValToStr(select->FalseVal));
                         }
                         break;
 
@@ -641,7 +440,7 @@ void PrintTAC(TAC& TAC)
                         {
                             TACJump* jump = static_cast<TACJump*>(inst.get());
 
-                            std::print("    jump B{}\n", jump->TargetBlock);
+                            std::print("    jump B{}\n", jump->TargetBlock->ID);
                         }
                         break;
 
@@ -649,10 +448,10 @@ void PrintTAC(TAC& TAC)
                         {
                             TACReturn* ret = static_cast<TACReturn*>(inst.get());
 
-                            if (ret->ReturnValue.value.empty())
+                            if (ret->ReturnValue.has_value())
                                 std::print("    return\n");
                             else
-                                std::print("    return {}\n", ret->ReturnValue.value);
+                                std::print("    return {}\n", TACValToStr(ret->ReturnValue.value()));
                         }
                         break;
                 }
@@ -663,13 +462,4 @@ void PrintTAC(TAC& TAC)
     }
 
     std::print("\n");
-}
-
-bool isConstant(std::string str)
-{
-    int value;
-
-    auto [ptr, err] = std::from_chars(str.data(), str.data() + str.size(), value);
-
-    return err == std::errc{} && ptr == str.data() + str.size();
 }

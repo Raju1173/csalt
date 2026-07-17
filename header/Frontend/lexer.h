@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string_view>
 #include <vector>
 
@@ -80,7 +81,6 @@ struct Token
 
 namespace std
 {
-
 template<> struct hash<Token>
 {
     size_t operator()(const Token& t) const noexcept
@@ -88,7 +88,6 @@ template<> struct hash<Token>
         return std::hash<std::string_view>{}(t.lexeme) ^ static_cast<size_t>(t.type);
     }
 };
-
 }
 
 class TokenStream

@@ -122,9 +122,9 @@ bool RemoveDeadCode(TAC& TAC)
         {
             changed = false;
 
-            if (EliminateDeadInstructions(TACFunc, TAC.computeVarUses(TACFunc)))
+            if (EliminateDeadInstructions(TACFunc, TAC.getVarUsesInfo(TACFunc)))
             {
-                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
+                TAC.getVarUsesInfo(TACFunc).isValid = false;
 
                 changed = true;
                 globalChanged = true;
@@ -132,9 +132,9 @@ bool RemoveDeadCode(TAC& TAC)
 
             if (EliminateUnreachableBlocks(TACFunc))
             {
-                TAC.getVarUsesInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorInfo(TACFunc.Name).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc.Name).isValid = false;
+                TAC.getVarUsesInfo(TACFunc).isValid = false;
+                TAC.getDominatorInfo(TACFunc).isValid = false;
+                TAC.getDominatorTreeInfo(TACFunc).isValid = false;
 
                 changed = true;
                 globalChanged = true;

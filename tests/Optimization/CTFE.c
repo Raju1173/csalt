@@ -1,57 +1,50 @@
-int absolute_value(int val)
+int absoluteValue(int val)
 {
     if (val < 0)
     {
         return 0 - val;
     }
+
     return val;
 }
 
-int compute_gcd(int a, int b)
+int computeGCD(int a, int b)
 {
-    int temp_a;
-    temp_a = absolute_value(a);
+    int tempA = absoluteValue(a);
 
-    int temp_b;
-    temp_b = absolute_value(b);
+    int tempB = absoluteValue(b);
 
-    while (temp_b != 0)
+    while (tempB != 0)
     {
-        int remainder;
-        remainder = temp_a;
+        int remainder = tempA;
 
-        while (remainder >= temp_b)
+        while (remainder >= tempB)
         {
-            remainder = remainder - temp_b;
+            remainder = remainder - tempB;
         }
 
-        temp_a = temp_b;
-        temp_b = remainder;
+        tempA = tempB;
+        tempB = remainder;
     }
-    return temp_a;
+
+    return tempA;
 }
 
-int test_harness(int limit, int target_gcd)
+int test(int limit, int targetGCD)
 {
-    int total_matches;
-    total_matches = 0;
+    int totalMatches = 0;
 
-    int x;
-    x = 1;
+    int x = 1;
 
     while (x <= limit)
     {
-        int y;
-        y = 1;
+        int y = 1;
 
         while (y <= limit)
         {
-            int current_gcd;
-            current_gcd = compute_gcd(x, y);
-
-            if (current_gcd == target_gcd)
+            if (computeGCD(x, y) == targetGCD)
             {
-                total_matches = total_matches + 1;
+                totalMatches = totalMatches + 1;
             }
 
             y = y + 1;
@@ -60,10 +53,10 @@ int test_harness(int limit, int target_gcd)
         x = x + 1;
     }
 
-    return total_matches;
+    return totalMatches;
 }
 
 int main()
 {
-    return test_harness(12, 3);
+    return test(12, 3);
 }

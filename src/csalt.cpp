@@ -1,4 +1,5 @@
 #include "csalt.h"
+#include "SSAConstructor.h"
 
 int main(int argc, char** argv)
 {
@@ -41,25 +42,14 @@ int main(int argc, char** argv)
     DumpIf(opts.dumpAST, AST);
 
     CFG CFG = ConstructCFG(AST);
-    DumpIf(opts.dumpCFGConst, CFG);
-
-    CFG.computeDominators();
-    DumpIf(opts.dumpCFGDom, CFG);
-
-    CFG.computeDominatorTree();
-    DumpIf(opts.dumpCFGDomTree, CFG);
-
-    CFG.computeFrontiers();
-    DumpIf(opts.dumpCFGFront, CFG);
-
-    InsertPhiNodes(CFG);
-    DumpIf(opts.dumpCFGPhi, CFG);
-
-    RenameVariables(CFG);
-    DumpIf(opts.dumpCFG || opts.dumpCFGRename, CFG);
+    DumpIf(opts.dumpCFG, CFG);
 
     TAC TAC = GenerateTAC(CFG);
     DumpIf(opts.dumpTACConst, TAC);
+
+    InsertPhiNodes(TAC);
+
+    RenameVariables(TAC);
 
     // clang-format off
     PassManager<::TAC> TACPassManager(
@@ -67,6 +57,7 @@ int main(int argc, char** argv)
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
+                    // this pass stays disabled by default and during benchmarks as well because it's basically a cheatcode due to my language constraints...
                     {Pass<::TAC>{"Compile Time Function Execution", !opts.disableCTFE, false, {.Run = EvaluateConstantFunctions}}},
                 }},
 
@@ -85,6 +76,7 @@ int main(int argc, char** argv)
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{"Sibling Call Optimization", !opts.disableSCO, false, {.Run = OptimizeSiblingCalls}}},
+                    {Pass<::TAC>{"Loop Invariant Code Motion", !opts.disableLICM, false, {.Run = HoistLoopInvariants}}},
                 }},
         });
     // clang-format on

@@ -3,6 +3,39 @@ int add(int a, int b)
     return a + b;
 }
 
+int testAcyclicPhi(int cond)
+{
+    int x;
+
+    if (cond == 1)
+    {
+        x = 100;
+    }
+
+    if (cond == 0)
+    {
+        x = 100;
+    }
+
+    return x + 5;
+}
+
+int testCyclicPhi()
+{
+    int val = 99;
+    int i = 0;
+
+    while (i < 10)
+    {
+        int temp = val;
+        val = temp;
+
+        i = i + 1;
+    }
+
+    return val;
+}
+
 int test()
 {
     int t1 = add(3, 4);
@@ -42,5 +75,8 @@ int main()
 
     y = add(2 + 1, 1 - 2);
 
-    return 0 + add(3, 4);
+    int r1 = testAcyclicPhi(x);
+    int r2 = testCyclicPhi();
+
+    return r1 + r2 + add(3, 4);
 }
