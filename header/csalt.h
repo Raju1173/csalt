@@ -16,14 +16,13 @@
 #include "DCE.h"
 #include "lexer.h"
 #include "parser.h"
-#include <fstream>
 #include <print>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <functional>
-#include <fstream>
 #include <cstring>
+#include <fstream>
 
 struct CompilerOptions
 {
@@ -49,12 +48,24 @@ struct CompilerOptions
     bool disableDCE = false;
     bool disableCFGSimp = false;
     bool disableGVN = false;
-
     bool disableFPO = false;
     bool disableSCO = false;
     bool disableCTFE = true;
-
     bool disableLICM = false;
+
+    bool historyFolding = false;
+    bool historyAlgSimp = false;
+    bool historyBrnSimp = false;
+    bool historyDCE = false;
+    bool historyCFGSimp = false;
+    bool historyGVN = false;
+    bool historyCTFE = false;
+    bool historyLICM = false;
+    bool historyTAC = false;
+
+    bool historyFPO = false;
+    bool historySCO = false;
+    bool historyMIR = false;
 };
 
 inline void PrintIR(TokenStream& tokenStream) { PrintTokens(tokenStream); }
@@ -84,8 +95,8 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"dump-all", []() { opts.dumpTOK = opts.dumpAST = opts.dumpCFG = opts.dumpTAC = opts.dumpASM = true; }},
 
     {"dump-tac-const", []() { opts.dumpTACConst = true; }},
-    {"dump-tac-const", []() { opts.dumpTACPhiIns = true; }},
-    {"dump-tac-const", []() { opts.dumpTACRename = true; }},
+    {"dump-tac-phi-ins", []() { opts.dumpTACPhiIns = true; }},
+    {"dump-tac-rename", []() { opts.dumpTACRename = true; }},
     {"dump-tac-opt", []() { opts.dumpTACOpt = true; }},
     {"dump-tac-phires", []() { opts.dumpTACPhiRes = true; }},
 
@@ -115,4 +126,19 @@ static std::unordered_map<std::string_view, std::function<void()>> argHandlers =
     {"enable-fpo", []() { opts.disableFPO = false; }},
     {"enable-sco", []() { opts.disableSCO = false; }},
     {"enable-ctfe", []() { opts.disableCTFE = false; }},
-    {"enable-licm", []() { opts.disableLICM = false; }}};
+    {"enable-licm", []() { opts.disableLICM = false; }},
+
+    {"history-folding", []() { opts.historyFolding = true; }},
+    {"history-algsimp", []() { opts.historyAlgSimp = true; }},
+    {"history-brnsimp", []() { opts.historyBrnSimp = true; }},
+    {"history-dce", []() { opts.historyDCE = true; }},
+    {"history-cfgsimp", []() { opts.historyCFGSimp = true; }},
+    {"history-gvn", []() { opts.historyGVN = true; }},
+    {"history-ctfe", []() { opts.historyCTFE = true; }},
+    {"history-licm", []() { opts.historyLICM = true; }},
+    {"history-tac", []() { opts.historyTAC = true; }},
+
+    {"history-fpo", []() { opts.historyFPO = true; }},
+    {"history-sco", []() { opts.historySCO = true; }},
+    {"history-mir", []() { opts.historyMIR = true; }},
+};

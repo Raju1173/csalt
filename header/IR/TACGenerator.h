@@ -61,41 +61,65 @@ enum class TACPass
     DCE,
     GVN,
     LICM,
-    CTFE
+    CTFE,
+
+    SSA_RECONSTRUCTION,
 };
 
-enum class InstTransformType
+inline std::string PassToStr(TACPass pass)
 {
+    switch (pass)
+    {
+        case TACPass::CONSTANT_FOLDING:
+            return "CONSTANT FOLDING";
+        case TACPass::ALGEBRAIC_SIMPLIFICATION:
+            return "ALGEBRAIC SIMPLIFICATION";
+        case TACPass::BRANCH_SIMPLIFICATION:
+            return "BRANCH SIMPLIFICATION";
+        case TACPass::CONTROL_FLOW_SIMPLIFICATION:
+            return "CONTROL FLOW SIMPLIFICATION";
+        case TACPass::DCE:
+            return "DEAD CODE ELIMINATION";
+        case TACPass::GVN:
+            return "GLOBAL VALUE NUMBERING";
+        case TACPass::LICM:
+            return "LOOP INVARIANT CODE MOTION";
+        case TACPass::CTFE:
+            return "COMPILE TIME FUNCTION EXECUTION";
+        case TACPass::SSA_RECONSTRUCTION:
+            return "SSA RECONSTRUCTION";
+    }
+}
+
+enum class TACTransformType
+{
+    ADDED,
+
     DELETED,
 
     MOVED,
     CLONED,
 
     REPLACED,
-    REPLACED_OPERAND,
-    SIMPLIFIED,
-
-    RENAMED
+    RENAMED,
 };
 
-std::string TransformationToStr(InstTransformType op)
+inline std::string TransformationToStr(TACTransformType op)
 {
     switch (op)
     {
-        case InstTransformType::MOVED:
+        case TACTransformType::MOVED:
             return "MOVED";
-        case InstTransformType::CLONED:
+        case TACTransformType::CLONED:
             return "CLONED";
-        case InstTransformType::REPLACED:
+        case TACTransformType::REPLACED:
             return "REPLACED";
-        case InstTransformType::REPLACED_OPERAND:
-            return "REPLACED_OP";
-        case InstTransformType::SIMPLIFIED:
-            return "SIMPLIFIED";
-        case InstTransformType::DELETED:
-            return "DELETED";
-        case InstTransformType::RENAMED:
+        case TACTransformType::RENAMED:
             return "RENAMED";
+        case TACTransformType::ADDED:
+            return "ADDED";
+        case TACTransformType::DELETED:
+            return "DELETED";
     }
 }
 
@@ -104,8 +128,54 @@ class TACBlock;
 struct Message
 {
     TACPass Pass;
-    InstTransformType TranformationType;
+    TACTransformType TranformationType;
     std::string Info;
+};
+
+// ignore the questionable naming please...
+template<typename T> class DeadSiblings
+{
+public:
+    std::vector<std::unique_ptr<T>> preceding;
+    std::vector<std::unique_ptr<T>> trailing;
+
+    DeadSiblings() = default;
+
+    DeadSiblings(DeadSiblings& other){};
+
+    void absorbLeftSibling(std::unique_ptr<T>& deadElement)
+    {
+        auto deadPreceding = std::move(deadElement->deadSiblings.preceding);
+        auto deadTrailing = std::move(deadElement->deadSiblings.trailing);
+
+        std::vector<std::unique_ptr<T>> combined;
+
+        combined.insert(combined.end(), std::make_move_iterator(deadPreceding.begin()), std::make_move_iterator(deadPreceding.end()));
+
+        combined.push_back(std::move(deadElement));
+
+        combined.insert(combined.end(), std::make_move_iterator(deadTrailing.begin()), std::make_move_iterator(deadTrailing.end()));
+        combined.insert(combined.end(), std::make_move_iterator(preceding.begin()), std::make_move_iterator(preceding.end()));
+
+        preceding = std::move(combined);
+    }
+
+    void absorbRightSibling(std::unique_ptr<T>& deadElement)
+    {
+        auto deadPreceding = std::move(deadElement->deadSiblings.preceding);
+        auto deadTrailing = std::move(deadElement->deadSiblings.trailing);
+
+        std::vector<std::unique_ptr<T>> combined;
+
+        combined.insert(combined.end(), std::make_move_iterator(trailing.begin()), std::make_move_iterator(trailing.end()));
+        combined.insert(combined.end(), std::make_move_iterator(deadPreceding.begin()), std::make_move_iterator(deadPreceding.end()));
+
+        combined.push_back(std::move(deadElement));
+
+        combined.insert(combined.end(), std::make_move_iterator(deadTrailing.begin()), std::make_move_iterator(deadTrailing.end()));
+
+        trailing = std::move(combined);
+    }
 };
 
 class TACInstruction
@@ -113,9 +183,9 @@ class TACInstruction
 public:
     const TACType type;
 
-    bool dead = false;
-
     std::vector<Message> History;
+
+    DeadSiblings<TACInstruction> deadSiblings;
 
     TACInstruction(TACType type) : type(type){};
 
@@ -126,7 +196,20 @@ struct TACVariable
 {
     std::string OriginalName;
     std::string SSAName = this->OriginalName;
+
+    auto operator<=>(const TACVariable&) const = default;
 };
+
+namespace std
+{
+template<> struct hash<TACVariable>
+{
+    std::size_t operator()(const TACVariable& var) const noexcept
+    {
+        return std::hash<std::string>{}(var.SSAName);
+    }
+};
+}
 
 using TACValue = std::variant<int, TACVariable>;
 
@@ -138,63 +221,71 @@ inline std::string TACValToStr(const TACValue& val)
     }
 
     const auto& var = std::get<TACVariable>(val);
-    return var.SSAName.empty() ? var.OriginalName : var.SSAName;
+    return var.SSAName;
 }
 
 class TACBinaryOp : public TACInstruction
 {
 public:
-    TACBinaryOp() : TACInstruction(TACType::BINARYOP){};
-
     TACValue dest;
-
     TACValue left;
     BinaryOp op;
     TACValue right;
+
+    TACBinaryOp() : TACInstruction(TACType::BINARYOP){};
+
+    TACBinaryOp(TACValue dest, TACValue left, BinaryOp op, TACValue right) : TACInstruction(TACType::BINARYOP), dest(std::move(dest)), left(std::move(left)), op(op), right(std::move(right)){};
 };
 
 class TACNeg : public TACInstruction
 {
 public:
+    TACValue dest;
+    TACValue source;
+
     TACNeg() : TACInstruction(TACType::NEG){};
 
-    TACValue dest;
-
-    TACValue source;
+    TACNeg(TACValue dest, TACValue source) : TACInstruction(TACType::NEG), dest(std::move(dest)), source(std::move(source)){};
 };
 
 class TACAssign : public TACInstruction
 {
 public:
+    TACValue dest;
+    TACValue source;
+
     TACAssign() : TACInstruction(TACType::ASSIGN){};
 
-    TACValue dest;
-
-    TACValue source;
+    TACAssign(TACValue dest, TACValue source) : TACInstruction(TACType::ASSIGN), dest(std::move(dest)), source(std::move(source)){};
 };
 
 class TACJump : public TACInstruction
 {
 public:
-    TACJump() : TACInstruction(TACType::JUMP), TargetBlock(){};
-
     TACBlock* TargetBlock;
+
+    TACJump() : TACInstruction(TACType::JUMP), TargetBlock(nullptr){};
+
+    TACJump(TACBlock* targetBlock) : TACInstruction(TACType::JUMP), TargetBlock(targetBlock){};
 };
 
 struct PhiArgument
 {
-    size_t SourceID;
+    TACBlock* SourceBlock;
     TACValue Value;
 };
 
 class TACPhi : public TACInstruction
 {
 public:
-    TACPhi(TACValue var) : TACInstruction(TACType::PHI), variable(std::move(var)){};
-
     TACValue variable;
-
     std::vector<PhiArgument> args;
+
+    TACPhi() : TACInstruction(TACType::PHI){};
+
+    TACPhi(TACValue variable) : TACInstruction(TACType::PHI), variable(variable){};
+
+    TACPhi(TACValue var, std::vector<PhiArgument> args) : TACInstruction(TACType::PHI), variable(std::move(var)), args(std::move(args)){};
 };
 
 struct Comparison
@@ -207,45 +298,78 @@ struct Comparison
 class TACBranch : public TACInstruction
 {
 public:
-    TACBranch(Comparison cond) : TACInstruction(TACType::BRANCH), cond(cond){};
-
     Comparison cond;
-
     TACBlock* TrueTarget;
     TACBlock* FalseTarget;
+
+    TACBranch() : TACInstruction(TACType::BRANCH), cond(), TrueTarget(nullptr), FalseTarget(nullptr){};
+
+    TACBranch(Comparison cond) : TACInstruction(TACType::BRANCH), cond(cond), TrueTarget(nullptr), FalseTarget(nullptr){};
+
+    TACBranch(Comparison cond, TACBlock* trueTarget, TACBlock* falseTarget) : TACInstruction(TACType::BRANCH), cond(std::move(cond)), TrueTarget(trueTarget), FalseTarget(falseTarget){};
 };
 
 class TACSelect : public TACInstruction
 {
 public:
-    TACSelect() : TACInstruction(TACType::SELECT){};
-
     TACValue dest;
-
     Comparison cond;
     TACValue TrueVal;
     TACValue FalseVal;
+
+    TACSelect() : TACInstruction(TACType::SELECT){};
+
+    TACSelect(TACValue dest, Comparison cond, TACValue trueVal, TACValue falseVal) : TACInstruction(TACType::SELECT), dest(std::move(dest)), cond(std::move(cond)), TrueVal(std::move(trueVal)), FalseVal(std::move(falseVal)){};
 };
 
 class TACCall : public TACInstruction
 {
 public:
+    std::optional<TACValue> dest;
+    std::string functionName;
+    std::vector<TACValue> args;
+
     TACCall() : TACInstruction(TACType::CALL){};
 
-    std::optional<TACValue> dest;
-
-    std::string functionName;
-
-    std::vector<TACValue> args;
+    TACCall(std::optional<TACValue> dest, std::string functionName, std::vector<TACValue> args) : TACInstruction(TACType::CALL), dest(std::move(dest)), functionName(std::move(functionName)), args(std::move(args)){};
 };
 
 class TACReturn : public TACInstruction
 {
 public:
+    std::optional<TACValue> ReturnValue = std::nullopt;
+
     TACReturn() : TACInstruction(TACType::RETURN){};
 
-    std::optional<TACValue> ReturnValue = std::nullopt;
+    TACReturn(std::optional<TACValue> returnValue) : TACInstruction(TACType::RETURN), ReturnValue(std::move(returnValue)){};
 };
+
+inline std::unique_ptr<TACInstruction> cloneTACInstruction(TACInstruction* inst)
+{
+    switch (inst->type)
+    {
+        case TACType::ASSIGN:
+            return std::make_unique<TACAssign>(*static_cast<TACAssign*>(inst));
+        case TACType::JUMP:
+            return std::make_unique<TACJump>(*static_cast<TACJump*>(inst));
+        case TACType::BINARYOP:
+            return std::make_unique<TACBinaryOp>(*static_cast<TACBinaryOp*>(inst));
+        case TACType::RETURN:
+            return std::make_unique<TACReturn>(*static_cast<TACReturn*>(inst));
+        case TACType::BRANCH:
+            return std::make_unique<TACBranch>(*static_cast<TACBranch*>(inst));
+        case TACType::CALL:
+            return std::make_unique<TACCall>(*static_cast<TACCall*>(inst));
+        case TACType::NEG:
+            return std::make_unique<TACNeg>(*static_cast<TACNeg*>(inst));
+        case TACType::PHI:
+            return std::make_unique<TACPhi>(*static_cast<TACPhi*>(inst));
+        case TACType::SELECT:
+            return std::make_unique<TACSelect>(*static_cast<TACSelect*>(inst));
+    }
+
+    return nullptr;
+}
 
 class TACFunction;
 
@@ -261,7 +385,15 @@ public:
     std::vector<TACBlock*> Parents;
     std::vector<TACBlock*> Children;
 
+    std::vector<Message> History;
+
+    DeadSiblings<TACBlock> deadSiblings;
+
+    std::unique_ptr<TACInstruction> LastDeadInstruction = nullptr;
+
     TACBlock(size_t ID, TACFunction* function) : ID(ID), Function(function){};
+
+    friend class TACEditor;
 };
 
 struct TACDominatorInfo
@@ -337,6 +469,12 @@ public:
 
     std::vector<std::unique_ptr<TACBlock>> Blocks;
 
+    std::vector<Message> History;
+
+    DeadSiblings<TACFunction> deadSiblings;
+
+    std::unique_ptr<TACBlock> LastDeadBlock;
+
     TACFunction(std::string name, std::vector<std::string> parameters) : Name(name), Parameters(parameters){};
 
 private:
@@ -354,12 +492,12 @@ public:
     TACDefBlocksInfo& getDefBlocksInfo();
 
     TACLoopInfo& getLoopInfo();
+
+    friend class TACEditor;
 };
 
 using TAC = std::vector<std::unique_ptr<TACFunction>>;
 
 TAC GenerateTAC(CFG& CFG);
 
-void ResolvePhiNodes(TAC& TAC);
-
-void PrintTAC(TAC& TAC);
+void PrintTAC(TAC& TAC, bool history = false);

@@ -1,5 +1,5 @@
 #include "csalt.h"
-#include "SSAConstructor.h"
+#include "TACGenerator.h"
 
 int main(int argc, char** argv)
 {
@@ -48,8 +48,10 @@ int main(int argc, char** argv)
     DumpIf(opts.dumpTACConst, TAC);
 
     InsertPhiNodes(TAC);
+    DumpIf(opts.dumpTACPhiIns, TAC);
 
     RenameVariables(TAC);
+    DumpIf(opts.dumpTACRename, TAC);
 
     // clang-format off
     PassManager<::TAC> TACPassManager(
@@ -57,26 +59,24 @@ int main(int argc, char** argv)
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
-                    // this pass stays disabled by default and during benchmarks as well because it's basically a cheatcode due to my language constraints...
-                    {Pass<::TAC>{"Compile Time Function Execution", !opts.disableCTFE, false, {.Run = EvaluateConstantFunctions}}},
+                    {Pass<::TAC>{"Compile Time Function Evaluation", !opts.disableCTFE, opts.historyCTFE, {.Run = EvaluateConstantFunctions}}},
                 }},
 
             PassGroup<::TAC>{
                 .IterateToFixedPoint = true,
                 .Passes = {
-                    {Pass<::TAC>{"Constant Folding", !opts.disableFolding, false, {.RunIter = FoldConstants}}},
-                    {Pass<::TAC>{"Algebraic Simplification", !opts.disableAlgSimp, false, {.RunIter = SimplifyAlgebra}}},
-                    {Pass<::TAC>{"Branch Simplification", !opts.disableBrnSimp, false, {.RunIter = SimplifyBranches}}},
-                    {Pass<::TAC>{"Dead Code Elimination", !opts.disableDCE, false, {.RunIter = RemoveDeadCode}}},
-                    {Pass<::TAC>{"Control Flow Simplification", !opts.disableCFGSimp, false, {.RunIter = SimplifyControlFlow}}},
-                    {Pass<::TAC>{"Global Value Numbering", !opts.disableGVN, false, {.RunIter = GVN}}},
+                    {Pass<::TAC>{"Constant Folding", !opts.disableFolding, opts.historyFolding, {.RunIter = FoldConstants}}},
+                    {Pass<::TAC>{"Algebraic Simplification", !opts.disableAlgSimp, opts.historyAlgSimp, {.RunIter = SimplifyAlgebra}}},
+                    {Pass<::TAC>{"Branch Simplification", !opts.disableBrnSimp, opts.historyBrnSimp, {.RunIter = SimplifyBranches}}},
+                    {Pass<::TAC>{"Control Flow Simplification", !opts.disableCFGSimp, opts.historyCFGSimp, {.RunIter = SimplifyControlFlow}}},
+                    {Pass<::TAC>{"Dead Code Elimination", !opts.disableDCE, opts.historyDCE, {.RunIter = RemoveDeadCode}}},
+                    {Pass<::TAC>{"Global Value Numbering", !opts.disableGVN, opts.historyGVN, {.RunIter = GVN}}},
                 }},
 
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
-                    {Pass<::TAC>{"Sibling Call Optimization", !opts.disableSCO, false, {.Run = OptimizeSiblingCalls}}},
-                    {Pass<::TAC>{"Loop Invariant Code Motion", !opts.disableLICM, false, {.Run = HoistLoopInvariants}}},
+                    {Pass<::TAC>{"Loop Invariant Code Motion", !opts.disableLICM, opts.historyLICM, {.Run = HoistLoopInvariants}}},
                 }},
         });
     // clang-format on
@@ -84,9 +84,12 @@ int main(int argc, char** argv)
     TACPassManager.RunOptimizations(TAC);
     DumpIf(opts.dumpTACOpt, TAC);
 
+    if (opts.historyTAC)
+        PrintTAC(TAC, true);
+
     ResolvePhiNodes(TAC);
     DumpIf(opts.dumpTAC || opts.dumpTACPhiRes, TAC);
-
+    /*
     MIR MIR = GenerateMachineIR(TAC);
     DumpIf(opts.dumpMIRConst, MIR);
 
@@ -109,6 +112,6 @@ int main(int argc, char** argv)
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
 
     PrintOutput(ExecutableFilePath);
-
+*/
     return 0;
 }

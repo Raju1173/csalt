@@ -2,7 +2,7 @@ int absoluteValue(int val)
 {
     if (val < 0)
     {
-        return 0 - val;
+        return -val;
     }
 
     return val;

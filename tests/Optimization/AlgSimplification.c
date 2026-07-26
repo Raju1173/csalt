@@ -14,7 +14,7 @@ int main()
         a = (0 - 1);
     }
 
-    d = 0 - b;
+    d = 0 - (-(b));
 
     return a + b;
 }

@@ -138,8 +138,6 @@ void printBlock(CFGBlock* Block)
 
     if (Block->TransitionFalse.has_value())
         std::print("\n|    Transition False : Block - {}\n", Block->TransitionFalse.value()->ID);
-
-    std::print("}}\n");
 }
 
 void PrintCFG(CFG& CFG)

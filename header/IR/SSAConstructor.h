@@ -5,3 +5,5 @@
 void InsertPhiNodes(TAC& TAC);
 
 void RenameVariables(TAC& TAC);
+
+void ResolvePhiNodes(TAC& TAC);

@@ -1,172 +1,103 @@
-#include "CFGBuilder.h"
 #include "TACGenerator.h"
+#include "TACEditor.h"
 #include <algorithm>
 #include <cstddef>
+#include <format>
 #include <memory>
-#include <string>
+#include <print>
+#include <utility>
 #include <vector>
 
-bool MergeLinearBlocks(TACFunction& TACFunc)
+bool MergeLinearBlocks(TACFunction* TACFunc)
 {
-    for (size_t i = 0; i < TACFunc.Blocks.size(); ++i)
+    for (auto& curBlock : TACFunc->Blocks)
     {
-        auto& curBlock = TACFunc.Blocks[i];
-
         if (curBlock->Instructions.empty())
             continue;
 
-        if (curBlock->Instructions.back()->type == TACType::JUMP)
+        if (curBlock->Instructions.back()->type != TACType::JUMP)
+            continue;
+
+        TACJump* jump = static_cast<TACJump*>(curBlock->Instructions.back().get());
+
+        if (jump->TargetBlock->Parents.size() != 1)
+            continue;
+
+        TACBlock* jumpBlock = std::find_if(TACFunc->Blocks.begin(), TACFunc->Blocks.end(), [&jump](const auto& b) { return b.get() == jump->TargetBlock; })->get();
+
+        TACEditor::deleteInstruction(curBlock.get(), curBlock->Instructions.back().get(), Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::DELETED, std::format("jump redundant after target block 'Block - {}' got merged with this block", jumpBlock->ID)});
+
+        for (int i = jumpBlock->Instructions.size() - 1; i >= 0; --i)
         {
-            TACJump* jump = static_cast<TACJump*>(curBlock->Instructions.back().get());
+            auto& inst = jumpBlock->Instructions[i];
 
-            auto blockBIt = std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [&jump](const auto& b) { return b->ID == jump->TargetBlock; });
-
-            if (blockBIt != TACFunc.Blocks.end())
-            {
-                auto& jumpBlock = *blockBIt;
-
-                if (jumpBlock->Parents.size() == 1 && jumpBlock->Parents.front() == curBlock.get())
-                {
-                    curBlock->Instructions.pop_back();
-
-                    for (auto& inst : jumpBlock->Instructions)
-                    {
-                        curBlock->Instructions.push_back(std::move(inst));
-                    }
-
-                    std::erase(curBlock->Children, jumpBlock.get());
-
-                    for (TACBlock* child : jumpBlock->Children)
-                    {
-                        if (child == jumpBlock.get())
-                            continue;
-
-                        curBlock->Children.push_back(child);
-
-                        auto pIt = std::find(child->Parents.begin(), child->Parents.end(), curBlock.get());
-                        auto bIt = std::find(child->Parents.begin(), child->Parents.end(), jumpBlock.get());
-
-                        if (bIt != child->Parents.end())
-                        {
-                            if (pIt != child->Parents.end())
-                            {
-                                child->Parents.erase(bIt);
-                            }
-
-                            else
-                            {
-                                *bIt = curBlock.get();
-                            }
-                        }
-                    }
-
-                    TACFunc.Blocks.erase(blockBIt);
-
-                    return true;
-                }
-            }
+            TACEditor::moveInstructionTo(jumpBlock, inst.get(), curBlock.get(), Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::MOVED, std::format("merged from linear block 'Block - {}' into 'Block - {}'", jumpBlock->ID, curBlock->ID)});
         }
+
+        auto childrenCopy = jumpBlock->Children;
+
+        TACEditor::removeEdge(curBlock.get(), jumpBlock);
+
+        for (TACBlock* child : childrenCopy)
+        {
+            TACEditor::removeEdge(jumpBlock, child);
+            TACEditor::addEdge(curBlock.get(), child);
+        }
+
+        TACEditor::deleteBlock(jumpBlock, Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::DELETED, std::format("merged linear block into 'Block - {}'", curBlock->ID)});
+
+        return true;
     }
 
     return false;
 }
 
-bool EliminateEmptyJumpBlocks(TACFunction& TACFunc)
+bool EliminateEmptyJumpBlocks(TACFunction* TACFunc)
 {
-    for (auto& jumpBlock : TACFunc.Blocks)
+    for (auto& emptyBlock : TACFunc->Blocks)
     {
-        if (jumpBlock == TACFunc.Blocks.front())
+        if (emptyBlock == TACFunc->Blocks.front())
             continue;
 
-        if (jumpBlock->Instructions.size() == 1 && jumpBlock->Instructions.back()->type == TACType::JUMP)
+        if (emptyBlock->Instructions.size() != 1 || emptyBlock->Instructions.back()->type != TACType::JUMP)
+            continue;
+
+        TACJump* jump = static_cast<TACJump*>(emptyBlock->Instructions.back().get());
+        TACBlock* targetBlock = jump->TargetBlock;
+
+        if (targetBlock == emptyBlock.get())
+            continue;
+
+        auto parentsCopy = emptyBlock->Parents;
+
+        for (TACBlock* parent : parentsCopy)
         {
-            TACJump* jump = static_cast<TACJump*>(jumpBlock->Instructions.back().get());
+            TACEditor::removeEdge(parent, emptyBlock.get());
+            TACEditor::addEdge(parent, targetBlock);
 
-            auto blockBIt = std::find_if(TACFunc.Blocks.begin(), TACFunc.Blocks.end(), [&jump](const auto& b) { return b->ID == jump->TargetBlock; });
-
-            if (blockBIt != TACFunc.Blocks.end())
+            if (parent->Instructions.back()->type == TACType::JUMP)
             {
-                auto& parentBlock = *blockBIt;
+                auto* parentJump = static_cast<TACJump*>(parent->Instructions.back().get());
 
-                if (parentBlock.get() == jumpBlock.get())
-                    continue;
+                if (parentJump->TargetBlock == emptyBlock.get())
+                    parentJump->TargetBlock = targetBlock;
+            }
 
-                for (TACBlock* parent : jumpBlock->Parents)
-                {
-                    if (!parent->Instructions.empty())
-                    {
-                        auto& lastInst = parent->Instructions.back();
+            else if (parent->Instructions.back()->type == TACType::BRANCH)
+            {
+                auto* parentBranch = static_cast<TACBranch*>(parent->Instructions.back().get());
 
-                        if (lastInst->type == TACType::JUMP)
-                        {
-                            TACJump* pJump = static_cast<TACJump*>(lastInst.get());
+                if (parentBranch->TrueTarget == emptyBlock.get())
+                    parentBranch->TrueTarget = targetBlock;
 
-                            if (pJump->TargetBlock == jumpBlock->ID)
-                                pJump->TargetBlock = parentBlock->ID;
-                        }
-                        else if (lastInst->type == TACType::BRANCH)
-                        {
-                            TACBranch* pBranch = static_cast<TACBranch*>(lastInst.get());
-
-                            if (pBranch->TrueTarget == jumpBlock->ID)
-                                pBranch->TrueTarget = parentBlock->ID;
-
-                            if (pBranch->FalseTarget == jumpBlock->ID)
-                                pBranch->FalseTarget = parentBlock->ID;
-                        }
-                    }
-
-                    std::replace(parent->Children.begin(), parent->Children.end(), jumpBlock.get(), parentBlock.get());
-
-                    if (std::find(parentBlock->Parents.begin(), parentBlock->Parents.end(), parent) == parentBlock->Parents.end())
-                    {
-                        parentBlock->Parents.push_back(parent);
-                    }
-
-                    for (auto& inst : parentBlock->Instructions)
-                    {
-                        if (inst->type != TACType::PHI)
-                            break;
-
-                        auto* phi = static_cast<TACPhi*>(inst.get());
-
-                        auto argIt = std::find_if(phi->args.begin(), phi->args.end(), [&jumpBlock](const PhiArgument& arg) { return arg.SourceID == jumpBlock->ID; });
-
-                        if (argIt != phi->args.end())
-                        {
-                            auto parentArgIt = std::find_if(phi->args.begin(), phi->args.end(), [parent](const PhiArgument& arg) { return arg.SourceID == parent->ID; });
-
-                            if (parentArgIt != phi->args.end())
-                                parentArgIt->Value = argIt->Value;
-
-                            else
-                                phi->args.push_back({parent->ID, argIt->Value});
-                        }
-                    }
-                }
-
-                for (auto& inst : parentBlock->Instructions)
-                {
-                    if (inst->type != TACType::PHI)
-                        break;
-
-                    auto* phi = static_cast<TACPhi*>(inst.get());
-
-                    auto eraseIt = std::find_if(phi->args.begin(), phi->args.end(), [&jumpBlock](const PhiArgument& arg) { return arg.SourceID == jumpBlock->ID; });
-
-                    if (eraseIt != phi->args.end())
-                    {
-                        phi->args.erase(eraseIt);
-                    }
-                }
-
-                std::erase(parentBlock->Parents, jumpBlock.get());
-
-                std::erase_if(TACFunc.Blocks, [&jumpBlock](const auto& b) { return b.get() == jumpBlock.get(); });
-
-                return true;
+                if (parentBranch->FalseTarget == emptyBlock.get())
+                    parentBranch->FalseTarget = targetBlock;
             }
         }
+
+        TACEditor::deleteBlock(emptyBlock.get(), Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::DELETED, std::format("eliminated empty jump block, redirected parents to Block - {}", targetBlock->ID)});
+
+        return true;
     }
 
     return false;
@@ -184,20 +115,10 @@ bool SimplifyControlFlow(TAC& TAC)
         {
             blocksChanged = false;
 
-            if (MergeLinearBlocks(TACFunc))
+            // bitwise OR operator "|" makes both functions run whereas comparison OR operator "||" skips checking second condition if first condition evaluates to true...
+            if (MergeLinearBlocks(TACFunc.get()) | EliminateEmptyJumpBlocks(TACFunc.get()))
             {
-                TAC.getDominatorInfo(TACFunc).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc).isValid = false;
-
-                blocksChanged = true;
-                globalChanged = true;
-            }
-
-            if (EliminateEmptyJumpBlocks(TACFunc))
-            {
-                TAC.getVarUsesInfo(TACFunc).isValid = false;
-                TAC.getDominatorInfo(TACFunc).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc).isValid = false;
+                TACEditor::reconstructSSA(TAC);
 
                 blocksChanged = true;
                 globalChanged = true;

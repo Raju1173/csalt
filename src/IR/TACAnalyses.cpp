@@ -352,6 +352,7 @@ TACLoopInfo& TACFunction::getLoopInfo()
             {
                 if (DominatorInfo.Dominators[Block.get()].contains(child))
                 {
+                    // csalt doesnt support continue, break or goto, thus, every single loop is guaranteed to have a single back-edge...
                     LoopInfo.Loops.push_back(TACLoop{child, Block.get(), {child, Block.get()}});
 
                     findLoopBlocks(LoopInfo.Loops.back(), Block.get());

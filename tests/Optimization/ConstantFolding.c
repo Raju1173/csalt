@@ -3,7 +3,7 @@ int main()
     int a;
     int b;
 
-    a = 1 + 2 * 3 / 9 + 2;
+    a = -1 + 2 * 3 / 9 + 2;
 
     int d = 5 + 10;
 
@@ -14,5 +14,5 @@ int main()
         a = 1;
     }
 
-    return a + b;
+    return a + -b;
 }

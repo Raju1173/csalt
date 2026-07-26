@@ -1,18 +1,24 @@
+int add(int a, int b)
+{
+    return a + b;
+}
+
 int test()
 {
-    int x;
-    int y;
+    int x = 10;
+    int y = 5;
     int z;
     int i;
-
-    x = 10;
-    y = 5;
-    z = 0;
-    i = 0;
+    int w;
+    int c;
 
     while (i < 100)
     {
         z = x + y;
+
+        w = -z;
+
+        c = add(z, w);
 
         i = i + 1;
     }

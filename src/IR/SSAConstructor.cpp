@@ -1,5 +1,6 @@
 #include "SSAConstructor.h"
 #include "TACGenerator.h"
+#include "TACEditor.h"
 #include <cstddef>
 #include <memory>
 #include <print>
@@ -28,9 +29,7 @@ void InsertPhiNodes(TAC& TAC)
                 {
                     if (added.find(frontier) == added.end())
                     {
-                        auto phi = std::make_unique<TACPhi>(var);
-
-                        frontier->Instructions.push_back(std::move(phi));
+                        frontier->Instructions.insert(frontier->Instructions.begin(), std::make_unique<TACPhi>(var));
 
                         added.insert(frontier);
 
@@ -48,25 +47,19 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 {
     std::vector<std::string> pushed;
 
-    auto renameDef = [&pushed](TACVariable& var) {
-        auto& [versionStack, versionCounter] = VarStacks[var.OriginalName];
-
-        versionStack.push(versionCounter);
-        versionCounter++;
-
-        var.SSAName += std::to_string(versionStack.top());
-        pushed.push_back(var.OriginalName);
-    };
-
     auto renameUse = [](TACValue& val) {
         if (val.index() == 1)
         {
             TACVariable& var = std::get<TACVariable>(val);
+
+            if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
+                return;
+
             std::stack<int>& VersionStack = VarStacks[var.OriginalName].first;
 
             if (!VersionStack.empty())
             {
-                var.SSAName += std::to_string(VersionStack.top());
+                var.SSAName = var.OriginalName + std::to_string(VersionStack.top());
             }
         }
     };
@@ -82,7 +75,7 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 
                 if (!VarStacks[var.OriginalName].first.empty())
                 {
-                    phi->args.push_back(PhiArgument{Block->ID, TACVariable{var.OriginalName, var.OriginalName + std::to_string(VarStacks[var.OriginalName].first.top())}});
+                    phi->args.push_back(PhiArgument{Block, TACVariable{var.OriginalName, var.OriginalName + std::to_string(VarStacks[var.OriginalName].first.top())}});
                 }
             }
         }
@@ -90,6 +83,24 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 
     for (auto& inst : Block->Instructions)
     {
+        auto renameDef = [&pushed, &inst](TACVariable& var) {
+            if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
+                return;
+
+            auto& [versionStack, versionCounter] = VarStacks[var.OriginalName];
+
+            versionStack.push(versionCounter);
+            versionCounter++;
+
+            if (var.SSAName != var.OriginalName && var.SSAName != var.OriginalName + std::to_string(versionStack.top()) && inst->type != TACType::PHI)
+            {
+                inst->History.push_back(Message{TACPass::SSA_RECONSTRUCTION, TACTransformType::RENAMED, std::format("renamed definition {} to {}", var.SSAName, var.OriginalName + std::to_string(versionStack.top()))});
+            }
+
+            var.SSAName = var.OriginalName + std::to_string(versionStack.top());
+            pushed.push_back(var.OriginalName);
+        };
+
         switch (inst->type)
         {
             case TACType::PHI:
@@ -104,8 +115,8 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                 {
                     auto* assign = static_cast<TACAssign*>(inst.get());
 
-                    renameDef(std::get<TACVariable>(assign->dest));
                     renameUse(assign->source);
+                    renameDef(std::get<TACVariable>(assign->dest));
                     break;
                 }
 
@@ -113,8 +124,8 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                 {
                     auto* neg = static_cast<TACNeg*>(inst.get());
 
-                    renameDef(std::get<TACVariable>(neg->dest));
                     renameUse(neg->source);
+                    renameDef(std::get<TACVariable>(neg->dest));
                     break;
                 }
 
@@ -122,9 +133,9 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                 {
                     auto* binary = static_cast<TACBinaryOp*>(inst.get());
 
-                    renameDef(std::get<TACVariable>(binary->dest));
                     renameUse(binary->left);
                     renameUse(binary->right);
+                    renameDef(std::get<TACVariable>(binary->dest));
                     break;
                 }
 
@@ -132,23 +143,15 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                 {
                     auto* call = static_cast<TACCall*>(inst.get());
 
-                    if (call->dest.has_value())
-                    {
-                        renameDef(std::get<TACVariable>(call->dest.value()));
-                    }
-
                     for (TACValue& arg : call->args)
                     {
                         renameUse(arg);
                     }
-                    break;
-                }
 
-            case TACType::JUMP:
-                {
-                    auto* jump = static_cast<TACJump*>(inst.get());
-
-                    renamePhiArgs(jump->TargetBlock);
+                    if (call->dest.has_value())
+                    {
+                        renameDef(std::get<TACVariable>(call->dest.value()));
+                    }
                     break;
                 }
 
@@ -158,9 +161,6 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 
                     renameUse(branch->cond.Left);
                     renameUse(branch->cond.Right);
-
-                    renamePhiArgs(branch->TrueTarget);
-                    renamePhiArgs(branch->FalseTarget);
                     break;
                 }
 
@@ -172,6 +172,7 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                     renameUse(select->cond.Right);
                     renameUse(select->TrueVal);
                     renameUse(select->FalseVal);
+                    renameDef(std::get<TACVariable>(select->dest));
                     break;
                 }
 
@@ -186,6 +187,11 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                     break;
                 }
         }
+    }
+
+    for (auto& child : Block->Children)
+    {
+        renamePhiArgs(child);
     }
 
     for (size_t i = 0; i < DomTreeInfo.DominatorTree[Block].size(); i++)
@@ -221,6 +227,48 @@ void RenameVariables(TAC& TAC)
 
                 return false;
             });
+        }
+    }
+}
+
+void ResolvePhiNodes(TAC& TAC)
+{
+    for (auto& TACFunc : TAC)
+    {
+        for (auto& block : TACFunc->Blocks)
+        {
+            for (auto& inst : block->Instructions)
+            {
+                if (inst->type == TACType::PHI)
+                {
+                    TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                    for (PhiArgument& arg : phi->args)
+                    {
+                        for (auto& sourceBlock : TACFunc->Blocks)
+                        {
+                            if (sourceBlock->ID == arg.SourceBlock->ID)
+                            {
+                                auto assign = std::make_unique<TACAssign>();
+
+                                assign->dest = phi->variable;
+
+                                assign->source = arg.Value;
+
+                                if (sourceBlock->Instructions.size() >= 1)
+                                    sourceBlock->Instructions.insert(sourceBlock->Instructions.end() - 1, std::move(assign));
+
+                                else
+                                    sourceBlock->Instructions.push_back(std::move(assign));
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            std::erase_if(block->Instructions, [](const auto& inst) { return inst->type == TACType::PHI; });
         }
     }
 }

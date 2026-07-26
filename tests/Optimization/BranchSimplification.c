@@ -7,5 +7,20 @@ int main()
         x = 2;
     }
 
+    if (x > x)
+    {
+        x = 2;
+    }
+
+    if (x == x)
+    {
+        x = 2;
+    }
+
+    if (-x > -x)
+    {
+        x = 2;
+    }
+
     return x;
 }

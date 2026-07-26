@@ -1,39 +1,51 @@
 #include "TACGenerator.h"
+#include "TACEditor.h"
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
-bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo)
+bool EliminateDeadInstructions(TACFunction* TACFunc, TACVarUsesInfo& VarUsesInfo)
 {
     bool changed = false;
 
-    for (auto& Block : TACFunc.Blocks)
+    for (auto& Block : TACFunc->Blocks)
     {
         size_t initialSize = Block->Instructions.size();
 
-        std::erase_if(Block->Instructions, [&VarUsesInfo](const auto& inst) {
-            std::string destVar;
+        for (int i = Block->Instructions.size() - 1; i >= 0; --i)
+        {
+            auto& inst = Block->Instructions[i];
+
+            TACValue destVar;
 
             if (inst->type == TACType::PHI)
             {
                 TACPhi* phi = static_cast<TACPhi*>(inst.get());
 
-                destVar = phi->variable.value;
+                destVar = phi->variable;
             }
 
             else if (inst->type == TACType::ASSIGN)
             {
                 TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
-                destVar = assign->dest.value;
+                destVar = assign->dest;
+            }
+
+            else if (inst->type == TACType::NEG)
+            {
+                TACNeg* neg = static_cast<TACNeg*>(inst.get());
+
+                destVar = neg->dest;
             }
 
             else if (inst->type == TACType::BINARYOP)
             {
                 TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
-                destVar = binary->dest.value;
+                destVar = binary->dest;
             }
 
             else if (inst->type == TACType::CALL)
@@ -41,18 +53,23 @@ bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo
                 TACCall* call = static_cast<TACCall*>(inst.get());
 
                 if (!call->dest.has_value())
-                    return true;
+                {
+                    TACEditor::deleteInstruction(Block.get(), inst.get(), Message{TACPass::DCE, TACTransformType::DELETED, "calls with no destination are dead because all functions are pure in the C subset supported by csalt"});
+                    continue;
+                }
 
-                destVar = call->dest->value;
+                else
+                    destVar = call->dest.value();
             }
 
             else
             {
-                return false;
+                continue;
             }
 
-            return !VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar] == 0;
-        });
+            if (!VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar] == 0)
+                TACEditor::deleteInstruction(Block.get(), inst.get(), Message{TACPass::DCE, TACTransformType::DELETED, "definition was unused"});
+        }
 
         if (Block->Instructions.size() != initialSize)
         {
@@ -63,22 +80,26 @@ bool EliminateDeadInstructions(TACFunction& TACFunc, TACVarUsesInfo& VarUsesInfo
     return changed;
 }
 
-bool EliminateUnreachableBlocks(TACFunction& TACFunc)
+bool EliminateUnreachableBlocks(TACFunction* TACFunc)
 {
-    if (TACFunc.Blocks.empty())
+    if (TACFunc->Blocks.empty())
         return false;
 
-    size_t entryBlockID = TACFunc.Blocks.front()->ID;
-    size_t initialBlocks = TACFunc.Blocks.size();
+    size_t entryBlockID = TACFunc->Blocks.front()->ID;
+    size_t initialBlocks = TACFunc->Blocks.size();
 
-    std::erase_if(TACFunc.Blocks, [entryBlockID](const auto& Block) {
-        if (Block->ID == entryBlockID)
-            return false;
+    for (int i = TACFunc->Blocks.size() - 1; i >= 0; --i)
+    {
+        auto& block = TACFunc->Blocks[i];
 
-        return Block->Parents.empty();
-    });
+        if (block->ID == entryBlockID)
+            continue;
 
-    return TACFunc.Blocks.size() != initialBlocks;
+        if (block->Parents.empty())
+            TACEditor::deleteBlock(block.get(), Message{TACPass::DCE, TACTransformType::DELETED, "block was unreachable"});
+    }
+
+    return TACFunc->Blocks.size() != initialBlocks;
 }
 
 bool EliminateDeadFunctions(TAC& TAC)
@@ -89,7 +110,7 @@ bool EliminateDeadFunctions(TAC& TAC)
 
     for (const auto& TACFunc : TAC)
     {
-        for (const auto& Block : TACFunc.Blocks)
+        for (const auto& Block : TACFunc->Blocks)
         {
             for (const auto& inst : Block->Instructions)
             {
@@ -103,9 +124,16 @@ bool EliminateDeadFunctions(TAC& TAC)
         }
     }
 
-    TAC.eraseFuncIf([&callCounts](const auto& TACFunc) {
-        return TACFunc.Name != "main" && callCounts[TACFunc.Name] == 0;
-    });
+    for (int i = TAC.size() - 1; i >= 0; --i)
+    {
+        auto& TACFunc = TAC[i];
+
+        if (TACFunc->Name == "main")
+            continue;
+
+        if (callCounts[TACFunc->Name] == 0)
+            TACEditor::deleteFunction(TAC, TACFunc.get(), Message{TACPass::DCE, TACTransformType::DELETED, "function was never called"});
+    };
 
     return initialFuncCount != TAC.size();
 }
@@ -122,20 +150,14 @@ bool RemoveDeadCode(TAC& TAC)
         {
             changed = false;
 
-            if (EliminateDeadInstructions(TACFunc, TAC.getVarUsesInfo(TACFunc)))
+            if (EliminateDeadInstructions(TACFunc.get(), TACFunc->getVarUsesInfo()))
             {
-                TAC.getVarUsesInfo(TACFunc).isValid = false;
-
                 changed = true;
                 globalChanged = true;
             }
 
-            if (EliminateUnreachableBlocks(TACFunc))
+            if (EliminateUnreachableBlocks(TACFunc.get()))
             {
-                TAC.getVarUsesInfo(TACFunc).isValid = false;
-                TAC.getDominatorInfo(TACFunc).isValid = false;
-                TAC.getDominatorTreeInfo(TACFunc).isValid = false;
-
                 changed = true;
                 globalChanged = true;
             }

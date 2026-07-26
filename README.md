@@ -8,11 +8,12 @@ An optimization focused compiler for a minimal subset of C targeting x86-64 asse
 - **Clang Version**: 18.1.3
 - **GCC Version**: 13.3.0
 
-| Compiler |  |
-|---|---|
-| CSalt |  |
-| Clang -O1 |  |
-| GCC -O1 |  |
+| Type Of Benchmarks | GCC -O1 | Clang -O1 | CSalt |
+|---|---|---|---|
+|  | 100% () |  |  |
+|  | 100% () |  |  |
+|  | 100% () |  |  |
+|  | 100% () |  |  |
 
 # Optimization Pipeline
 
@@ -44,7 +45,7 @@ Keeping the fronted super small *(like a grain of sea salt)* makes implementing 
 
 # Architecture
 
-`Source Code -> Tokens -> AST -> CFG -> SSA -> TAC -> Middle End optimizations -> Machine IR -> Backend Optimizations -> Assembly`
+`Source Code -> Tokens -> AST -> CFG -> TAC -> Pre SSA Optimizations -> SSA TAC -> Post SSA Optimizations -> Machine IR -> Backend Optimizations -> Assembly`
 
 *Note : I'm storing AST nodes inside the CFG because it felt much simpler than converting from AST to TAC directly...*
 

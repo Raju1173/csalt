@@ -1,15 +1,18 @@
 #include "CFGBuilder.h"
 #include "TACGenerator.h"
+#include "TACEditor.h"
+#include <algorithm>
+#include <format>
 #include <map>
 #include <memory>
 #include <vector>
+#include <map>
 
 struct ExpressionKey
 {
     BinaryOp op;
     TACValue left;
     TACValue right;
-
     auto operator<=>(const ExpressionKey&) const = default;
 };
 
@@ -17,23 +20,13 @@ struct FunctionCallKey
 {
     std::string function;
     std::vector<TACValue> args;
-
     auto operator<=>(const FunctionCallKey&) const = default;
 };
 
 std::map<TACValue, TACValue> Copies;
 std::map<ExpressionKey, TACValue> Expressions;
-std::map<FunctionCallKey, TACValue> Calls; // All functions are guaranteed to be pure...
-std::unordered_map<std::string, std::string> CanonicalValue; // For phi simplification...
-
-std::string FindCanonical(std::string var)
-{
-    if (!CanonicalValue.contains(var))
-        return var;
-    if (CanonicalValue[var] == var)
-        return var;
-    return CanonicalValue[var] = FindCanonical(CanonicalValue[var]);
-}
+std::map<TACValue, TACValue> NegDefs;
+std::map<FunctionCallKey, TACValue> Calls; // all functions are guaranteed to be pure in the supported C subset...
 
 bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 {
@@ -41,162 +34,80 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 
     std::vector<TACValue> addedCopies;
     std::vector<ExpressionKey> addedExpressions;
+    std::vector<TACValue> addedNegDefs;
     std::vector<FunctionCallKey> addedCalls;
+
+    auto tryPropagate = [](TACValue& val) {
+        if (Copies.contains(val))
+        {
+            val = Copies[val];
+            return true;
+        }
+
+        return false;
+    };
+
+    auto replaceWithAssign = [&block, &addedCopies, &changed](std::unique_ptr<TACInstruction>& inst, const TACValue& dest, const TACValue& source) {
+        TACEditor::replaceInstruction(block, inst.get(), std::make_unique<TACAssign>(dest, source), Message{TACPass::GVN, TACTransformType::REPLACED, std::format("TODO: ADD MESSAGE")});
+
+        Copies[dest] = source;
+        addedCopies.push_back(dest);
+
+        changed = true;
+    };
 
     for (auto& inst : block->Instructions)
     {
         switch (inst->type)
         {
-            case TACType::PHI:
-                {
-                    TACPhi* phi = static_cast<TACPhi*>(inst.get());
-
-                    for (auto& arg : phi->args)
-                    {
-                        arg.Value = FindCanonical(arg.Value);
-                    }
-
-                    std::string commonValue = "";
-                    bool isReducible = true;
-
-                    for (PhiArgument& arg : phi->args)
-                    {
-                        if (arg.Value == phi->variable.value)
-                        {
-                            continue;
-                        }
-
-                        if (commonValue == "")
-                        {
-                            commonValue = arg.Value;
-                        }
-
-                        else if (arg.Value != commonValue)
-                        {
-                            isReducible = false;
-                            break;
-                        }
-                    }
-
-                    if (isReducible && !commonValue.empty())
-                    {
-                        CanonicalValue[phi->variable.value] = commonValue;
-
-                        auto assign = std::make_unique<TACAssign>();
-                        assign->dest = phi->variable;
-                        assign->source = TACValue{commonValue};
-
-                        Copies[assign->dest] = assign->source;
-                        addedCopies.push_back(assign->dest);
-
-                        inst = std::move(assign);
-                        changed = true;
-                    }
-                }
-                break;
-
             case TACType::ASSIGN:
                 {
                     TACAssign* assign = static_cast<TACAssign*>(inst.get());
-
-                    if (Copies.contains(assign->source))
-                    {
-                        assign->source = Copies[assign->source];
-
-                        changed = true;
-                    }
+                    changed |= tryPropagate(assign->source);
 
                     Copies[assign->dest] = assign->source;
                     addedCopies.push_back(assign->dest);
+                }
+                break;
 
-                    CanonicalValue[assign->dest.value] = FindCanonical(assign->source.value);
+            case TACType::NEG:
+                {
+                    TACNeg* neg = static_cast<TACNeg*>(inst.get());
+
+                    changed |= tryPropagate(neg->source);
+
+                    if (NegDefs.contains(neg->source))
+                        replaceWithAssign(inst, neg->dest, NegDefs[neg->source]);
+
+                    else
+                    {
+                        NegDefs[neg->source] = neg->dest;
+                        addedNegDefs.push_back(neg->source);
+                    }
                 }
                 break;
 
             case TACType::BINARYOP:
                 {
                     TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
+                    changed |= tryPropagate(binary->left);
+                    changed |= tryPropagate(binary->right);
 
-                    if (Copies.contains(binary->left))
-                    {
-                        binary->left = Copies[binary->left];
+                    TACValue left = binary->left;
+                    TACValue right = binary->right;
 
-                        changed = true;
-                    }
+                    if ((binary->op == BinaryOp::PLUS || binary->op == BinaryOp::MUL) && left > right)
+                        std::swap(left, right);
 
-                    if (Copies.contains(binary->right))
-                    {
-                        binary->right = Copies[binary->right];
+                    ExpressionKey key = {binary->op, left, right};
 
-                        changed = true;
-                    }
-
-                    ExpressionKey key1 = {binary->op, binary->left, binary->right};
-                    ExpressionKey key2 = {binary->op, binary->right, binary->left};
-
-                    if (binary->op == BinaryOp::PLUS || binary->op == BinaryOp::MUL)
-                    {
-                        if (Expressions.contains(key1))
-                        {
-                            auto assignInst = std::make_unique<TACAssign>();
-
-                            assignInst->dest = binary->dest;
-                            assignInst->source = Expressions[key1];
-
-                            Copies[assignInst->dest] = assignInst->source;
-                            addedCopies.push_back(assignInst->dest);
-
-                            inst = std::move(assignInst);
-
-                            changed = true;
-                        }
-
-                        else if (Expressions.contains(key2))
-                        {
-                            auto assignInst = std::make_unique<TACAssign>();
-
-                            assignInst->dest = binary->dest;
-                            assignInst->source = Expressions[key2];
-
-                            Copies[assignInst->dest] = assignInst->source;
-                            addedCopies.push_back(assignInst->dest);
-
-                            inst = std::move(assignInst);
-
-                            changed = true;
-                        }
-
-                        else
-                        {
-                            Expressions[key1] = binary->dest;
-
-                            addedExpressions.push_back(key1);
-                        }
-                    }
+                    if (Expressions.contains(key))
+                        replaceWithAssign(inst, binary->dest, Expressions[key]);
 
                     else
                     {
-                        if (Expressions.contains(key1))
-                        {
-                            auto assignInst = std::make_unique<TACAssign>();
-
-                            assignInst->dest = binary->dest;
-                            assignInst->source = Expressions[key1];
-
-                            Copies[assignInst->dest] = assignInst->source;
-                            addedCopies.push_back(assignInst->dest);
-
-                            inst = std::move(assignInst);
-
-                            changed = true;
-                        }
-
-                        else
-                        {
-                            Expressions[key1] = binary->dest;
-
-                            addedExpressions.push_back(key1);
-                        }
+                        Expressions[key] = binary->dest;
+                        addedExpressions.push_back(key);
                     }
                 }
                 break;
@@ -207,34 +118,14 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 
                     if (call->dest.has_value())
                     {
-                        for (size_t i = 0; i < call->args.size(); i++)
-                        {
-                            if (Copies.contains(call->args[i]))
-                            {
-                                call->args[i] = Copies[call->args[i]];
-
-                                changed = true;
-                            }
-                        }
+                        for (auto& arg : call->args)
+                            changed |= tryPropagate(arg);
 
                         FunctionCallKey key = {call->functionName, call->args};
-
                         auto currentDest = call->dest.value();
 
                         if (Calls.contains(key))
-                        {
-                            auto assignInst = std::make_unique<TACAssign>();
-
-                            assignInst->dest = call->dest.value();
-                            assignInst->source = Calls[key];
-
-                            Copies[assignInst->dest] = assignInst->source;
-                            addedCopies.push_back(assignInst->dest);
-
-                            inst = std::move(assignInst);
-
-                            changed = true;
-                        }
+                            replaceWithAssign(inst, currentDest, Calls[key]);
 
                         else
                         {
@@ -248,33 +139,15 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
             case TACType::BRANCH:
                 {
                     TACBranch* branch = static_cast<TACBranch*>(inst.get());
-
-                    if (Copies.contains(branch->cond.Left))
-                    {
-                        branch->cond.Left = Copies[branch->cond.Left];
-
-                        changed = true;
-                    }
-
-                    if (Copies.contains(branch->cond.Right))
-                    {
-                        branch->cond.Right = Copies[branch->cond.Right];
-
-                        changed = true;
-                    }
+                    changed |= tryPropagate(branch->cond.Left);
+                    changed |= tryPropagate(branch->cond.Right);
                 }
                 break;
 
             case TACType::RETURN:
                 {
                     TACReturn* ret = static_cast<TACReturn*>(inst.get());
-
-                    if (Copies.contains(ret->ReturnValue))
-                    {
-                        ret->ReturnValue = Copies[ret->ReturnValue];
-
-                        changed = true;
-                    }
+                    changed |= tryPropagate(ret->ReturnValue.value());
                 }
                 break;
         }
@@ -282,7 +155,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 
     for (auto domChild : DomTreeInfo.DominatorTree[block])
     {
-        changed = WalkTACDomTree(domChild, DomTreeInfo);
+        changed |= WalkTACDomTree(domChild, DomTreeInfo);
     }
 
     for (const auto& key : addedCopies)
@@ -298,25 +171,18 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 bool GVN(TAC& TAC)
 {
     bool globalChanged = false;
-    bool localChanged = true;
 
-    for (TACFunction& TACFunc : TAC)
+    for (auto& TACFunc : TAC)
     {
-        localChanged = true;
-
-        CanonicalValue.clear();
+        bool localChanged = true;
 
         while (localChanged)
         {
             localChanged = false;
 
-            Copies.clear();
-            Expressions.clear();
-            Calls.clear();
-
-            if (!TACFunc.Blocks.empty())
+            if (!TACFunc->Blocks.empty())
             {
-                localChanged = WalkTACDomTree(TACFunc.Blocks[0].get(), TAC.getDominatorTreeInfo(TACFunc));
+                localChanged = WalkTACDomTree(TACFunc->Blocks[0].get(), TACFunc->getDominatorTreeInfo());
             }
 
             if (localChanged)
@@ -326,7 +192,9 @@ bool GVN(TAC& TAC)
         }
 
         if (globalChanged)
-            TAC.getVarUsesInfo(TACFunc).isValid = false;
+        {
+            TACFunc->getVarUsesInfo().isValid = false;
+        }
     }
 
     return globalChanged;

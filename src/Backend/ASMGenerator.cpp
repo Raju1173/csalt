@@ -11,19 +11,20 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 {
     std::ofstream out(filename);
 
-    out << ".intel_syntax noprefix\n";
+    out << ".intel_syntax noprefix\n\n";
+
     out << ".text\n\n";
 
-    for (const MIRFunction& function : MIR)
+    for (auto& function : MIR)
     {
-        if (function.FunctionName == "main")
+        if (function->FunctionName == "main")
             out << ".global main\n";
 
-        out << function.FunctionName << ":\n";
+        out << function->FunctionName << ":\n";
 
-        for (const auto& block : function.Blocks)
+        for (const auto& block : function->Blocks)
         {
-            out << "." << function.FunctionName << "L" << block.ID << ":\n";
+            out << "." << function->FunctionName << "L" << block.ID << ":\n";
 
             for (const auto& inst : block.Instructions)
             {
@@ -33,7 +34,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRMov* mov = static_cast<MIRMov*>(inst.get());
 
-                            out << "    mov " << OperandString(mov->Dest, function.OmitFramePtr) << ", " << OperandString(mov->Source, function.OmitFramePtr) << "\n";
+                            out << "    mov " << OperandString(mov->Dest, function->OmitFramePtr) << ", " << OperandString(mov->Source, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -41,7 +42,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRAdd* add = static_cast<MIRAdd*>(inst.get());
 
-                            out << "    add " << OperandString(add->Dest, function.OmitFramePtr) << ", " << OperandString(add->Source, function.OmitFramePtr) << "\n";
+                            out << "    add " << OperandString(add->Dest, function->OmitFramePtr) << ", " << OperandString(add->Source, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -49,7 +50,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRSub* sub = static_cast<MIRSub*>(inst.get());
 
-                            out << "    sub " << OperandString(sub->Dest, function.OmitFramePtr) << ", " << OperandString(sub->Source, function.OmitFramePtr) << "\n";
+                            out << "    sub " << OperandString(sub->Dest, function->OmitFramePtr) << ", " << OperandString(sub->Source, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -57,7 +58,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRImul* mul = static_cast<MIRImul*>(inst.get());
 
-                            out << "    imul " << OperandString(mul->Dest, function.OmitFramePtr) << ", " << OperandString(mul->Source, function.OmitFramePtr) << "\n";
+                            out << "    imul " << OperandString(mul->Dest, function->OmitFramePtr) << ", " << OperandString(mul->Source, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -65,7 +66,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
 
-                            out << "    idiv " << OperandString(div->Divisor, function.OmitFramePtr) << "\n";
+                            out << "    idiv " << OperandString(div->Divisor, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -73,7 +74,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
 
-                            out << "    neg " << OperandString(neg->Dest, function.OmitFramePtr) << "\n";
+                            out << "    neg " << OperandString(neg->Dest, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -81,7 +82,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
 
-                            out << "    cmp " << OperandString(cmp->Left, function.OmitFramePtr) << ", " << OperandString(cmp->Right, function.OmitFramePtr) << "\n";
+                            out << "    cmp " << OperandString(cmp->Left, function->OmitFramePtr) << ", " << OperandString(cmp->Right, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -89,7 +90,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRPush* push = static_cast<MIRPush*>(inst.get());
 
-                            out << "    push " << OperandString(push->Source, function.OmitFramePtr) << "\n";
+                            out << "    push " << OperandString(push->Source, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -97,7 +98,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRPop* pop = static_cast<MIRPop*>(inst.get());
 
-                            out << "    pop " << OperandString(pop->Dest, function.OmitFramePtr) << "\n";
+                            out << "    pop " << OperandString(pop->Dest, function->OmitFramePtr) << "\n";
                         }
                         break;
 
@@ -105,7 +106,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRJump* jump = static_cast<MIRJump*>(inst.get());
 
-                            out << "    jmp ." << function.FunctionName << "L" << jump->TargetBlock << "\n";
+                            out << "    jmp ." << function->FunctionName << "L" << jump->TargetBlock << "\n";
                         }
                         break;
 
@@ -137,7 +138,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                                     break;
                             }
 
-                            out << "." << function.FunctionName << "L" << jump->TargetBlock << "\n";
+                            out << "." << function->FunctionName << "L" << jump->TargetBlock << "\n";
                         }
                         break;
 
@@ -189,6 +190,7 @@ void PrintASM(std::string AssemblyFilePath)
     std::print("{}\n", AsmOutput);
 }
 
+// using gcc to assemble and link instead of writing a faster, smaller startup sequence because it keeps benchmarks fair...
 
 void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)
 {
@@ -233,7 +235,7 @@ void PrintOutput(std::string ExecFilePath)
 
             if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
             {
-                std::print("\033[31mEXIT CODE\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
+                std::print("\033[31mOUTPUT (EXIT CODE)\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
 
                 break;
             }

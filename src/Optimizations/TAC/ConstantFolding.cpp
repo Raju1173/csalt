@@ -1,16 +1,19 @@
 #include "ConstantFolding.h"
 #include "TACGenerator.h"
+#include "TACEditor.h"
 #include <cctype>
+#include <format>
 #include <memory>
+#include <print>
 #include <utility>
 
 bool FoldConstants(TAC& TAC)
 {
     bool changed = false;
 
-    for (TACFunction& Function : TAC)
+    for (auto& Function : TAC)
     {
-        for (auto& block : Function.Blocks)
+        for (auto& block : Function->Blocks)
         {
             for (auto& inst : block->Instructions)
             {
@@ -18,53 +21,32 @@ bool FoldConstants(TAC& TAC)
                 {
                     TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
 
-                    if (isConstant(bin->left.value) && isConstant(bin->right.value))
-                    {
-                        int left = std::stoi(bin->left.value);
-                        int right = std::stoi(bin->right.value);
+                    auto* left = std::get_if<int>(&bin->left);
+                    auto* right = std::get_if<int>(&bin->right);
 
+                    if (left && right)
+                    {
                         int result = 0;
 
                         switch (bin->op)
                         {
                             case BinaryOp::PLUS:
-                                result = left + right;
+                                result = *left + *right;
                                 break;
                             case BinaryOp::MINUS:
-                                result = left - right;
+                                result = *left - *right;
                                 break;
                             case BinaryOp::MUL:
-                                result = left * right;
+                                result = *left * *right;
                                 break;
                             case BinaryOp::DIV:
-                                result = left / right;
-                                break;
-                            case BinaryOp::DOUBLE_EQUAL:
-                                result = left == right;
-                                break;
-                            case BinaryOp::NOT_EQUAL:
-                                result = left != right;
-                                break;
-                            case BinaryOp::GREATER:
-                                result = left > right;
-                                break;
-                            case BinaryOp::GREATER_EQUAL:
-                                result = left >= right;
-                                break;
-                            case BinaryOp::LESS:
-                                result = left < right;
-                                break;
-                            case BinaryOp::LESS_EQUAL:
-                                result = left <= right;
+                                result = *left / *right;
                                 break;
                         }
 
-                        auto assignInst = std::make_unique<TACAssign>();
+                        Message message = Message{TACPass::CONSTANT_FOLDING, TACTransformType::REPLACED, std::format("simplified {} {} {} to {}", *left, BinaryOpToStr[std::to_underlying(bin->op)], *right, result)};
 
-                        assignInst->dest = bin->dest;
-                        assignInst->source = TACValue{std::to_string(result)};
-
-                        inst = std::move(assignInst);
+                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), message);
 
                         changed = true;
                     }

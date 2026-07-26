@@ -309,15 +309,20 @@ Node Parse(TokenStream& TokenStream)
                             Node child = std::move(nodeStack.top());
                             nodeStack.pop();
 
-                            if (nodeStack.top().type != NodeType::BINARY_OP && nodeStack.top().type != NodeType::EXPR && nodeStack.top().type != NodeType::UNARY_OP)
+                            if (nodeStack.top().type == NodeType::BINARY_OP || nodeStack.top().type == NodeType::EXPR)
                             {
-                                nodeStack.top().children.push_back(child);
+                                nodeStack.top().children.push_back(child.children[0]);
+                                pos++;
+                            }
+
+                            else if (nodeStack.top().type == NodeType::UNARY_OP)
+                            {
+                                nodeStack.top().children.push_back(child.children[0]);
                             }
 
                             else
                             {
-                                nodeStack.top().children.push_back(child.children[0]);
-                                pos++;
+                                nodeStack.top().children.push_back(child);
                             }
 
                             continue;
@@ -506,12 +511,6 @@ Node Parse(TokenStream& TokenStream)
                 switch (cur.type)
                 {
                     case TokenType::LPAREN:
-                        if (nodeStack.top().children.size() == 1)
-                        {
-                            popAndAttach();
-                            continue;
-                        }
-
                         pushNode(NodeType::EXPR);
                         pos++;
                         continue;
@@ -520,12 +519,6 @@ Node Parse(TokenStream& TokenStream)
                     case TokenType::NUMBER:
                     case TokenType::IDENTIFIER:
                         {
-                            if (nodeStack.top().children.size() == 1)
-                            {
-                                popAndAttach();
-                                continue;
-                            }
-
                             if (next.type == TokenType::LPAREN)
                             {
                                 pushNode(NodeType::CALL, cur, {});
@@ -535,11 +528,23 @@ Node Parse(TokenStream& TokenStream)
 
                             else
                             {
-                                Node child = cur.type == TokenType::IDENTIFIER ? Node{NodeType::IDENTIFIER, cur, {}} : Node{NodeType::NUMBER, cur, {}};
-                                nodeStack.top().children.push_back(Node{child});
-                                popAndAttach();
-                                pos++;
-                                continue;
+                                if (cur.type == TokenType::IDENTIFIER)
+                                {
+                                    Node child = Node{NodeType::IDENTIFIER, cur, {}};
+                                    nodeStack.top().children.push_back(Node{child});
+                                    popAndAttach();
+                                    pos++;
+                                    continue;
+                                }
+
+                                else
+                                {
+                                    Node child = Node{NodeType::NUMBER, Token{TokenType::NUMBER, "-" + cur.lexeme}, {}};
+                                    nodeStack.pop();
+                                    nodeStack.top().children.push_back(Node{child});
+                                    pos++;
+                                    continue;
+                                }
                             }
                         }
                         break;

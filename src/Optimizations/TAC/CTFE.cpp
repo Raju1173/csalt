@@ -1,33 +1,33 @@
 #include "CTFE.h"
-#include "CFGBuilder.h"
 #include "TACGenerator.h"
+#include "TACEditor.h"
 #include <climits>
-#include <cstdint>
+#include <format>
 #include <string>
 
-int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
+int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
 {
     std::unordered_map<std::string, int> varStates;
 
-    for (size_t i = 0; i < Func.Parameters.size(); i++)
+    for (size_t i = 0; i < Func->Parameters.size(); i++)
     {
-        varStates[Func.Parameters[i]] = args[i];
+        varStates[Func->Parameters[i]] = args[i];
     }
 
     auto getState = [&varStates](TACValue TACVal) -> int {
-        if (isConstant(TACVal.value))
+        if (TACVal.index() == 0)
         {
-            return stoi(TACVal.value);
+            return std::get<int>(TACVal);
         }
 
         else
         {
-            return TACVal.neg ? -varStates[TACVal.value] : varStates[TACVal.value];
+            return varStates[std::get<TACVariable>(TACVal).SSAName];
         }
     };
 
     size_t prevBlockID;
-    TACBlock* curBlock = Func.Blocks[0].get();
+    TACBlock* curBlock = Func->Blocks[0].get();
 
     while (curBlock != nullptr)
     {
@@ -43,11 +43,11 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
 
                         for (PhiArgument& arg : phi->args)
                         {
-                            if (arg.SourceID == prevBlockID)
+                            if (arg.SourceBlock->ID == prevBlockID)
                                 value = getState(TACValue{arg.Value});
                         }
 
-                        varStates[phi->variable.value] = value;
+                        varStates[std::get<TACVariable>(phi->variable).SSAName] = value;
                     }
                     break;
 
@@ -55,7 +55,15 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
                     {
                         TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
-                        varStates[assign->dest.value] = getState(assign->source);
+                        varStates[std::get<TACVariable>(assign->dest).SSAName] = getState(assign->source);
+                    }
+                    break;
+
+                case TACType::NEG:
+                    {
+                        TACNeg* neg = static_cast<TACNeg*>(inst.get());
+
+                        varStates[std::get<TACVariable>(neg->dest).SSAName] = -getState(neg->source);
                     }
                     break;
 
@@ -66,16 +74,16 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
                         switch (bin->op)
                         {
                             case BinaryOp::PLUS:
-                                varStates[bin->dest.value] = getState(bin->left) + getState(bin->right);
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) + getState(bin->right);
                                 break;
                             case BinaryOp::MINUS:
-                                varStates[bin->dest.value] = getState(bin->left) - getState(bin->right);
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) - getState(bin->right);
                                 break;
                             case BinaryOp::MUL:
-                                varStates[bin->dest.value] = getState(bin->left) * getState(bin->right);
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) * getState(bin->right);
                                 break;
                             case BinaryOp::DIV:
-                                varStates[bin->dest.value] = getState(bin->left) / getState(bin->right);
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) / getState(bin->right);
                                 break;
                         }
                     }
@@ -94,7 +102,7 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
                                 intArgs.push_back(getState(arg));
                             }
 
-                            varStates[call->dest->value] = Execute(TAC, TAC.findFuncByName(call->functionName), intArgs);
+                            varStates[std::get<TACVariable>(call->dest.value()).SSAName] = Execute(TAC, std::find_if(TAC.begin(), TAC.end(), [&call](auto& func) { return func->Name == call->functionName; })->get(), intArgs);
                         }
                     }
                     break;
@@ -130,13 +138,13 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
                         if (condition)
                         {
                             prevBlockID = curBlock->ID;
-                            curBlock = (*std::ranges::find_if(Func.Blocks, [&br](size_t ID) { return ID == br->TrueTarget; }, &TACBlock::ID)).get();
+                            curBlock = std::find_if(Func->Blocks.begin(), Func->Blocks.end(), [&br](auto& b) { return b.get() == br->TrueTarget; })->get();
                         }
 
                         else
                         {
                             prevBlockID = curBlock->ID;
-                            curBlock = (*std::ranges::find_if(Func.Blocks, [&br](size_t ID) { return ID == br->FalseTarget; }, &TACBlock::ID)).get();
+                            curBlock = std::find_if(Func->Blocks.begin(), Func->Blocks.end(), [&br](auto& b) { return b.get() == br->FalseTarget; })->get();
                         }
                     }
                     break;
@@ -147,7 +155,7 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
 
                         prevBlockID = curBlock->ID;
 
-                        curBlock = (*std::ranges::find_if(Func.Blocks, [&jump](size_t ID) { return ID == jump->TargetBlock; }, &TACBlock::ID)).get();
+                        curBlock = std::find_if(Func->Blocks.begin(), Func->Blocks.end(), [&jump](auto& b) { return b.get() == jump->TargetBlock; })->get();
                     }
                     break;
 
@@ -155,7 +163,7 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
                     {
                         TACReturn* ret = static_cast<TACReturn*>(inst.get());
 
-                        return getState(ret->ReturnValue);
+                        return getState(ret->ReturnValue.value());
                     }
                     break;
             }
@@ -167,9 +175,9 @@ int Execute(TAC& TAC, TACFunction& Func, std::vector<int> args)
 
 void EvaluateConstantFunctions(TAC& TAC)
 {
-    for (TACFunction& Func : TAC)
+    for (auto& Func : TAC)
     {
-        for (auto& Block : Func.Blocks)
+        for (auto& Block : Func->Blocks)
         {
             for (auto& inst : Block->Instructions)
             {
@@ -189,25 +197,32 @@ void EvaluateConstantFunctions(TAC& TAC)
 
                                 for (TACValue& arg : call->args)
                                 {
-                                    if (!isConstant(arg.value))
+                                    if (arg.index() != 0)
                                     {
                                         constant = false;
                                         break;
                                     }
 
-                                    intArgs.push_back(std::stoi(arg.value));
+                                    intArgs.push_back(std::get<int>(arg));
                                 }
 
                                 if (constant)
                                 {
-                                    returnVal = Execute(TAC, TAC.findFuncByName(call->functionName), intArgs);
+                                    returnVal = Execute(TAC, std::find_if(TAC.begin(), TAC.end(), [&call](auto& func) { return func->Name == call->functionName; })->get(), intArgs);
 
-                                    auto assignInst = std::make_unique<TACAssign>();
+                                    std::string argsString = "(";
 
-                                    assignInst->dest = call->dest.value();
-                                    assignInst->source = TACValue{std::to_string(returnVal)};
+                                    for (size_t i = 0; i < call->args.size(); i++)
+                                    {
+                                        argsString += std::format("{}", TACValToStr(call->args[i]));
 
-                                    inst = std::move(assignInst);
+                                        if (i + 1 != call->args.size())
+                                            argsString += ", ";
+                                    }
+
+                                    argsString += ")\n";
+
+                                    TACEditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{TACPass::CTFE, TACTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments - {}{}", call->functionName, argsString)});
                                 }
                             }
                         }
