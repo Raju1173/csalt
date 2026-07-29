@@ -32,7 +32,7 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
             if (outsideParents.empty())
                 continue;
 
-            TACBlock* preheader = TACEditor::insertBlockBefore(header, Message{TACPass::LICM, TACTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", TACFunc->Blocks.size() + 1, header->ID)});
+            TACBlock* preheader = TACEditor::insertBlockBefore(header, Message{IRPass::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", TACFunc->Blocks.size() + 1, header->ID)});
 
             for (TACBlock* parent : outsideParents)
             {
@@ -90,12 +90,12 @@ void HoistLoopInvariants(TAC& TAC)
             std::unordered_set<TACVariable> invariants;
 
             auto isInvariant = [&](TACValue val) -> bool {
-                TACVariable& var = std::get<TACVariable>(val);
-
-                if (val.index() == 0 || invariants.contains(var))
+                if (val.index() == 0 || invariants.contains(std::get<TACVariable>(val)))
                 {
                     return true;
                 }
+
+                TACVariable& var = std::get<TACVariable>(val);
 
                 if (DefBlocksInfo.DefBlocks.find(var) != DefBlocksInfo.DefBlocks.end())
                 {
@@ -182,7 +182,7 @@ void HoistLoopInvariants(TAC& TAC)
                         {
                             invariants.insert(destVar);
 
-                            TACEditor::moveInstructionBefore(block, inst.get(), preheader, preheader->Instructions.back().get(), Message{TACPass::LICM, TACTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
+                            TACEditor::moveInstructionBefore(block, inst.get(), preheader, preheader->Instructions.back().get(), Message{IRPass::LICM, IRTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
 
                             changed = true;
                         }

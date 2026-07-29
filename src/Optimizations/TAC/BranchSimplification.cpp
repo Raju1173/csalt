@@ -22,7 +22,7 @@ bool SimplifyBranches(TAC& TAC)
 
                     if (br->TrueTarget == br->FalseTarget)
                     {
-                        Message message = Message{TACPass::BRANCH_SIMPLIFICATION, TACTransformType::REPLACED, std::format("simplified 'cond ? B{} : B{}' to 'jump B{}'", br->TrueTarget->ID, br->FalseTarget->ID, br->TrueTarget->ID)};
+                        Message message = Message{IRPass::BRANCH_SIMPLIFICATION, IRTransformType::REPLACED, std::format("simplified 'cond ? B{} : B{}' to 'jump B{}'", br->TrueTarget->ID, br->FalseTarget->ID, br->TrueTarget->ID)};
 
                         TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACJump>(br->TrueTarget), message);
 
@@ -115,7 +115,7 @@ bool SimplifyBranches(TAC& TAC)
 
                         std::string info = std::format("constant branch '{} {} {} ? B{} : B{}' simplified to 'jump B{}'", TACValToStr(br->cond.Left), BinaryOpToStr[std::to_underlying(br->cond.Op)], TACValToStr(br->cond.Right), std::to_string(br->TrueTarget->ID), std::to_string(br->FalseTarget->ID), std::to_string(jumpInst->TargetBlock->ID));
 
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::move(jumpInst), Message{TACPass::BRANCH_SIMPLIFICATION, TACTransformType::REPLACED, info});
+                        TACEditor::replaceInstruction(block.get(), inst.get(), std::move(jumpInst), Message{IRPass::BRANCH_SIMPLIFICATION, IRTransformType::REPLACED, info});
 
                         changed = true;
                     }

@@ -222,7 +222,7 @@ void EvaluateConstantFunctions(TAC& TAC)
 
                                     argsString += ")\n";
 
-                                    TACEditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{TACPass::CTFE, TACTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments - {}{}", call->functionName, argsString)});
+                                    TACEditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{IRPass::CTFE, IRTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments - {}{}", call->functionName, argsString)});
                                 }
                             }
                         }

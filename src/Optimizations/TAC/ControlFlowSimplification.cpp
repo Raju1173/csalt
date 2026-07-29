@@ -25,13 +25,13 @@ bool MergeLinearBlocks(TACFunction* TACFunc)
 
         TACBlock* jumpBlock = std::find_if(TACFunc->Blocks.begin(), TACFunc->Blocks.end(), [&jump](const auto& b) { return b.get() == jump->TargetBlock; })->get();
 
-        TACEditor::deleteInstruction(curBlock.get(), curBlock->Instructions.back().get(), Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::DELETED, std::format("jump redundant after target block 'Block - {}' got merged with this block", jumpBlock->ID)});
+        TACEditor::deleteInstruction(curBlock.get(), curBlock->Instructions.back().get(), Message{IRPass::CONTROL_FLOW_SIMPLIFICATION, IRTransformType::DELETED, std::format("jump redundant after target block 'Block - {}' got merged with this block", jumpBlock->ID)});
 
         for (int i = jumpBlock->Instructions.size() - 1; i >= 0; --i)
         {
             auto& inst = jumpBlock->Instructions[i];
 
-            TACEditor::moveInstructionTo(jumpBlock, inst.get(), curBlock.get(), Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::MOVED, std::format("merged from linear block 'Block - {}' into 'Block - {}'", jumpBlock->ID, curBlock->ID)});
+            TACEditor::moveInstructionTo(jumpBlock, inst.get(), curBlock.get(), Message{IRPass::CONTROL_FLOW_SIMPLIFICATION, IRTransformType::MOVED, std::format("merged from linear block 'Block - {}' into 'Block - {}'", jumpBlock->ID, curBlock->ID)});
         }
 
         auto childrenCopy = jumpBlock->Children;
@@ -44,7 +44,7 @@ bool MergeLinearBlocks(TACFunction* TACFunc)
             TACEditor::addEdge(curBlock.get(), child);
         }
 
-        TACEditor::deleteBlock(jumpBlock, Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::DELETED, std::format("merged linear block into 'Block - {}'", curBlock->ID)});
+        TACEditor::deleteBlock(jumpBlock, Message{IRPass::CONTROL_FLOW_SIMPLIFICATION, IRTransformType::DELETED, std::format("merged linear block into 'Block - {}'", curBlock->ID)});
 
         return true;
     }
@@ -95,7 +95,7 @@ bool EliminateEmptyJumpBlocks(TACFunction* TACFunc)
             }
         }
 
-        TACEditor::deleteBlock(emptyBlock.get(), Message{TACPass::CONTROL_FLOW_SIMPLIFICATION, TACTransformType::DELETED, std::format("eliminated empty jump block, redirected parents to Block - {}", targetBlock->ID)});
+        TACEditor::deleteBlock(emptyBlock.get(), Message{IRPass::CONTROL_FLOW_SIMPLIFICATION, IRTransformType::DELETED, std::format("eliminated empty jump block, redirected parents to Block - {}", targetBlock->ID)});
 
         return true;
     }

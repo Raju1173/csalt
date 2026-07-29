@@ -94,7 +94,7 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 
             if (var.SSAName != var.OriginalName && var.SSAName != var.OriginalName + std::to_string(versionStack.top()) && inst->type != TACType::PHI)
             {
-                inst->History.push_back(Message{TACPass::SSA_RECONSTRUCTION, TACTransformType::RENAMED, std::format("renamed definition {} to {}", var.SSAName, var.OriginalName + std::to_string(versionStack.top()))});
+                inst->History.push_back(Message{IRPass::SSA_RECONSTRUCTION, IRTransformType::RENAMED, std::format("renamed definition {} to {}", var.SSAName, var.OriginalName + std::to_string(versionStack.top()))});
             }
 
             var.SSAName = var.OriginalName + std::to_string(versionStack.top());

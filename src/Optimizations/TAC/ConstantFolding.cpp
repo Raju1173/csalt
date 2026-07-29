@@ -44,7 +44,7 @@ bool FoldConstants(TAC& TAC)
                                 break;
                         }
 
-                        Message message = Message{TACPass::CONSTANT_FOLDING, TACTransformType::REPLACED, std::format("simplified {} {} {} to {}", *left, BinaryOpToStr[std::to_underlying(bin->op)], *right, result)};
+                        Message message = Message{IRPass::CONSTANT_FOLDING, IRTransformType::REPLACED, std::format("simplified {} {} {} to {}", *left, BinaryOpToStr[std::to_underlying(bin->op)], *right, result)};
 
                         TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), message);
 

@@ -49,15 +49,6 @@ Keeping the fronted super small *(like a grain of sea salt)* makes implementing 
 
 *Note : I'm storing AST nodes inside the CFG because it felt much simpler than converting from AST to TAC directly...*
 
-# Limitations
-
-### **No error detection**
-csalt treats incorrect code as undefined behaviour. *(definitely not a sophisticated way of saying "I was too lazy to do semantic analysis")*
-### **No support for external libraries**
-unfortunately, some external libraries require the stack frame to be aligned with 16 bytes for SIMD instructions but csalt does not perform any alignment
-### **Exit codes as the only method of getting an output**
-since csalt does not support external libraries, there is no way of printing to the terminal other than returning an integer and catching it using "echo $?" or using a parent process to fetch the value in rdi during termination before the OS truncates it to 8 bits...
-
 # Usage
 
 ### CSalt can only compile a single file with no dependencies :

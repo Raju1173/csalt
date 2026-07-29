@@ -1,5 +1,4 @@
 #include "csalt.h"
-#include "TACGenerator.h"
 
 int main(int argc, char** argv)
 {
@@ -36,22 +35,22 @@ int main(int argc, char** argv)
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     TokenStream TokenStream = Tokenize(source);
-    DumpIf(opts.dumpTOK, TokenStream);
+    TakeSnapshot("TOKEN STREAM", TokenStream);
 
     Node AST = Parse(TokenStream);
-    DumpIf(opts.dumpAST, AST);
+    TakeSnapshot("ABSTRACT SYNTAX TREE", AST);
 
     CFG CFG = ConstructCFG(AST);
-    DumpIf(opts.dumpCFG, CFG);
+    TakeSnapshot("CONTROL FLOW GRAPH", CFG);
 
     TAC TAC = GenerateTAC(CFG);
-    DumpIf(opts.dumpTACConst, TAC);
+    TakeSnapshot("TAC AFTER CONSTRUCTION", TAC);
 
     InsertPhiNodes(TAC);
-    DumpIf(opts.dumpTACPhiIns, TAC);
+    TakeSnapshot("TAC AFTER PHI INSERTION", TAC);
 
     RenameVariables(TAC);
-    DumpIf(opts.dumpTACRename, TAC);
+    TakeSnapshot("TAC AFTER SSA RENAMING", TAC);
 
     // clang-format off
     PassManager<::TAC> TACPassManager(
@@ -82,13 +81,12 @@ int main(int argc, char** argv)
     // clang-format on
 
     TACPassManager.RunOptimizations(TAC);
-    DumpIf(opts.dumpTACOpt, TAC);
+    TakeSnapshot("TAC AFTER OPTIMIZATIONS", TAC);
 
-    if (opts.historyTAC)
-        PrintTAC(TAC, true);
+    TakeSnapshot("TAC HISTORY AFTER OPTIMIZATIONS", TAC);
 
     ResolvePhiNodes(TAC);
-    DumpIf(opts.dumpTAC || opts.dumpTACPhiRes, TAC);
+    TakeSnapshot("TAC AFTER FINAL TRANSFORMATION", TAC);
     /*
     MIR MIR = GenerateMachineIR(TAC);
     DumpIf(opts.dumpMIRConst, MIR);
@@ -112,6 +110,6 @@ int main(int argc, char** argv)
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
 
     PrintOutput(ExecutableFilePath);
-*/
+    */
     return 0;
 }

@@ -48,7 +48,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
     };
 
     auto replaceWithAssign = [&block, &addedCopies, &changed](std::unique_ptr<TACInstruction>& inst, const TACValue& dest, const TACValue& source) {
-        TACEditor::replaceInstruction(block, inst.get(), std::make_unique<TACAssign>(dest, source), Message{TACPass::GVN, TACTransformType::REPLACED, std::format("TODO: ADD MESSAGE")});
+        TACEditor::replaceInstruction(block, inst.get(), std::make_unique<TACAssign>(dest, source), Message{IRPass::GVN, IRTransformType::REPLACED, std::format("TODO: ADD MESSAGE")});
 
         Copies[dest] = source;
         addedCopies.push_back(dest);
@@ -63,6 +63,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
             case TACType::ASSIGN:
                 {
                     TACAssign* assign = static_cast<TACAssign*>(inst.get());
+
                     changed |= tryPropagate(assign->source);
 
                     Copies[assign->dest] = assign->source;
@@ -90,6 +91,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
             case TACType::BINARYOP:
                 {
                     TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
+
                     changed |= tryPropagate(binary->left);
                     changed |= tryPropagate(binary->right);
 
@@ -139,6 +141,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
             case TACType::BRANCH:
                 {
                     TACBranch* branch = static_cast<TACBranch*>(inst.get());
+
                     changed |= tryPropagate(branch->cond.Left);
                     changed |= tryPropagate(branch->cond.Right);
                 }
@@ -147,6 +150,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
             case TACType::RETURN:
                 {
                     TACReturn* ret = static_cast<TACReturn*>(inst.get());
+
                     changed |= tryPropagate(ret->ReturnValue.value());
                 }
                 break;

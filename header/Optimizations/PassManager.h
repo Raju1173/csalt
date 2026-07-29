@@ -1,3 +1,4 @@
+#include "IRDebugger.h"
 #include "MIRGenerator.h"
 #include "TACGenerator.h"
 #include <string>
@@ -61,7 +62,7 @@ public:
                 {
                     if (pass.Enabled && pass.PrintHistory)
                     {
-                        PrintIRHistory(IR);
+                        TakeSnapshot(IR);
                         break;
                     }
                 }
@@ -78,7 +79,7 @@ public:
 
                     if (pass.Enabled && pass.PrintHistory)
                     {
-                        PrintIRHistory(IR);
+                        TakeSnapshot(IR);
                     }
                 }
             }

@@ -1,16 +1,20 @@
 #include "MIRGenerator.h"
+#include "MIRInstructions.h"
 #include "TACGenerator.h"
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <memory>
 #include <print>
+#include <string>
 #include <sys/types.h>
-#include <utility>
 #include <variant>
+#include <ranges>
 
-std::unordered_map<std::string, std::variant<Register, StackOffset>> StackSlots;
+std::unordered_map<TACValue, Operand> VarLocations;
 
 int NextOffset = -4;
+int NextVirtualReg = 0;
 
 struct PendingOutgoingArg
 {
@@ -18,31 +22,247 @@ struct PendingOutgoingArg
     int ArgIndex;
 };
 
-Operand GetOperand(const TACValue& TACVal, MIRFunction& CurFunc)
-{
-    if ((TACVal.value[0] >= '0' && TACVal.value[0] <= '9') || TACVal.value[0] == '-')
-        return Immediate{std::stoi(TACVal.value)};
-
-    if (StackSlots.contains(TACVal.value))
-        return std::visit([](auto&& arg) -> Operand { return arg; }, StackSlots[TACVal.value]);
-
-    StackSlots[TACVal.value] = StackOffset{NextOffset};
-
-    NextOffset -= 4;
-
-    CurFunc.StackFrameSize += 4;
-
-    return std::visit([](auto&& arg) -> Operand { return arg; }, StackSlots[TACVal.value]);
-}
-
 constexpr Register ArgRegs[] = {
     Register::EDI,
     Register::ESI,
     Register::EDX,
     Register::ECX,
     Register::R8D,
-    Register::R9D};
+    Register::R9D,
+};
 
+Operand GetOperand(TACValue& TACVal)
+{
+    if (std::holds_alternative<int>(TACVal))
+        return Immediate{std::get<int>(TACVal)};
+
+    if (VarLocations.contains(TACVal))
+        return VarLocations[TACVal];
+
+    VarLocations[TACVal] = VirtualRegister{NextVirtualReg++};
+
+    return VarLocations[TACVal];
+}
+
+MIR GenerateMachineIR(TAC& TAC)
+{
+    MIR MIR;
+
+    for (auto& TACFunc : TAC)
+    {
+        MIR.push_back(std::make_unique<MIRFunction>(TACFunc->Name, TACFunc->Parameters));
+
+        auto& curFunc = MIR.back();
+
+        int MaxOutgoingArgs = 0;
+        std::vector<PendingOutgoingArg> PendingOutgoingArgs;
+
+        std::unordered_map<TACBlock*, MIRBlock*> blockMap;
+
+        for (auto& TACBlock : std::views::reverse(TACFunc->Blocks))
+        {
+            curFunc->Blocks.push_back(std::make_unique<MIRBlock>(TACBlock->ID, MIR.back().get()));
+            blockMap[TACBlock.get()] = MIR.back()->Blocks.back().get();
+        }
+
+        for (auto& TACBlock : std::views::reverse(TACFunc->Blocks))
+        {
+            MIR.back()->Blocks.push_back(std::make_unique<MIRBlock>(TACBlock->ID, MIR.back().get()));
+
+            MIRBlock* curBlock = blockMap[TACBlock.get()];
+
+            for (auto& inst : TACBlock->Instructions)
+            {
+                // not using switch to reduce nesting and keep indentation simpler...
+                if (inst->type == TACType::ASSIGN)
+                {
+                    TACAssign* assign = static_cast<TACAssign*>(inst.get());
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRMov>(GetOperand(assign->dest), GetOperand(assign->source)));
+                }
+
+                if (inst->type == TACType::NEG)
+                {
+                    TACNeg* neg = static_cast<TACNeg*>(inst.get());
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRMov>(GetOperand(neg->dest), GetOperand(neg->source)));
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRNeg>(GetOperand(neg->dest)));
+                }
+
+                if (inst->type == TACType::BINARYOP)
+                {
+                    TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
+
+                    Operand dest = GetOperand(binary->dest);
+                    Operand left = GetOperand(binary->left);
+                    Operand right = GetOperand(binary->right);
+
+                    if (binary->op == BinaryOp::PLUS || binary->op == BinaryOp::MINUS || binary->op == BinaryOp::MUL)
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(dest, left));
+
+                        if (binary->op == BinaryOp::PLUS)
+                            curBlock->Instructions.push_back(std::make_unique<MIRAdd>(dest, right));
+
+                        else if (binary->op == BinaryOp::MINUS)
+                            curBlock->Instructions.push_back(std::make_unique<MIRSub>(dest, right));
+
+                        else if (binary->op == BinaryOp::MUL)
+                            curBlock->Instructions.push_back(std::make_unique<MIRImul>(dest, right));
+                    }
+
+                    else
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, left));
+
+                        curBlock->Instructions.push_back(std::make_unique<MIRCdq>());
+
+                        Operand divisor = right;
+
+                        if (divisor.index() == 3)
+                        {
+                            VirtualRegister tempReg{NextVirtualReg++};
+
+                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(tempReg, divisor));
+
+                            divisor = tempReg;
+                        }
+
+                        curBlock->Instructions.push_back(std::make_unique<MIRIdiv>(divisor));
+
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(dest, Register::EAX));
+                        break;
+                    }
+                }
+
+                if (inst->type == TACType::CALL)
+                {
+                    MIR.back()->IsLeaf = false;
+
+                    TACCall* call = static_cast<TACCall*>(inst.get());
+
+                    int extraArgs = call->args.size() - 6;
+
+                    if (extraArgs > MaxOutgoingArgs)
+                        MaxOutgoingArgs = extraArgs;
+
+                    for (size_t i = 0; i < call->args.size(); i++)
+                    {
+                        if (i < 6)
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(ArgRegs[i], GetOperand(call->args[i])));
+                        }
+
+                        else
+                        {
+                            auto movArgument = std::make_unique<MIRMov>();
+                            movArgument->Source = GetOperand(call->args[i]);
+                            PendingOutgoingArgs.push_back({movArgument.get(), static_cast<int>(i - 6)});
+                            curBlock->Instructions.push_back(std::move(movArgument));
+                        }
+                    }
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRCall>(std::find_if(MIR.begin(), MIR.end(), [&call](auto& func) { return func->FunctionName == call->functionName; })->get()));
+
+                    if (call->dest.has_value())
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(GetOperand(call->dest.value()), Register::EAX));
+                    }
+                }
+
+                if (inst->type == TACType::BRANCH)
+                {
+                    TACBranch* branch = static_cast<TACBranch*>(inst.get());
+
+                    auto CMP = std::make_unique<MIRCmp>();
+                    Operand left = GetOperand(branch->cond.Left);
+                    Operand right = GetOperand(branch->cond.Right);
+
+                    if ((std::holds_alternative<StackOffset>(right) && std::holds_alternative<StackOffset>(left)) || (std::holds_alternative<Immediate>(right) && std::holds_alternative<Immediate>(left)))
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, left));
+
+                        CMP->Left = Register::EAX;
+                        CMP->Right = right;
+                    }
+
+                    else
+                    {
+                        if (std::holds_alternative<Immediate>(left))
+                        {
+                            CMP->Left = left;
+                            CMP->Right = right;
+                        }
+
+                        else
+                        {
+                            CMP->Left = right;
+                            CMP->Right = left;
+                        }
+                    }
+
+                    curBlock->Instructions.push_back(std::move(CMP));
+
+                    auto condJump = std::make_unique<MIRCondJump>();
+
+                    switch (branch->cond.Op)
+                    {
+                        case BinaryOp::DOUBLE_EQUAL:
+                            condJump->Cond = Condition::EQUAL;
+                            break;
+                        case BinaryOp::NOT_EQUAL:
+                            condJump->Cond = Condition::NOT_EQUAL;
+                            break;
+                        case BinaryOp::LESS:
+                            condJump->Cond = Condition::LESS;
+                            break;
+                        case BinaryOp::LESS_EQUAL:
+                            condJump->Cond = Condition::LESS_EQUAL;
+                            break;
+                        case BinaryOp::GREATER:
+                            condJump->Cond = Condition::GREATER;
+                            break;
+                        case BinaryOp::GREATER_EQUAL:
+                            condJump->Cond = Condition::GREATER_EQUAL;
+                            break;
+                    }
+
+                    condJump->TargetBlock = blockMap[branch->TrueTarget];
+                    curBlock->Instructions.push_back(std::move(condJump));
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRJump>(blockMap[branch->FalseTarget]));
+                }
+
+                if (inst->type == TACType::JUMP)
+                {
+                    TACJump* jump = static_cast<TACJump*>(inst.get());
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRJump>(blockMap[jump->TargetBlock]));
+                }
+
+                if (inst->type == TACType::RETURN)
+                {
+                    TACReturn* ret = static_cast<TACReturn*>(inst.get());
+
+                    if (!ret->ReturnValue.has_value())
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, GetOperand(ret->ReturnValue.value())));
+                    }
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::RSP, Register::RBP));
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRPop>(Register::RBP));
+                    curBlock->Instructions.push_back(std::make_unique<MIRRet>());
+                }
+            }
+        }
+    }
+
+    return MIR;
+}
+
+/*
 MIR GenerateMachineIR(TAC& TAC)
 {
     MIR MIR;
@@ -532,6 +752,7 @@ MIR GenerateMachineIR(TAC& TAC)
 
     return MIR;
 }
+*/
 
 std::string RegisterName(Register reg)
 {
@@ -580,185 +801,362 @@ std::string RegisterName(Register reg)
 
 std::string OperandString(const Operand& op, bool UseRSP)
 {
-    return std::visit([UseRSP](auto&& value) -> std::string {
-        using T = std::decay_t<decltype(value)>;
+    if (std::holds_alternative<Register>(op))
+    {
+        return RegisterName(std::get<Register>(op));
+    }
 
-        if constexpr (std::is_same_v<T, Register>)
-        {
-            return RegisterName(value);
-        }
+    else if (std::holds_alternative<VirtualRegister>(op))
+    {
+        return "vreg." + std::to_string(std::get<VirtualRegister>(op).ID);
+    }
 
-        else if constexpr (std::is_same_v<T, StackOffset>)
-        {
-            std::string base = UseRSP ? "rsp" : "rbp";
+    else if (std::holds_alternative<StackOffset>(op))
+    {
+        std::string base = UseRSP ? "rsp" : "rbp";
 
-            if (value.Offset < 0)
-                return "DWORD PTR [" + base + std::to_string(value.Offset) + "]";
-            if (value.Offset > 0)
-                return "DWORD PTR [" + base + " + " + std::to_string(value.Offset) + "]";
+        if (std::get<StackOffset>(op).Offset < 0)
+            return "DWORD PTR [" + base + std::to_string(std::get<StackOffset>(op).Offset) + "]";
+        if (std::get<StackOffset>(op).Offset > 0)
+            return "DWORD PTR [" + base + " + " + std::to_string(std::get<StackOffset>(op).Offset) + "]";
 
-            return "DWORD PTR [" + base + "]";
-        }
+        return "DWORD PTR [" + base + "]";
+    }
 
-        else
-        {
-            return std::to_string(value.Value);
-        }
-    },
-        op);
+    else
+    {
+        return std::to_string(std::get<Immediate>(op).Value);
+    }
 }
 
-void PrintMIR(MIR& MIR)
+void PrintMIRInstruction(MIRFunction* function, MIRInstruction* inst, bool history)
 {
-    for (const MIRFunction& function : MIR)
+    switch (inst->type)
     {
-        std::print("# Function - {} :\n\n", function.FunctionName);
-
-        for (const auto& block : function.Blocks)
-        {
-            std::print("Block - {} :\n", block.ID);
-
-            for (const auto& inst : block.Instructions)
+        case MIRType::MOV:
             {
-                switch (inst->type)
+                MIRMov* mov = static_cast<MIRMov*>(inst);
+
+                std::print("    mov {}, {}\n", OperandString(mov->Dest, function->OmitFramePtr), OperandString(mov->Source, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::ADD:
+            {
+                MIRAdd* add = static_cast<MIRAdd*>(inst);
+
+                std::print("    add {}, {}\n", OperandString(add->Dest, function->OmitFramePtr), OperandString(add->Source, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::SUB:
+            {
+                MIRSub* sub = static_cast<MIRSub*>(inst);
+
+                std::print("    sub {}, {}\n", OperandString(sub->Dest, function->OmitFramePtr), OperandString(sub->Source, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::MUL:
+            {
+                MIRImul* mul = static_cast<MIRImul*>(inst);
+
+                std::print("    imul {}, {}\n", OperandString(mul->Dest, function->OmitFramePtr), OperandString(mul->Source, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::DIV:
+            {
+                MIRIdiv* div = static_cast<MIRIdiv*>(inst);
+
+                std::print("    idiv {}\n", OperandString(div->Divisor, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::NEG:
+            {
+                MIRNeg* neg = static_cast<MIRNeg*>(inst);
+
+                std::print("    neg {}\n", OperandString(neg->Dest, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::CMP:
+            {
+                MIRCmp* cmp = static_cast<MIRCmp*>(inst);
+
+                std::print("    cmp {}, {}\n", OperandString(cmp->Left, function->OmitFramePtr), OperandString(cmp->Right, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::PUSH:
+            {
+                MIRPush* push = static_cast<MIRPush*>(inst);
+
+                std::print("    push {}\n", OperandString(push->Source, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::POP:
+            {
+                MIRPop* pop = static_cast<MIRPop*>(inst);
+
+                std::print("    pop {}\n", OperandString(pop->Dest, function->OmitFramePtr));
+            }
+            break;
+
+        case MIRType::JMP:
+            {
+                MIRJump* jump = static_cast<MIRJump*>(inst);
+
+                std::print("    jmp B{}\n", jump->TargetBlock->ID);
+            }
+            break;
+
+        case MIRType::CJMP:
+            {
+                MIRCondJump* jump = static_cast<MIRCondJump*>(inst);
+
+                std::print("    ");
+
+                switch (jump->Cond)
                 {
-                    case MIRType::MOV:
-                        {
-                            MIRMov* mov = static_cast<MIRMov*>(inst.get());
-
-                            std::print("    mov {}, {}\n", OperandString(mov->Dest, function.OmitFramePtr), OperandString(mov->Source, function.OmitFramePtr));
-                        }
+                    case Condition::EQUAL:
+                        std::print("je ");
                         break;
-
-                    case MIRType::ADD:
-                        {
-                            MIRAdd* add = static_cast<MIRAdd*>(inst.get());
-
-                            std::print("    add {}, {}\n", OperandString(add->Dest, function.OmitFramePtr), OperandString(add->Source, function.OmitFramePtr));
-                        }
+                    case Condition::NOT_EQUAL:
+                        std::print("jne ");
                         break;
-
-                    case MIRType::SUB:
-                        {
-                            MIRSub* sub = static_cast<MIRSub*>(inst.get());
-
-                            std::print("    sub {}, {}\n", OperandString(sub->Dest, function.OmitFramePtr), OperandString(sub->Source, function.OmitFramePtr));
-                        }
+                    case Condition::LESS:
+                        std::print("jl ");
                         break;
-
-                    case MIRType::MUL:
-                        {
-                            MIRImul* mul = static_cast<MIRImul*>(inst.get());
-
-                            std::print("    imul {}, {}\n", OperandString(mul->Dest, function.OmitFramePtr), OperandString(mul->Source, function.OmitFramePtr));
-                        }
+                    case Condition::LESS_EQUAL:
+                        std::print("jle ");
                         break;
-
-                    case MIRType::DIV:
-                        {
-                            MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
-
-                            std::print("    idiv {}\n", OperandString(div->Divisor, function.OmitFramePtr));
-                        }
+                    case Condition::GREATER:
+                        std::print("jg ");
                         break;
-
-                    case MIRType::NEG:
-                        {
-                            MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
-
-                            std::print("    neg {}\n", OperandString(neg->Dest, function.OmitFramePtr));
-                        }
-                        break;
-
-                    case MIRType::CMP:
-                        {
-                            MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
-
-                            std::print("    cmp {}, {}\n", OperandString(cmp->Left, function.OmitFramePtr), OperandString(cmp->Right, function.OmitFramePtr));
-                        }
-                        break;
-
-                    case MIRType::PUSH:
-                        {
-                            MIRPush* push = static_cast<MIRPush*>(inst.get());
-
-                            std::print("    push {}\n", OperandString(push->Source, function.OmitFramePtr));
-                        }
-                        break;
-
-                    case MIRType::POP:
-                        {
-                            MIRPop* pop = static_cast<MIRPop*>(inst.get());
-
-                            std::print("    pop {}\n", OperandString(pop->Dest, function.OmitFramePtr));
-                        }
-                        break;
-
-                    case MIRType::JMP:
-                        {
-                            MIRJump* jump = static_cast<MIRJump*>(inst.get());
-
-                            std::print("    jmp B{}\n", jump->TargetBlock);
-                        }
-                        break;
-
-                    case MIRType::CJMP:
-                        {
-                            MIRCondJump* jump = static_cast<MIRCondJump*>(inst.get());
-
-                            std::print("    ");
-
-                            switch (jump->Cond)
-                            {
-                                case Condition::EQUAL:
-                                    std::print("je ");
-                                    break;
-                                case Condition::NOT_EQUAL:
-                                    std::print("jne ");
-                                    break;
-                                case Condition::LESS:
-                                    std::print("jl ");
-                                    break;
-                                case Condition::LESS_EQUAL:
-                                    std::print("jle ");
-                                    break;
-                                case Condition::GREATER:
-                                    std::print("jg ");
-                                    break;
-                                case Condition::GREATER_EQUAL:
-                                    std::print("jge ");
-                                    break;
-                            }
-
-                            std::print("B{}\n", jump->TargetBlock);
-                        }
-                        break;
-
-                    case MIRType::CALL:
-                        {
-                            MIRCall* call = static_cast<MIRCall*>(inst.get());
-
-                            std::print("    call {}\n", call->Function);
-                        }
-                        break;
-
-                    case MIRType::RET:
-                        {
-                            std::print("    ret\n");
-                        }
-                        break;
-
-                    case MIRType::CDQ:
-                        {
-                            std::print("    cdq\n");
-                        }
+                    case Condition::GREATER_EQUAL:
+                        std::print("jge ");
                         break;
                 }
+
+                std::print("B{}\n", jump->TargetBlock->ID);
+            }
+            break;
+
+        case MIRType::CALL:
+            {
+                MIRCall* call = static_cast<MIRCall*>(inst);
+
+                std::print("    call {}\n", call->Function->FunctionName);
+            }
+            break;
+
+        case MIRType::RET:
+            {
+                std::print("    ret\n");
+            }
+            break;
+
+        case MIRType::CDQ:
+            {
+                std::print("    cdq\n");
+            }
+            break;
+    }
+
+    std::print("\033[0m");
+
+    if (history)
+    {
+        for (Message& message : inst->History)
+        {
+            PrintMessage(message);
+        }
+    }
+}
+
+void PrintMIRBlock(MIRBlock* block, bool history)
+{
+    auto blockDead = std::find_if(block->Function->Blocks.begin(), block->Function->Blocks.end(), [&block](auto& b) { return b.get() == block; });
+
+    std::print("Block - {} :\n", block->ID);
+
+    std::print("\033[0m");
+
+    if (history)
+    {
+        for (Message& message : block->History)
+        {
+            PrintMessage(message);
+        }
+    }
+
+    if (history)
+    {
+        if (block->LastDeadInstruction != nullptr)
+        {
+            for (auto& prec : block->LastDeadInstruction->deadSiblings.preceding)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRInstruction(block->Function, prec.get(), history);
             }
 
-            std::print("\n");
+            std::print("\033[2;37m");
+
+            PrintMIRInstruction(block->Function, block->LastDeadInstruction.get(), history);
+
+            for (auto& trail : block->LastDeadInstruction->deadSiblings.trailing)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRInstruction(block->Function, trail.get(), history);
+            }
+        }
+    }
+
+    for (auto& inst : block->Instructions)
+    {
+        if (history)
+        {
+            for (auto& prec : inst->deadSiblings.preceding)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRInstruction(block->Function, prec.get(), history);
+            }
         }
 
-        std::print("\n");
+        if (blockDead == block->Function->Blocks.end())
+            std::print("\033[2;37m");
+
+        PrintMIRInstruction(block->Function, inst.get(), history);
+
+        if (history)
+        {
+            for (auto& trail : inst->deadSiblings.trailing)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRInstruction(block->Function, trail.get(), history);
+            }
+        }
     }
+
+    std::print("\n");
+}
+
+void PrintMIRFunction(MIRFunction* func, bool history)
+{
+    std::print("# Function - {}(", func->FunctionName);
+
+    for (size_t j = 0; j < func->Parameters.size(); ++j)
+    {
+        if (j != 0)
+            std::print(", ");
+
+        std::print("{}", func->Parameters[j]);
+    }
+
+    std::print(") :\n");
+
+    std::print("\033[0m");
+
+    if (history)
+    {
+        for (Message& message : func->History)
+        {
+            PrintMessage(message);
+        }
+    }
+
+    if (history)
+    {
+        if (func->LastDeadBlock != nullptr)
+        {
+            for (auto& prec : func->LastDeadBlock->deadSiblings.preceding)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRBlock(prec.get(), history);
+            }
+
+            std::print("\033[2;37m");
+
+            PrintMIRBlock(func->LastDeadBlock.get(), history);
+
+            for (auto& trail : func->LastDeadBlock->deadSiblings.trailing)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRBlock(trail.get(), history);
+            }
+
+            std::print("\n\033[2;37mend {}\033[0m\n\n", func->FunctionName);
+
+            return;
+        }
+    }
+
+    for (auto& block : func->Blocks)
+    {
+        if (history)
+        {
+            for (auto& prec : block->deadSiblings.preceding)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRBlock(prec.get(), history);
+            }
+        }
+
+        PrintMIRBlock(block.get(), history);
+
+        if (history)
+        {
+            for (auto& trail : block->deadSiblings.trailing)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRBlock(trail.get(), history);
+            }
+        }
+    }
+}
+
+void PrintMIR(MIR& MIR, bool history)
+{
+    if (!history)
+        std::print("-----------MIR-----------\n\n");
+    else
+        std::print("-------MIR-HISTORY-------\n\n");
+
+    for (auto& func : MIR)
+    {
+        if (history)
+        {
+            for (auto& prec : func->deadSiblings.preceding)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRFunction(prec.get(), history);
+            }
+        }
+
+        PrintMIRFunction(func.get(), history);
+
+        if (history)
+        {
+            for (auto& trail : func->deadSiblings.trailing)
+            {
+                std::print("\033[2;37m");
+
+                PrintMIRFunction(trail.get(), history);
+            }
+        }
+    }
+
+    std::print("\n");
 }

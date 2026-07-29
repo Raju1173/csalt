@@ -23,6 +23,7 @@
 #include <functional>
 #include <cstring>
 #include <fstream>
+#include "IRDebugger.h"
 
 struct CompilerOptions
 {

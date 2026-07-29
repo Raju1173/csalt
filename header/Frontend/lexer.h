@@ -90,40 +90,7 @@ template<> struct hash<Token>
 };
 }
 
-class TokenStream
-{
-private:
-    std::vector<Token> Tokens;
-
-public:
-    TokenStream(std::vector<Token>& tokenStream) : Tokens(tokenStream){};
-
-    std::vector<Token>& getTokens()
-    {
-        return Tokens;
-    }
-
-    size_t size() const
-    {
-        return Tokens.size();
-    }
-
-    Token& operator[](size_t index)
-    {
-        return Tokens[index];
-    }
-
-    const Token& operator[](size_t index) const
-    {
-        return Tokens[index];
-    }
-
-    auto begin() { return Tokens.begin(); }
-    auto end() { return Tokens.end(); }
-
-    auto begin() const { return Tokens.begin(); }
-    auto end() const { return Tokens.end(); }
-};
+using TokenStream = std::vector<Token>;
 
 TokenStream Tokenize(std::string_view source);
 

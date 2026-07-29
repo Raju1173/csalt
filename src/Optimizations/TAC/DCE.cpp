@@ -54,7 +54,7 @@ bool EliminateDeadInstructions(TACFunction* TACFunc, TACVarUsesInfo& VarUsesInfo
 
                 if (!call->dest.has_value())
                 {
-                    TACEditor::deleteInstruction(Block.get(), inst.get(), Message{TACPass::DCE, TACTransformType::DELETED, "calls with no destination are dead because all functions are pure in the C subset supported by csalt"});
+                    TACEditor::deleteInstruction(Block.get(), inst.get(), Message{IRPass::DCE, IRTransformType::DELETED, "calls with no destination are dead because all functions are pure in the C subset supported by csalt"});
                     continue;
                 }
 
@@ -68,7 +68,7 @@ bool EliminateDeadInstructions(TACFunction* TACFunc, TACVarUsesInfo& VarUsesInfo
             }
 
             if (!VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar] == 0)
-                TACEditor::deleteInstruction(Block.get(), inst.get(), Message{TACPass::DCE, TACTransformType::DELETED, "definition was unused"});
+                TACEditor::deleteInstruction(Block.get(), inst.get(), Message{IRPass::DCE, IRTransformType::DELETED, "definition was unused"});
         }
 
         if (Block->Instructions.size() != initialSize)
@@ -96,7 +96,7 @@ bool EliminateUnreachableBlocks(TACFunction* TACFunc)
             continue;
 
         if (block->Parents.empty())
-            TACEditor::deleteBlock(block.get(), Message{TACPass::DCE, TACTransformType::DELETED, "block was unreachable"});
+            TACEditor::deleteBlock(block.get(), Message{IRPass::DCE, IRTransformType::DELETED, "block was unreachable"});
     }
 
     return TACFunc->Blocks.size() != initialBlocks;
@@ -132,7 +132,7 @@ bool EliminateDeadFunctions(TAC& TAC)
             continue;
 
         if (callCounts[TACFunc->Name] == 0)
-            TACEditor::deleteFunction(TAC, TACFunc.get(), Message{TACPass::DCE, TACTransformType::DELETED, "function was never called"});
+            TACEditor::deleteFunction(TAC, TACFunc.get(), Message{IRPass::DCE, IRTransformType::DELETED, "function was never called"});
     };
 
     return initialFuncCount != TAC.size();

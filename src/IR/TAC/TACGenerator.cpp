@@ -4,7 +4,6 @@
 #include "parser.h"
 #include <algorithm>
 #include <cstddef>
-#include <ios>
 #include <memory>
 #include <optional>
 #include <string>
@@ -12,8 +11,6 @@
 #include <vector>
 #include <print>
 #include <ranges>
-
-size_t NextTemp = 0;
 
 BinaryOp TokenOpToBinaryOp(TokenType op)
 {
@@ -50,6 +47,8 @@ BinaryOp TokenOpToBinaryOp(TokenType op)
             return BinaryOp::GREATER_EQUAL;
     }
 }
+
+size_t NextTemp = 0;
 
 TACValue GetTemp()
 {
@@ -337,36 +336,6 @@ TAC GenerateTAC(CFG& CFG)
     }
 
     return TAC;
-}
-
-inline void PrintMessage(const Message& msg)
-{
-    std::string color = "\033[1;30m";
-
-    switch (msg.TranformationType)
-    {
-        case TACTransformType::DELETED:
-            color = "\033[0;91m";
-            break;
-
-        case TACTransformType::ADDED:
-        case TACTransformType::CLONED:
-            color = "\033[0;92m";
-            break;
-
-        case TACTransformType::RENAMED:
-        case TACTransformType::REPLACED:
-            color = "\033[0;93m";
-            break;
-
-        case TACTransformType::MOVED:
-            color = "\033[0;94m";
-            break;
-    }
-
-    // └ = U+2514
-    // ─ = U+2500
-    std::print("\033[0m      └─{}{:<11}\033[0m BY \033[0;96m{:<33}\033[0m : {}\n", color, "[" + TransformationToStr(msg.TranformationType) + "]", "[" + PassToStr(msg.Pass) + "]", msg.Info);
 }
 
 void PrintTACInstruction(TACInstruction* inst, bool history)

@@ -16,16 +16,30 @@ target_include_directories(projectConfigs INTERFACE
     ${HEADER}
     ${HEADER}/Frontend
     ${HEADER}/IR
+    ${HEADER}/IR/CFG
+    ${HEADER}/IR/TAC
+    ${HEADER}/IR/MIR
     ${HEADER}/Optimizations
     ${HEADER}/Optimizations/TAC
     ${HEADER}/Optimizations/MIR
     ${HEADER}/Backend
 )
 
-add_library(FRONTEND STATIC src/Frontend/lexer.cpp src/Frontend/parser.cpp)
+add_library(FRONTEND STATIC
+    src/Frontend/lexer.cpp
+    src/Frontend/parser.cpp
+)
+
 target_link_libraries(FRONTEND PUBLIC projectConfigs)
 
-add_library(IR STATIC src/IR/CFGBuilder.cpp src/IR/SSAConstructor.cpp src/IR/TACGenerator.cpp src/IR/TACAnalyses.cpp src/IR/TACEditor.cpp)
+add_library(IR STATIC
+    src/IR/CFG/CFGBuilder.cpp
+    src/IR/TAC/SSAConstructor.cpp
+    src/IR/TAC/TACGenerator.cpp
+    src/IR/TAC/TACAnalyses.cpp
+    src/IR/TAC/TACEditor.cpp
+)
+
 target_link_libraries(IR PUBLIC FRONTEND projectConfigs)
 
 set(TAC src/Optimizations/TAC)
@@ -41,7 +55,14 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/LICM.cpp
     ${TAC}/CTFE.cpp
 )
+
 target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)
+
+#[[add_library(BACKEND STATIC
+    src/IR/MIRGenerator.cpp
+    src/IR/MIRAnalyses.cpp
+    src/IR/MIREditor.cpp
+)]]
 
 add_executable(csalt src/csalt.cpp)
 target_link_libraries(csalt PRIVATE OPTIMIZATIONS)

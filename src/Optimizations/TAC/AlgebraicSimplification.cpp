@@ -42,7 +42,7 @@ bool SimplifyAlgebra(TAC& TAC)
 
                     if (replaceWithAssign)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(neg->dest, result), Message{TACPass::ALGEBRAIC_SIMPLIFICATION, TACTransformType::REPLACED, info});
+                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(neg->dest, result), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
 
                         changed = true;
                     }
@@ -204,21 +204,21 @@ bool SimplifyAlgebra(TAC& TAC)
 
                     if (replaceWithAssign)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), Message{TACPass::ALGEBRAIC_SIMPLIFICATION, TACTransformType::REPLACED, info});
+                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
 
                         changed = true;
                     }
 
                     if (replaceWithBinary)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::move(resultBinary), Message{TACPass::ALGEBRAIC_SIMPLIFICATION, TACTransformType::REPLACED, info});
+                        TACEditor::replaceInstruction(block.get(), inst.get(), std::move(resultBinary), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
 
                         changed = true;
                     }
 
                     else if (replaceWithNeg)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACNeg>(bin->dest, result), Message{TACPass::ALGEBRAIC_SIMPLIFICATION, TACTransformType::REPLACED, info});
+                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACNeg>(bin->dest, result), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
 
                         changed = true;
                     }
