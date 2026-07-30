@@ -192,18 +192,3 @@ TokenStream Tokenize(std::string_view source)
 
     return TokenStream(tokenStream);
 }
-
-void PrintTokens(const TokenStream& TokenStream)
-{
-    std::print("------TOKENS-------\n\n");
-
-    for (Token t : TokenStream)
-    {
-        if (t.type == TokenType::IDENTIFIER || t.type == TokenType::NUMBER)
-            std::print("{}({})\n", TokenNames[std::to_underlying(t.type)], t.lexeme);
-        else
-            std::print("{}\n", TokenNames[std::to_underlying(t.type)]);
-    }
-
-    std::print("\n\n");
-}

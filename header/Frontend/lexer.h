@@ -93,5 +93,3 @@ template<> struct hash<Token>
 using TokenStream = std::vector<Token>;
 
 TokenStream Tokenize(std::string_view source);
-
-void PrintTokens(const TokenStream& TokenStream);

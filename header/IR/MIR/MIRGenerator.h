@@ -63,5 +63,3 @@ public:
 using MIR = std::vector<std::unique_ptr<MIRFunction>>;
 
 MIR GenerateMachineIR(TAC& TAC);
-
-void PrintMIR(MIR& MIR, bool history = false);

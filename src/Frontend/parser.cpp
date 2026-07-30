@@ -598,31 +598,3 @@ Node Parse(TokenStream& TokenStream)
 
     return nodeStack.top();
 }
-
-void printNode(const Node& node, int depth)
-{
-    for (int i = 0; i < depth; i++)
-        std::print("|    ");
-
-    if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER || node.type == NodeType::CALL || node.type == NodeType::BINARY_OP || node.type == NodeType::VAR || node.type == NodeType::FUNCTION || node.type == NodeType::UNARY_OP)
-    {
-        std::print("{} ({})\n", NodeNames[std::to_underlying(node.type)], (node.type == NodeType::BINARY_OP || node.type == NodeType::UNARY_OP) ? TokenNames[std::to_underlying(node.token.type)] : node.token.lexeme);
-    }
-
-    else
-    {
-        std::print("{}\n", NodeNames[std::to_underlying(node.type)]);
-    }
-
-    for (size_t i = 0; i < node.children.size(); i++)
-        printNode(node.children[i], depth + 1);
-}
-
-void PrintAST(const Node& root)
-{
-    std::print("------AST-------\n\n");
-
-    printNode(root);
-
-    std::print("\n");
-}

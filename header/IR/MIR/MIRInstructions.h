@@ -29,7 +29,50 @@ enum class Register
     RBP
 };
 
-std::string RegisterName(Register reg);
+inline std::string RegisterName(Register reg)
+{
+    switch (reg)
+    {
+        case Register::EAX:
+            return "eax";
+
+        case Register::EDI:
+            return "edi";
+        case Register::ESI:
+            return "esi";
+        case Register::EDX:
+            return "edx";
+        case Register::ECX:
+            return "ecx";
+        case Register::R8D:
+            return "r8d";
+        case Register::R9D:
+            return "r9d";
+
+        case Register::R10D:
+            return "r10d";
+        case Register::R11D:
+            return "r11d";
+
+        case Register::EBX:
+            return "ebx";
+        case Register::R12D:
+            return "r12d";
+        case Register::R13D:
+            return "r13d";
+        case Register::R14D:
+            return "r14d";
+        case Register::R15D:
+            return "r15d";
+
+        case Register::RSP:
+            return "rsp";
+        case Register::RBP:
+            return "rbp";
+    }
+
+    return "";
+}
 
 struct VirtualRegister
 {
@@ -48,7 +91,35 @@ struct Immediate
 
 using Operand = std::variant<Register, VirtualRegister, StackOffset, Immediate>;
 
-std::string OperandString(const Operand& op, bool UseRSP);
+inline std::string OperandString(const Operand& op, bool UseRSP)
+{
+    if (std::holds_alternative<Register>(op))
+    {
+        return RegisterName(std::get<Register>(op));
+    }
+
+    else if (std::holds_alternative<VirtualRegister>(op))
+    {
+        return "vreg." + std::to_string(std::get<VirtualRegister>(op).ID);
+    }
+
+    else if (std::holds_alternative<StackOffset>(op))
+    {
+        std::string base = UseRSP ? "rsp" : "rbp";
+
+        if (std::get<StackOffset>(op).Offset < 0)
+            return "DWORD PTR [" + base + std::to_string(std::get<StackOffset>(op).Offset) + "]";
+        if (std::get<StackOffset>(op).Offset > 0)
+            return "DWORD PTR [" + base + " + " + std::to_string(std::get<StackOffset>(op).Offset) + "]";
+
+        return "DWORD PTR [" + base + "]";
+    }
+
+    else
+    {
+        return std::to_string(std::get<Immediate>(op).Value);
+    }
+}
 
 enum class MIRType
 {

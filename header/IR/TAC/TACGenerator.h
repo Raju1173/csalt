@@ -71,5 +71,3 @@ public:
 using TAC = std::vector<std::unique_ptr<TACFunction>>;
 
 TAC GenerateTAC(CFG& CFG);
-
-void PrintTAC(TAC& TAC, bool history = false);

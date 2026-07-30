@@ -49,7 +49,3 @@ struct Node
 };
 
 Node Parse(TokenStream& TokenStream);
-
-void printNode(const Node& node, int depth = 0);
-
-void PrintAST(const Node& root);

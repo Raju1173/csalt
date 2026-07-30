@@ -17,6 +17,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include <print>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -24,122 +25,113 @@
 #include <cstring>
 #include <fstream>
 #include "IRDebugger.h"
+#include "Globals.h"
 
-struct CompilerOptions
-{
-    bool dumpTOK = false;
-    bool dumpAST = false;
-    bool dumpCFG = false;
-    bool dumpTAC = false;
-    bool dumpMIR = false;
-    bool dumpASM = false;
+inline std::unordered_map<std::string, Phase> phaseMap = {
+    {"tok", Phase::TOK},
+    {"ast", Phase::AST},
+    {"cfg", Phase::CFG},
+    {"tac", Phase::TAC},
+    {"mir", Phase::MIR},
+    {"asm", Phase::ASM},
 
-    bool dumpTACConst = false;
-    bool dumpTACPhiIns = false;
-    bool dumpTACRename = false;
-    bool dumpTACOpt = false;
-    bool dumpTACPhiRes = false;
+    {"tac-const", Phase::TAC_CONST},
+    {"tac-phi-ins", Phase::TAC_PHI_INS},
+    {"tac-rename", Phase::TAC_RENAME},
+    {"tac-opt", Phase::TAC_OPT},
+    {"tac-phires", Phase::TAC_PHI_RES},
 
-    bool dumpMIRConst = false;
-    bool dumpMIROpt = false;
+    {"mir-const", Phase::MIR_CONST},
+    {"mir-opt", Phase::MIR_OPT},
 
-    bool disableFolding = false;
-    bool disableAlgSimp = false;
-    bool disableBrnSimp = false;
-    bool disableDCE = false;
-    bool disableCFGSimp = false;
-    bool disableGVN = false;
-    bool disableFPO = false;
-    bool disableSCO = false;
-    bool disableCTFE = true;
-    bool disableLICM = false;
-
-    bool historyFolding = false;
-    bool historyAlgSimp = false;
-    bool historyBrnSimp = false;
-    bool historyDCE = false;
-    bool historyCFGSimp = false;
-    bool historyGVN = false;
-    bool historyCTFE = false;
-    bool historyLICM = false;
-    bool historyTAC = false;
-
-    bool historyFPO = false;
-    bool historySCO = false;
-    bool historyMIR = false;
+    {"folding", Phase::FOLDING},
+    {"algsimp", Phase::ALG_SIMP},
+    {"brnsimp", Phase::BRN_SIMP},
+    {"dce", Phase::DCE},
+    {"cfgsimp", Phase::CFG_SIMP},
+    {"gvn", Phase::GVN},
+    {"fpo", Phase::FPO},
+    {"sco", Phase::SCO},
+    {"ctfe", Phase::CTFE},
+    {"licm", Phase::LICM},
 };
 
-inline void PrintIR(TokenStream& tokenStream) { PrintTokens(tokenStream); }
-inline void PrintIR(Node& AST) { PrintAST(AST); }
-inline void PrintIR(CFG& CFG) { PrintCFG(CFG); }
-inline void PrintIR(TAC& TAC) { PrintTAC(TAC); }
-inline void PrintIR(MIR& MIR) { PrintMIR(MIR); }
-inline void PrintIR(std::string AsmFilePath) { PrintASM(AsmFilePath); }
-
-template<typename T> void DumpIf(bool condition, T& obj)
+inline bool ParseCompileFlag(std::string arg)
 {
-    if (condition)
+    std::string target;
+
+    if (arg.starts_with("--interactive-history-dump-"))
     {
-        PrintIR(obj);
+        target = arg.substr(27);
+
+        if (phaseMap.contains(target))
+            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::INTERACTIVE_HISTORY;
     }
+
+    else if (arg.starts_with("--interactive-dump-"))
+    {
+        target = arg.substr(19);
+
+        if (phaseMap.contains(target))
+            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::INTERACTIVE;
+    }
+
+    else if (arg.starts_with("--history-dump-"))
+    {
+        target = arg.substr(15);
+
+        if (phaseMap.contains(target))
+            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::STATIC_HISTORY;
+    }
+
+    else if (arg.starts_with("--dump-"))
+    {
+        target = arg.substr(7);
+
+        if (target == "all")
+        {
+            for (const auto& [name, phase] : phaseMap)
+                gCompilerOptions[phase].dumpMode = DumpMode::STATIC;
+            return true;
+        }
+
+        if (phaseMap.contains(target))
+            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::STATIC;
+    }
+
+    else if (arg.starts_with("--enable-"))
+    {
+        target = arg.substr(9);
+
+        if (phaseMap.contains(target))
+            gCompilerOptions[phaseMap.at(target)].enabled = true;
+    }
+
+    else if (arg.starts_with("--disable-"))
+    {
+        target = arg.substr(10);
+
+        if (target == "all")
+        {
+            for (auto& [name, phase] : phaseMap)
+            {
+                if (phase >= Phase::FOLDING && phase <= Phase::LICM)
+                {
+                    gCompilerOptions[phase].enabled = false;
+                }
+            }
+            return true;
+        }
+
+        if (phaseMap.contains(target))
+            gCompilerOptions[phaseMap.at(target)].enabled = false;
+    }
+
+    else
+    {
+        std::print(stderr, "Error : Invalid flag '{}'\n", arg);
+        return false;
+    }
+
+    return true;
 }
-
-static CompilerOptions opts;
-
-static std::unordered_map<std::string_view, std::function<void()>> argHandlers = {
-    {"dump-tok", []() { opts.dumpTOK = true; }},
-    {"dump-ast", []() { opts.dumpAST = true; }},
-    {"dump-cfg", []() { opts.dumpCFG = true; }},
-    {"dump-tac", []() { opts.dumpTAC = true; }},
-    {"dump-mir", []() { opts.dumpMIR = true; }},
-    {"dump-asm", []() { opts.dumpASM = true; }},
-    {"dump-all", []() { opts.dumpTOK = opts.dumpAST = opts.dumpCFG = opts.dumpTAC = opts.dumpASM = true; }},
-
-    {"dump-tac-const", []() { opts.dumpTACConst = true; }},
-    {"dump-tac-phi-ins", []() { opts.dumpTACPhiIns = true; }},
-    {"dump-tac-rename", []() { opts.dumpTACRename = true; }},
-    {"dump-tac-opt", []() { opts.dumpTACOpt = true; }},
-    {"dump-tac-phires", []() { opts.dumpTACPhiRes = true; }},
-
-    {"dump-mir-const", []() { opts.dumpMIRConst = true; }},
-    {"dump-mir-opt", []() { opts.dumpMIROpt = true; }},
-
-    {"disable-folding", []() { opts.disableFolding = true; }},
-    {"disable-algsimp", []() { opts.disableAlgSimp = true; }},
-    {"disable-brnsimp", []() { opts.disableBrnSimp = true; }},
-    {"disable-dce", []() { opts.disableDCE = true; }},
-    {"disable-cfgsimp", []() { opts.disableCFGSimp = true; }},
-    {"disable-gvn", []() { opts.disableGVN = true; }},
-    {"disable-fpo", []() { opts.disableFPO = true; }},
-    {"disable-sco", []() { opts.disableSCO = true; }},
-    {"disable-ctfe", []() { opts.disableCTFE = true; }},
-    {"disable-licm", []() { opts.disableLICM = true; }},
-    {"disable-all", []() {
-         opts.disableFolding = opts.disableAlgSimp = opts.disableBrnSimp = opts.disableDCE = opts.disableCFGSimp = opts.disableGVN = opts.disableFPO = opts.disableSCO = opts.disableCTFE = opts.disableLICM = true;
-     }},
-
-    {"enable-folding", []() { opts.disableFolding = false; }},
-    {"enable-algsimp", []() { opts.disableAlgSimp = false; }},
-    {"enable-brnsimp", []() { opts.disableBrnSimp = false; }},
-    {"enable-dce", []() { opts.disableDCE = false; }},
-    {"enable-cfgsimp", []() { opts.disableCFGSimp = false; }},
-    {"enable-gvn", []() { opts.disableGVN = false; }},
-    {"enable-fpo", []() { opts.disableFPO = false; }},
-    {"enable-sco", []() { opts.disableSCO = false; }},
-    {"enable-ctfe", []() { opts.disableCTFE = false; }},
-    {"enable-licm", []() { opts.disableLICM = false; }},
-
-    {"history-folding", []() { opts.historyFolding = true; }},
-    {"history-algsimp", []() { opts.historyAlgSimp = true; }},
-    {"history-brnsimp", []() { opts.historyBrnSimp = true; }},
-    {"history-dce", []() { opts.historyDCE = true; }},
-    {"history-cfgsimp", []() { opts.historyCFGSimp = true; }},
-    {"history-gvn", []() { opts.historyGVN = true; }},
-    {"history-ctfe", []() { opts.historyCTFE = true; }},
-    {"history-licm", []() { opts.historyLICM = true; }},
-    {"history-tac", []() { opts.historyTAC = true; }},
-
-    {"history-fpo", []() { opts.historyFPO = true; }},
-    {"history-sco", []() { opts.historySCO = true; }},
-    {"history-mir", []() { opts.historyMIR = true; }},
-};

@@ -19,6 +19,7 @@ target_include_directories(projectConfigs INTERFACE
     ${HEADER}/IR/CFG
     ${HEADER}/IR/TAC
     ${HEADER}/IR/MIR
+    ${HEADER}/IR/Utils
     ${HEADER}/Optimizations
     ${HEADER}/Optimizations/TAC
     ${HEADER}/Optimizations/MIR

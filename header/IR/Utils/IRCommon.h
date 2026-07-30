@@ -86,36 +86,6 @@ struct Message
     std::string Info;
 };
 
-inline void PrintMessage(const Message& msg)
-{
-    std::string color = "\033[1;30m";
-
-    switch (msg.TranformationType)
-    {
-        case IRTransformType::DELETED:
-            color = "\033[0;91m";
-            break;
-
-        case IRTransformType::ADDED:
-        case IRTransformType::CLONED:
-            color = "\033[0;92m";
-            break;
-
-        case IRTransformType::RENAMED:
-        case IRTransformType::REPLACED:
-            color = "\033[0;93m";
-            break;
-
-        case IRTransformType::MOVED:
-            color = "\033[0;94m";
-            break;
-    }
-
-    // └ = U+2514
-    // ─ = U+2500
-    std::print("\033[0m      └─{}{:<11}\033[0m BY \033[0;96m{:<33}\033[0m : {}\n", color, "[" + IRTransformationToStr(msg.TranformationType) + "]", "[" + PassToStr(msg.Pass) + "]", msg.Info);
-}
-
 // ignore the questionable naming please...
 template<typename T> class DeadSiblings
 {

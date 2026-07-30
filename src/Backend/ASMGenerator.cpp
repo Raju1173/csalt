@@ -173,23 +173,6 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
     out << ".section .note.GNU-stack, \"\", @progbits\n\n";
 }
 
-void PrintASM(std::string AssemblyFilePath)
-{
-    std::print("------ASSEMBLY-----\n\n");
-
-    std::ifstream AsmFile(AssemblyFilePath, std::ios::in | std::ios::binary | std::ios::ate);
-
-    std::streamsize size = AsmFile.tellg();
-
-    AsmFile.seekg(0, std::ios::beg);
-
-    std::string AsmOutput(size, '\0');
-
-    AsmFile.read(AsmOutput.data(), size);
-
-    std::print("{}\n", AsmOutput);
-}
-
 // using gcc to assemble and link instead of writing a faster, smaller startup sequence because it keeps benchmarks fair...
 
 void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)

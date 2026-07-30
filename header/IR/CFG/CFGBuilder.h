@@ -34,5 +34,3 @@ struct CFGFunction
 using CFG = std::vector<CFGFunction>;
 
 CFG ConstructCFG(Node& AST);
-
-void PrintCFG(CFG& CFG);

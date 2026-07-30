@@ -1,4 +1,6 @@
 #include "csalt.h"
+#include "Globals.h"
+#include "IRDebugger.h"
 
 int main(int argc, char** argv)
 {
@@ -8,20 +10,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    gCompilerOptions[Phase::CTFE].enabled = false;
+
     for (int i = 1; i < argc - 1; i++)
     {
-        std::string arg(argv[i]);
-
-        if (auto opt = argHandlers.find(arg); opt != argHandlers.end())
-        {
-            opt->second();
-        }
-
-        else
-        {
-            std::print("Error : Invalid argument\n");
+        if (!ParseCompileFlag(std::string(argv[i])))
             return 1;
-        }
     }
 
     std::ifstream file(argv[argc - 1]);
@@ -35,22 +29,22 @@ int main(int argc, char** argv)
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     TokenStream TokenStream = Tokenize(source);
-    TakeSnapshot("TOKEN STREAM", TokenStream);
+    Degubber::TakeSnapshot("TOKEN STREAM", TokenStream, gCompilerOptions[Phase::TOK]);
 
     Node AST = Parse(TokenStream);
-    TakeSnapshot("ABSTRACT SYNTAX TREE", AST);
+    Degubber::TakeSnapshot("ABSTRACT SYNTAX TREE", AST, gCompilerOptions[Phase::AST]);
 
     CFG CFG = ConstructCFG(AST);
-    TakeSnapshot("CONTROL FLOW GRAPH", CFG);
+    Degubber::TakeSnapshot("CONTROL FLOW GRAPH", CFG, gCompilerOptions[Phase::CFG]);
 
     TAC TAC = GenerateTAC(CFG);
-    TakeSnapshot("TAC AFTER CONSTRUCTION", TAC);
+    Degubber::TakeSnapshot("TAC AFTER CONSTRUCTION", TAC, gCompilerOptions[Phase::TAC_CONST]);
 
     InsertPhiNodes(TAC);
-    TakeSnapshot("TAC AFTER PHI INSERTION", TAC);
+    Degubber::TakeSnapshot("TAC AFTER PHI INSERTION", TAC, gCompilerOptions[Phase::TAC_PHI_INS]);
 
     RenameVariables(TAC);
-    TakeSnapshot("TAC AFTER SSA RENAMING", TAC);
+    Degubber::TakeSnapshot("TAC AFTER SSA RENAMING", TAC, gCompilerOptions[Phase::TAC_RENAME]);
 
     // clang-format off
     PassManager<::TAC> TACPassManager(
@@ -58,35 +52,35 @@ int main(int argc, char** argv)
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
-                    {Pass<::TAC>{"Compile Time Function Evaluation", !opts.disableCTFE, opts.historyCTFE, {.Run = EvaluateConstantFunctions}}},
+                    // CTFE stays disabled by default an during benchmarks since its basically a cheat code...
+                    {Pass<::TAC>{"Compile Time Function Evaluation", gCompilerOptions[Phase::CTFE], {.Run = EvaluateConstantFunctions}}},
                 }},
 
             PassGroup<::TAC>{
                 .IterateToFixedPoint = true,
                 .Passes = {
-                    {Pass<::TAC>{"Constant Folding", !opts.disableFolding, opts.historyFolding, {.RunIter = FoldConstants}}},
-                    {Pass<::TAC>{"Algebraic Simplification", !opts.disableAlgSimp, opts.historyAlgSimp, {.RunIter = SimplifyAlgebra}}},
-                    {Pass<::TAC>{"Branch Simplification", !opts.disableBrnSimp, opts.historyBrnSimp, {.RunIter = SimplifyBranches}}},
-                    {Pass<::TAC>{"Control Flow Simplification", !opts.disableCFGSimp, opts.historyCFGSimp, {.RunIter = SimplifyControlFlow}}},
-                    {Pass<::TAC>{"Dead Code Elimination", !opts.disableDCE, opts.historyDCE, {.RunIter = RemoveDeadCode}}},
-                    {Pass<::TAC>{"Global Value Numbering", !opts.disableGVN, opts.historyGVN, {.RunIter = GVN}}},
+                    {Pass<::TAC>{"Constant Folding", gCompilerOptions[Phase::FOLDING], {.RunIter = FoldConstants}}},
+                    {Pass<::TAC>{"Algebraic Simplification", gCompilerOptions[Phase::ALG_SIMP], {.RunIter = SimplifyAlgebra}}},
+                    {Pass<::TAC>{"Branch Simplification", gCompilerOptions[Phase::BRN_SIMP], {.RunIter = SimplifyBranches}}},
+                    {Pass<::TAC>{"Control Flow Simplification", gCompilerOptions[Phase::CFG_SIMP], {.RunIter = SimplifyControlFlow}}},
+                    {Pass<::TAC>{"Dead Code Elimination", gCompilerOptions[Phase::DCE], {.RunIter = RemoveDeadCode}}},
+                    {Pass<::TAC>{"Global Value Numbering", gCompilerOptions[Phase::GVN], {.RunIter = GVN}}},
                 }},
 
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
-                    {Pass<::TAC>{"Loop Invariant Code Motion", !opts.disableLICM, opts.historyLICM, {.Run = HoistLoopInvariants}}},
+                    {Pass<::TAC>{"Loop Invariant Code Motion", gCompilerOptions[Phase::LICM], {.Run = HoistLoopInvariants}}},
                 }},
         });
     // clang-format on
 
     TACPassManager.RunOptimizations(TAC);
-    TakeSnapshot("TAC AFTER OPTIMIZATIONS", TAC);
-
-    TakeSnapshot("TAC HISTORY AFTER OPTIMIZATIONS", TAC);
+    Degubber::TakeSnapshot("TAC AFTER OPTIMIZATIONS", TAC, gCompilerOptions[Phase::TAC_OPT]);
 
     ResolvePhiNodes(TAC);
-    TakeSnapshot("TAC AFTER FINAL TRANSFORMATION", TAC);
+    Degubber::TakeSnapshot("TAC AFTER PHI RESOLUTION", TAC, gCompilerOptions[Phase::TAC_PHI_RES]);
+    Degubber::TakeSnapshot("TAC", TAC, gCompilerOptions[Phase::TAC]);
     /*
     MIR MIR = GenerateMachineIR(TAC);
     DumpIf(opts.dumpMIRConst, MIR);
