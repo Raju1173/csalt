@@ -1,6 +1,5 @@
 #include "csalt.h"
-#include "Globals.h"
-#include "IRDebugger.h"
+#include "MIREditor.h"
 
 int main(int argc, char** argv)
 {
@@ -81,10 +80,23 @@ int main(int argc, char** argv)
     ResolvePhiNodes(TAC);
     Degubber::TakeSnapshot("TAC AFTER PHI RESOLUTION", TAC, gCompilerOptions[Phase::TAC_PHI_RES]);
     Degubber::TakeSnapshot("TAC", TAC, gCompilerOptions[Phase::TAC]);
-    /*
-    MIR MIR = GenerateMachineIR(TAC);
-    DumpIf(opts.dumpMIRConst, MIR);
 
+    MIR MIR = GenerateMachineIR(TAC);
+    Degubber::TakeSnapshot("MIR AFTER CONSTRUCTION", MIR, gCompilerOptions[Phase::MIR_CONST]);
+
+    if (gCompilerOptions[Phase::REG_ALLOC].enabled)
+    {
+        ResolveVRegsLinearScan(MIR);
+        Degubber::TakeSnapshot("MIR AFTER LINEAR SCAN REGISTER ALLOCATION", MIR, gCompilerOptions[Phase::REG_ALLOC]);
+    }
+
+    else
+    {
+        ResolveVRegsSpillAll(MIR);
+        Degubber::TakeSnapshot("MIR AFTER SPILL ALLOCATION", MIR, gCompilerOptions[Phase::REG_ALLOC]);
+    }
+
+    /*
     PassManager<::MIR> MIRPassManager({PassGroup<::MIR>{
         .IterateToFixedPoint = false,
         .Passes = {
@@ -93,17 +105,20 @@ int main(int argc, char** argv)
 
     MIRPassManager.RunOptimizations(MIR);
     DumpIf(opts.dumpMIR || opts.dumpMIROpt, MIR);
+    */
 
     std::string AssemblyFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "s";
 
     EmitAssembly(MIR, AssemblyFilePath);
-    DumpIf(opts.dumpASM, AssemblyFilePath);
+    Degubber::TakeSnapshot("ASSEMBLY", AssemblyFilePath, gCompilerOptions[Phase::ASM]);
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 2);
 
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
 
+    Degubber::Run();
+
     PrintOutput(ExecutableFilePath);
-    */
+
     return 0;
 }

@@ -24,9 +24,9 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 
         for (const auto& block : function->Blocks)
         {
-            out << "." << function->FunctionName << "L" << block.ID << ":\n";
+            out << "." << function->FunctionName << "L" << block->ID << ":\n";
 
-            for (const auto& inst : block.Instructions)
+            for (const auto& inst : block->Instructions)
             {
                 switch (inst->type)
                 {
@@ -34,7 +34,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRMov* mov = static_cast<MIRMov*>(inst.get());
 
-                            out << "    mov " << OperandString(mov->Dest, function->OmitFramePtr) << ", " << OperandString(mov->Source, function->OmitFramePtr) << "\n";
+                            out << "    mov " << OperandString(mov->Dest) << ", " << OperandString(mov->Source) << "\n";
                         }
                         break;
 
@@ -42,7 +42,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRAdd* add = static_cast<MIRAdd*>(inst.get());
 
-                            out << "    add " << OperandString(add->Dest, function->OmitFramePtr) << ", " << OperandString(add->Source, function->OmitFramePtr) << "\n";
+                            out << "    add " << OperandString(add->Dest) << ", " << OperandString(add->Source) << "\n";
                         }
                         break;
 
@@ -50,7 +50,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRSub* sub = static_cast<MIRSub*>(inst.get());
 
-                            out << "    sub " << OperandString(sub->Dest, function->OmitFramePtr) << ", " << OperandString(sub->Source, function->OmitFramePtr) << "\n";
+                            out << "    sub " << OperandString(sub->Dest) << ", " << OperandString(sub->Source) << "\n";
                         }
                         break;
 
@@ -58,7 +58,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRImul* mul = static_cast<MIRImul*>(inst.get());
 
-                            out << "    imul " << OperandString(mul->Dest, function->OmitFramePtr) << ", " << OperandString(mul->Source, function->OmitFramePtr) << "\n";
+                            out << "    imul " << OperandString(mul->Dest) << ", " << OperandString(mul->Source) << "\n";
                         }
                         break;
 
@@ -66,7 +66,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
 
-                            out << "    idiv " << OperandString(div->Divisor, function->OmitFramePtr) << "\n";
+                            out << "    idiv " << OperandString(div->Divisor) << "\n";
                         }
                         break;
 
@@ -74,7 +74,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
 
-                            out << "    neg " << OperandString(neg->Dest, function->OmitFramePtr) << "\n";
+                            out << "    neg " << OperandString(neg->Dest) << "\n";
                         }
                         break;
 
@@ -82,7 +82,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
 
-                            out << "    cmp " << OperandString(cmp->Left, function->OmitFramePtr) << ", " << OperandString(cmp->Right, function->OmitFramePtr) << "\n";
+                            out << "    cmp " << OperandString(cmp->Left) << ", " << OperandString(cmp->Right) << "\n";
                         }
                         break;
 
@@ -90,7 +90,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRPush* push = static_cast<MIRPush*>(inst.get());
 
-                            out << "    push " << OperandString(push->Source, function->OmitFramePtr) << "\n";
+                            out << "    push " << OperandString(push->Source) << "\n";
                         }
                         break;
 
@@ -98,7 +98,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRPop* pop = static_cast<MIRPop*>(inst.get());
 
-                            out << "    pop " << OperandString(pop->Dest, function->OmitFramePtr) << "\n";
+                            out << "    pop " << OperandString(pop->Dest) << "\n";
                         }
                         break;
 
@@ -106,7 +106,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRJump* jump = static_cast<MIRJump*>(inst.get());
 
-                            out << "    jmp ." << function->FunctionName << "L" << jump->TargetBlock << "\n";
+                            out << "    jmp ." << function->FunctionName << "L" << jump->TargetBlock->ID << "\n";
                         }
                         break;
 
@@ -138,7 +138,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                                     break;
                             }
 
-                            out << "." << function->FunctionName << "L" << jump->TargetBlock << "\n";
+                            out << "." << function->FunctionName << "L" << jump->TargetBlock->ID << "\n";
                         }
                         break;
 
@@ -146,7 +146,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRCall* call = static_cast<MIRCall*>(inst.get());
 
-                            out << "    call " << call->Function << "\n";
+                            out << "    call " << call->Function->FunctionName << "\n";
                         }
                         break;
 

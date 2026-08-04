@@ -40,8 +40,6 @@ public:
 
     int StackFrameSize = 0;
 
-    bool OmitFramePtr = false;
-
     // gets flipped during MIRgeneration...
     bool IsLeaf = true;
 
@@ -58,6 +56,8 @@ private:
 
 public:
     MIRLivenessInfo& getLivenessInfo();
+
+    MIRUseDefInfo& getUseDefInfo();
 };
 
 using MIR = std::vector<std::unique_ptr<MIRFunction>>;

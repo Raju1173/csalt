@@ -17,37 +17,32 @@ enum class Phase
     TAC_OPT,
     TAC_PHI_RES,
 
-    MIR_CONST,
-    MIR_OPT,
-
     FOLDING,
     ALG_SIMP,
     BRN_SIMP,
     DCE,
     CFG_SIMP,
     GVN,
-    FPO,
     SCO,
     CTFE,
-    LICM
+    LICM,
+
+    MIR_CONST,
+    MIR_OPT,
+
+    REG_ALLOC,
+    FPO,
 };
 
-enum class DumpMode
-{
-    STATIC,
-    STATIC_HISTORY,
-    INTERACTIVE,
-    INTERACTIVE_HISTORY,
-
-    NONE,
-};
-
-struct SnapshotOptions
+struct PhaseOptions
 {
     bool enabled = true; // for optimization passes...
-    DumpMode dumpMode = DumpMode::NONE;
+    bool Dump = false;
+    bool HistoryDump = false;
+    bool InteractiveDump = false;
+    bool InteractiveHistoryDump = false;
 };
 
-using CompilerOptions = std::unordered_map<Phase, SnapshotOptions>;
+using CompilerOptions = std::unordered_map<Phase, PhaseOptions>;
 
 inline CompilerOptions gCompilerOptions;

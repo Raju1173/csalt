@@ -18,76 +18,79 @@ struct IRSnapshot
 class Degubber
 {
 private:
-    static std::vector<IRSnapshot> StaticIRSnapshots;
-    static std::vector<IRSnapshot> InteractiveIRSnapshots;
+    inline static std::vector<IRSnapshot> StaticIRSnapshots;
+    inline static std::vector<IRSnapshot> InteractiveIRSnapshots;
 
 public:
-    template<typename R> static void TakeSnapshot(std::string SnapshotName, R& IR, SnapshotOptions snapshotOptions)
+    template<typename R> static void TakeSnapshot(std::string SnapshotName, R& IR, PhaseOptions phaseOptions)
     {
-        if (snapshotOptions.dumpMode == DumpMode::STATIC)
+        if (phaseOptions.Dump)
             StaticIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR)});
-        else if (snapshotOptions.dumpMode == DumpMode::STATIC_HISTORY)
+        if (phaseOptions.HistoryDump)
             StaticIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR, true)});
-        else if (snapshotOptions.dumpMode == DumpMode::INTERACTIVE)
+        if (phaseOptions.InteractiveDump)
             InteractiveIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR)});
-        else if (snapshotOptions.dumpMode == DumpMode::INTERACTIVE_HISTORY)
+        if (phaseOptions.InteractiveHistoryDump)
             InteractiveIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR, true)});
     };
 
     static void Run()
     {
-        int i = 0;
-
-        std::string prevInput = "n";
-
-        while (true)
+        if (!InteractiveIRSnapshots.empty())
         {
-            std::print("\033[2J\033[1;1H");
-            std::print("-----{}-----\n", InteractiveIRSnapshots[i].Name);
-            std::print("{}", InteractiveIRSnapshots[i].Snapshot);
-            std::print("\nSnapshot : {}/{}\n", i + 1, InteractiveIRSnapshots.size());
-            std::print("\nControls : [n/p [N]] - next/prev [N] times, [q] - quit, [Enter] - repeat\n");
-            std::print("(csalt) ");
+            int i = 0;
 
-            std::string input;
-            std::getline(std::cin, input);
+            std::string prevInput = "n";
 
-            if (input.empty())
-                input = prevInput;
-            else
-                prevInput = input;
-
-            std::istringstream iss(input);
-            std::string cmd;
-            int steps = 1;
-
-            iss >> cmd;
-            if (iss >> steps)
+            while (true)
             {
-                if (steps < 0)
-                    steps = 0;
-            }
+                std::print("\033[2J\033[3J\033[1;1H");
+                std::print("-----{}-----\n\n", InteractiveIRSnapshots[i].Name);
+                std::print("{}", InteractiveIRSnapshots[i].Snapshot);
+                std::print("\nSnapshot : {}/{}\n", i + 1, InteractiveIRSnapshots.size());
+                std::print("\nControls : [n/p [N]] - next/prev N times, [q] - quit, [Enter] - repeat\n\n");
+                std::print("(csalt) ");
 
-            if (cmd == "n" || cmd == "next")
-            {
-                i = std::min(i + steps, static_cast<int>(InteractiveIRSnapshots.size()) - 1);
-            }
+                std::string input;
+                std::getline(std::cin, input);
 
-            else if (cmd == "p" || cmd == "prev")
-            {
-                i = std::max(i - steps, 0);
-            }
+                if (input.empty())
+                    input = prevInput;
+                else
+                    prevInput = input;
 
-            else if (cmd == "q" || cmd == "quit")
-            {
-                std::print("\033[2J\033[1;1H");
-                break;
+                std::istringstream iss(input);
+                std::string cmd;
+                int steps = 1;
+
+                iss >> cmd;
+                if (iss >> steps)
+                {
+                    if (steps < 0)
+                        steps = 0;
+                }
+
+                if (cmd == "n" || cmd == "next")
+                {
+                    i = std::min(i + steps, static_cast<int>(InteractiveIRSnapshots.size()) - 1);
+                }
+
+                else if (cmd == "p" || cmd == "prev")
+                {
+                    i = std::max(i - steps, 0);
+                }
+
+                else if (cmd == "q" || cmd == "quit")
+                {
+                    std::print("\033[2J\033[3J\033[1;1H");
+                    break;
+                }
             }
         }
 
         for (IRSnapshot Snapshot : StaticIRSnapshots)
         {
-            std::print("-----{}-----\n", Snapshot.Name);
+            std::print("-----{}-----\n\n", Snapshot.Name);
             std::print("{}", Snapshot.Snapshot);
         }
     };

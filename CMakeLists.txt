@@ -39,6 +39,12 @@ add_library(IR STATIC
     src/IR/TAC/TACGenerator.cpp
     src/IR/TAC/TACAnalyses.cpp
     src/IR/TAC/TACEditor.cpp
+    src/IR/MIR/MIRGenerator.cpp
+    src/IR/MIR/MIRAnalyses.cpp
+    src/IR/MIR/MIREditor.cpp
+    src/IR/MIR/RegisterAllocator.cpp
+    src/IR/MIR/SpillAllocator.cpp
+    src/IR/Utils/IRFormatters.cpp
 )
 
 target_link_libraries(IR PUBLIC FRONTEND projectConfigs)
@@ -59,12 +65,11 @@ add_library(OPTIMIZATIONS STATIC
 
 target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)
 
-#[[add_library(BACKEND STATIC
-    src/IR/MIRGenerator.cpp
-    src/IR/MIRAnalyses.cpp
-    src/IR/MIREditor.cpp
-)]]
+add_library(BACKEND STATIC
+    src/Backend/ASMGenerator.cpp
+)
+
+target_link_libraries(BACKEND PUBLIC OPTIMIZATIONS projectConfigs)
 
 add_executable(csalt src/csalt.cpp)
-target_link_libraries(csalt PRIVATE OPTIMIZATIONS)
-
+target_link_libraries(csalt PRIVATE BACKEND)

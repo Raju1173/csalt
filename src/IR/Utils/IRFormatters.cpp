@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-std::string FormatTokens(const TokenStream& tokenStream)
+std::string FormatTokens(TokenStream& tokenStream)
 {
     std::string out;
 
@@ -24,7 +24,7 @@ std::string FormatTokens(const TokenStream& tokenStream)
     return out;
 }
 
-std::string FormatNode(const Node& node, int depth = 0)
+std::string FormatNode(Node& node, int depth = 0)
 {
     std::string out;
 
@@ -47,7 +47,7 @@ std::string FormatNode(const Node& node, int depth = 0)
     return out;
 }
 
-std::string FormatAST(const Node& root)
+std::string FormatAST(Node& root)
 {
     std::string out;
 
@@ -117,7 +117,7 @@ std::string FormatCFG(CFG& CFG)
     return out;
 }
 
-std::string FormatMessage(const Message& msg)
+std::string FormatMessage(Message& msg)
 {
     std::string color = "\033[1;30m";
 
@@ -456,7 +456,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRMov* mov = static_cast<MIRMov*>(inst);
 
-                out += std::format("    mov {}, {}\n", OperandString(mov->Dest, function->OmitFramePtr), OperandString(mov->Source, function->OmitFramePtr));
+                out += std::format("    mov {}, {}\n", OperandString(mov->Dest), OperandString(mov->Source));
             }
             break;
 
@@ -464,7 +464,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRAdd* add = static_cast<MIRAdd*>(inst);
 
-                out += std::format("    add {}, {}\n", OperandString(add->Dest, function->OmitFramePtr), OperandString(add->Source, function->OmitFramePtr));
+                out += std::format("    add {}, {}\n", OperandString(add->Dest), OperandString(add->Source));
             }
             break;
 
@@ -472,7 +472,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRSub* sub = static_cast<MIRSub*>(inst);
 
-                out += std::format("    sub {}, {}\n", OperandString(sub->Dest, function->OmitFramePtr), OperandString(sub->Source, function->OmitFramePtr));
+                out += std::format("    sub {}, {}\n", OperandString(sub->Dest), OperandString(sub->Source));
             }
             break;
 
@@ -480,7 +480,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRImul* mul = static_cast<MIRImul*>(inst);
 
-                out += std::format("    imul {}, {}\n", OperandString(mul->Dest, function->OmitFramePtr), OperandString(mul->Source, function->OmitFramePtr));
+                out += std::format("    imul {}, {}\n", OperandString(mul->Dest), OperandString(mul->Source));
             }
             break;
 
@@ -488,7 +488,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRIdiv* div = static_cast<MIRIdiv*>(inst);
 
-                out += std::format("    idiv {}\n", OperandString(div->Divisor, function->OmitFramePtr));
+                out += std::format("    idiv {}\n", OperandString(div->Divisor));
             }
             break;
 
@@ -496,7 +496,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRNeg* neg = static_cast<MIRNeg*>(inst);
 
-                out += std::format("    neg {}\n", OperandString(neg->Dest, function->OmitFramePtr));
+                out += std::format("    neg {}\n", OperandString(neg->Dest));
             }
             break;
 
@@ -504,7 +504,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRCmp* cmp = static_cast<MIRCmp*>(inst);
 
-                out += std::format("    cmp {}, {}\n", OperandString(cmp->Left, function->OmitFramePtr), OperandString(cmp->Right, function->OmitFramePtr));
+                out += std::format("    cmp {}, {}\n", OperandString(cmp->Left), OperandString(cmp->Right));
             }
             break;
 
@@ -512,7 +512,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRPush* push = static_cast<MIRPush*>(inst);
 
-                out += std::format("    push {}\n", OperandString(push->Source, function->OmitFramePtr));
+                out += std::format("    push {}\n", OperandString(push->Source));
             }
             break;
 
@@ -520,7 +520,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRPop* pop = static_cast<MIRPop*>(inst);
 
-                out += std::format("    pop {}\n", OperandString(pop->Dest, function->OmitFramePtr));
+                out += std::format("    pop {}\n", OperandString(pop->Dest));
             }
             break;
 
@@ -680,7 +680,7 @@ std::string FormatMIRFunction(MIRFunction* func, bool history)
         out += func->Parameters[j];
     }
 
-    out += ") :\n\033[0m";
+    out += ") :\n\n\033[0m";
 
     if (history)
     {

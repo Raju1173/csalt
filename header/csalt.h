@@ -26,6 +26,8 @@
 #include <fstream>
 #include "IRDebugger.h"
 #include "Globals.h"
+#include "RegisterAllocator.h"
+#include "SpillAllocator.h"
 
 inline std::unordered_map<std::string, Phase> phaseMap = {
     {"tok", Phase::TOK},
@@ -41,19 +43,21 @@ inline std::unordered_map<std::string, Phase> phaseMap = {
     {"tac-opt", Phase::TAC_OPT},
     {"tac-phires", Phase::TAC_PHI_RES},
 
-    {"mir-const", Phase::MIR_CONST},
-    {"mir-opt", Phase::MIR_OPT},
-
     {"folding", Phase::FOLDING},
     {"algsimp", Phase::ALG_SIMP},
     {"brnsimp", Phase::BRN_SIMP},
     {"dce", Phase::DCE},
     {"cfgsimp", Phase::CFG_SIMP},
     {"gvn", Phase::GVN},
-    {"fpo", Phase::FPO},
     {"sco", Phase::SCO},
     {"ctfe", Phase::CTFE},
     {"licm", Phase::LICM},
+
+    {"mir-const", Phase::MIR_CONST},
+    {"mir-opt", Phase::MIR_OPT},
+
+    {"reg-alloc", Phase::REG_ALLOC},
+    {"fpo", Phase::FPO},
 };
 
 inline bool ParseCompileFlag(std::string arg)
@@ -65,7 +69,7 @@ inline bool ParseCompileFlag(std::string arg)
         target = arg.substr(27);
 
         if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::INTERACTIVE_HISTORY;
+            gCompilerOptions[phaseMap.at(target)].InteractiveHistoryDump = true;
     }
 
     else if (arg.starts_with("--interactive-dump-"))
@@ -73,7 +77,7 @@ inline bool ParseCompileFlag(std::string arg)
         target = arg.substr(19);
 
         if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::INTERACTIVE;
+            gCompilerOptions[phaseMap.at(target)].InteractiveDump = true;
     }
 
     else if (arg.starts_with("--history-dump-"))
@@ -81,7 +85,7 @@ inline bool ParseCompileFlag(std::string arg)
         target = arg.substr(15);
 
         if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::STATIC_HISTORY;
+            gCompilerOptions[phaseMap.at(target)].HistoryDump = true;
     }
 
     else if (arg.starts_with("--dump-"))
@@ -91,12 +95,12 @@ inline bool ParseCompileFlag(std::string arg)
         if (target == "all")
         {
             for (const auto& [name, phase] : phaseMap)
-                gCompilerOptions[phase].dumpMode = DumpMode::STATIC;
+                gCompilerOptions[phase].Dump = true;
             return true;
         }
 
         if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].dumpMode = DumpMode::STATIC;
+            gCompilerOptions[phaseMap.at(target)].Dump = true;
     }
 
     else if (arg.starts_with("--enable-"))

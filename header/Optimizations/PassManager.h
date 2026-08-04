@@ -15,7 +15,7 @@ template<typename T> struct Pass
 {
     std::string Name;
 
-    SnapshotOptions snapshotOptions;
+    PhaseOptions phaseOptions;
 
     PassFuncUnion<T> Func;
 };
@@ -47,7 +47,7 @@ public:
 
                     for (Pass pass : passGroup.Passes)
                     {
-                        if (pass.snapshotOptions.enabled)
+                        if (pass.phaseOptions.enabled)
                         {
                             changed |= pass.Func.RunIter(IR);
                         }
@@ -56,9 +56,9 @@ public:
 
                 for (Pass pass : passGroup.Passes)
                 {
-                    if (pass.snapshotOptions.enabled)
+                    if (pass.phaseOptions.enabled)
                     {
-                        TakeSnapshot("AFTER " + pass.Name, IR, pass.snapshotOptions);
+                        Degubber::TakeSnapshot("AFTER " + pass.Name, IR, pass.phaseOptions);
                         break;
                     }
                 }
@@ -68,14 +68,14 @@ public:
             {
                 for (Pass pass : passGroup.Passes)
                 {
-                    if (pass.Enabled)
+                    if (pass.phaseOptions.enabled)
                     {
                         pass.Func.Run(IR);
                     }
 
-                    if (pass.snapshotOptions.enabled)
+                    if (pass.phaseOptions.enabled)
                     {
-                        TakeSnapshot("AFTER " + pass.Name, IR, pass.snapshotOptions);
+                        Degubber::TakeSnapshot("AFTER " + pass.Name, IR, pass.phaseOptions);
                     }
                 }
             }

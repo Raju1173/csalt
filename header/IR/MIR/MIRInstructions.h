@@ -82,6 +82,8 @@ struct VirtualRegister
 struct StackOffset
 {
     int Offset;
+
+    bool RSP = false;
 };
 
 struct Immediate
@@ -91,7 +93,7 @@ struct Immediate
 
 using Operand = std::variant<Register, VirtualRegister, StackOffset, Immediate>;
 
-inline std::string OperandString(const Operand& op, bool UseRSP)
+inline std::string OperandString(const Operand& op)
 {
     if (std::holds_alternative<Register>(op))
     {
@@ -105,7 +107,7 @@ inline std::string OperandString(const Operand& op, bool UseRSP)
 
     else if (std::holds_alternative<StackOffset>(op))
     {
-        std::string base = UseRSP ? "rsp" : "rbp";
+        std::string base = std::get<StackOffset>(op).RSP ? "rsp" : "rbp";
 
         if (std::get<StackOffset>(op).Offset < 0)
             return "DWORD PTR [" + base + std::to_string(std::get<StackOffset>(op).Offset) + "]";
@@ -329,9 +331,6 @@ public:
 
 inline std::unique_ptr<MIRInstruction> cloneMIRInstruction(MIRInstruction* inst)
 {
-    if (!inst)
-        return nullptr;
-
     switch (inst->type)
     {
         case MIRType::MOV:

@@ -181,52 +181,48 @@ void EvaluateConstantFunctions(TAC& TAC)
         {
             for (auto& inst : Block->Instructions)
             {
-                switch (inst->type)
+                if (inst->type == TACType::CALL)
                 {
-                    case TACType::CALL:
+                    TACCall* call = static_cast<TACCall*>(inst.get());
+
+                    if (call->dest.has_value())
+                    {
+                        bool constant = true;
+
+                        std::vector<int> intArgs;
+
+                        int returnVal;
+
+                        for (TACValue& arg : call->args)
                         {
-                            TACCall* call = static_cast<TACCall*>(inst.get());
-
-                            if (call->dest.has_value())
+                            if (arg.index() != 0)
                             {
-                                bool constant = true;
-
-                                std::vector<int> intArgs;
-
-                                int returnVal;
-
-                                for (TACValue& arg : call->args)
-                                {
-                                    if (arg.index() != 0)
-                                    {
-                                        constant = false;
-                                        break;
-                                    }
-
-                                    intArgs.push_back(std::get<int>(arg));
-                                }
-
-                                if (constant)
-                                {
-                                    returnVal = Execute(TAC, std::find_if(TAC.begin(), TAC.end(), [&call](auto& func) { return func->Name == call->functionName; })->get(), intArgs);
-
-                                    std::string argsString = "(";
-
-                                    for (size_t i = 0; i < call->args.size(); i++)
-                                    {
-                                        argsString += std::format("{}", TACValToStr(call->args[i]));
-
-                                        if (i + 1 != call->args.size())
-                                            argsString += ", ";
-                                    }
-
-                                    argsString += ")\n";
-
-                                    TACEditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{IRPass::CTFE, IRTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments - {}{}", call->functionName, argsString)});
-                                }
+                                constant = false;
+                                break;
                             }
+
+                            intArgs.push_back(std::get<int>(arg));
                         }
-                        break;
+
+                        if (constant)
+                        {
+                            returnVal = Execute(TAC, std::find_if(TAC.begin(), TAC.end(), [&call](auto& func) { return func->Name == call->functionName; })->get(), intArgs);
+
+                            std::string argsString = "(";
+
+                            for (size_t i = 0; i < call->args.size(); i++)
+                            {
+                                argsString += std::format("{}", TACValToStr(call->args[i]));
+
+                                if (i + 1 != call->args.size())
+                                    argsString += ", ";
+                            }
+
+                            argsString += ")";
+
+                            TACEditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{IRPass::CTFE, IRTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments '{}{}' to {}", call->functionName, argsString, returnVal)});
+                        }
+                    }
                 }
             }
         }
