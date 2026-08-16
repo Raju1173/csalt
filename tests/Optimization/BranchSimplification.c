@@ -4,7 +4,7 @@ int main()
 
     if (1 > 2)
     {
-        x = 2;
+        x = 1;
     }
 
     if (x > x)
@@ -14,12 +14,12 @@ int main()
 
     if (x == x)
     {
-        x = 2;
+        x = 3;
     }
 
     if (-x > -x)
     {
-        x = 2;
+        x = 4;
     }
 
     return x;

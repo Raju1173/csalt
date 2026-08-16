@@ -1,3 +1,4 @@
+#include "IRDebugger.h"
 #include "MIRGenerator.h"
 #include <fstream>
 #include <sys/ptrace.h>
@@ -9,6 +10,8 @@
 
 void EmitAssembly(MIR& MIR, const std::string& filename)
 {
+    Debugger::AddIR(filename);
+
     std::ofstream out(filename);
 
     out << ".intel_syntax noprefix\n\n";
@@ -30,7 +33,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
             {
                 switch (inst->type)
                 {
-                    case MIRType::MOV:
+                    case MIRInstType::MOV:
                         {
                             MIRMov* mov = static_cast<MIRMov*>(inst.get());
 
@@ -38,7 +41,15 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::ADD:
+                    case MIRInstType::MOVZX:
+                        {
+                            MIRMovzx* movzx = static_cast<MIRMovzx*>(inst.get());
+
+                            out << "    movzx " << OperandString(movzx->Dest) << ", " << OperandString(movzx->Source) << "\n";
+                        }
+                        break;
+
+                    case MIRInstType::ADD:
                         {
                             MIRAdd* add = static_cast<MIRAdd*>(inst.get());
 
@@ -46,7 +57,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::SUB:
+                    case MIRInstType::SUB:
                         {
                             MIRSub* sub = static_cast<MIRSub*>(inst.get());
 
@@ -54,7 +65,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::MUL:
+                    case MIRInstType::MUL:
                         {
                             MIRImul* mul = static_cast<MIRImul*>(inst.get());
 
@@ -62,7 +73,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::DIV:
+                    case MIRInstType::DIV:
                         {
                             MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
 
@@ -70,7 +81,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::NEG:
+                    case MIRInstType::NEG:
                         {
                             MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
 
@@ -78,7 +89,15 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::CMP:
+                    case MIRInstType::XOR:
+                        {
+                            MIRXor* xorInst = static_cast<MIRXor*>(inst.get());
+
+                            out << "    xor " << OperandString(xorInst->Dest) << ", " << OperandString(xorInst->Source) << "\n";
+                        }
+                        break;
+
+                    case MIRInstType::CMP:
                         {
                             MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
 
@@ -86,7 +105,15 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::PUSH:
+                    case MIRInstType::TEST:
+                        {
+                            MIRTest* test = static_cast<MIRTest*>(inst.get());
+
+                            out << "    test " << OperandString(test->Left) << ", " << OperandString(test->Right) << "\n";
+                        }
+                        break;
+
+                    case MIRInstType::PUSH:
                         {
                             MIRPush* push = static_cast<MIRPush*>(inst.get());
 
@@ -94,7 +121,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::POP:
+                    case MIRInstType::POP:
                         {
                             MIRPop* pop = static_cast<MIRPop*>(inst.get());
 
@@ -102,7 +129,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::JMP:
+                    case MIRInstType::JMP:
                         {
                             MIRJump* jump = static_cast<MIRJump*>(inst.get());
 
@@ -110,7 +137,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::CJMP:
+                    case MIRInstType::CJMP:
                         {
                             MIRCondJump* jump = static_cast<MIRCondJump*>(inst.get());
 
@@ -142,7 +169,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::CALL:
+                    case MIRInstType::CALL:
                         {
                             MIRCall* call = static_cast<MIRCall*>(inst.get());
 
@@ -150,13 +177,45 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         }
                         break;
 
-                    case MIRType::RET:
+                    case MIRInstType::SET:
+                        {
+                            MIRSet* set = static_cast<MIRSet*>(inst.get());
+
+                            out << "    ";
+
+                            switch (set->Cond)
+                            {
+                                case Condition::EQUAL:
+                                    out << "sete ";
+                                    break;
+                                case Condition::NOT_EQUAL:
+                                    out << "setne ";
+                                    break;
+                                case Condition::LESS:
+                                    out << "setl ";
+                                    break;
+                                case Condition::LESS_EQUAL:
+                                    out << "setle ";
+                                    break;
+                                case Condition::GREATER:
+                                    out << "setg ";
+                                    break;
+                                case Condition::GREATER_EQUAL:
+                                    out << "setge ";
+                                    break;
+                            }
+
+                            out << OperandString(set->Dest) << "\n";
+                        }
+                        break;
+
+                    case MIRInstType::RET:
                         {
                             out << "    ret\n";
                         }
                         break;
 
-                    case MIRType::CDQ:
+                    case MIRInstType::CDQ:
                         {
                             out << "    cdq\n";
                         }
@@ -171,9 +230,11 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
     }
 
     out << ".section .note.GNU-stack, \"\", @progbits\n\n";
+
+    Debugger::Notify(Phase::ASM);
 }
 
-// using gcc to assemble and link instead of writing a faster, smaller startup sequence because it keeps benchmarks fair...
+// using gcc to assemble and link instead of writing a simple startup sequence to keep benchmarks fair...
 
 void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)
 {
@@ -201,6 +262,8 @@ void PrintOutput(std::string ExecFilePath)
 
         waitpid(pid, &status, 0);
 
+        ptrace(PTRACE_SETOPTIONS, pid, nullptr, PTRACE_O_EXITKILL);
+
         ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
 
         struct user_regs_struct regs;
@@ -227,5 +290,7 @@ void PrintOutput(std::string ExecFilePath)
         }
 
         ptrace(PTRACE_KILL, pid, nullptr, nullptr);
+
+        waitpid(pid, &status, 0);
     }
 }

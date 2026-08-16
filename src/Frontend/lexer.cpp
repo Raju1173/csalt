@@ -1,11 +1,12 @@
 #include "lexer.h"
+#include "IRDebugger.h"
 #include <cctype>
 #include <vector>
 #include <print>
 
-TokenStream Tokenize(std::string_view source)
+void Tokenize(std::string source, TokenStream& tokenStream)
 {
-    std::vector<Token> tokenStream;
+    Debugger::AddIR(tokenStream);
 
     for (size_t i = 0; i < source.size(); ++i)
     {
@@ -190,5 +191,5 @@ TokenStream Tokenize(std::string_view source)
 
     tokenStream.push_back({TokenType::END});
 
-    return TokenStream(tokenStream);
+    Debugger::Notify(Phase::TOK);
 }

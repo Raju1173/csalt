@@ -12,8 +12,8 @@ int main()
 {
     int a = -2;
 
-    if (-a - 1 + -2 + -(3 + 4) == 0)
+    if (-a - 1 + -2 + -(3 + 4) == -8)
     {
-        return -fib(20);
+        return -fib(20); // Expected : -6765
     }
 }

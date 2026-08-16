@@ -1,5 +1,5 @@
+#include "IREditor.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -14,52 +14,60 @@ bool EliminateDeadInstructions(TACFunction* TACFunc, TACVarUsesInfo& VarUsesInfo
     {
         size_t initialSize = Block->Instructions.size();
 
+        int returnIndex = -1;
+
         for (int i = Block->Instructions.size() - 1; i >= 0; --i)
         {
             auto& inst = Block->Instructions[i];
 
             TACValue destVar;
 
-            if (inst->type == TACType::PHI)
+            if (inst->type == TACInstType::PHI)
             {
                 TACPhi* phi = static_cast<TACPhi*>(inst.get());
 
                 destVar = phi->variable;
             }
 
-            else if (inst->type == TACType::ASSIGN)
+            else if (inst->type == TACInstType::ASSIGN)
             {
                 TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
                 destVar = assign->dest;
             }
 
-            else if (inst->type == TACType::NEG)
+            else if (inst->type == TACInstType::NEG)
             {
                 TACNeg* neg = static_cast<TACNeg*>(inst.get());
 
                 destVar = neg->dest;
             }
 
-            else if (inst->type == TACType::BINARYOP)
+            else if (inst->type == TACInstType::BINARYOP)
             {
                 TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
                 destVar = binary->dest;
             }
 
-            else if (inst->type == TACType::CALL)
+            else if (inst->type == TACInstType::CALL)
             {
                 TACCall* call = static_cast<TACCall*>(inst.get());
 
                 if (!call->dest.has_value())
                 {
-                    TACEditor::deleteInstruction(Block.get(), inst.get(), Message{IRPass::DCE, IRTransformType::DELETED, "calls with no destination are dead because all functions are pure in the C subset supported by csalt"});
+                    IREditor<TACTypes>::deleteInstruction(Block.get(), inst.get(), Message{Phase::DCE, IRTransformType::DELETED, "calls with no destination are dead because all functions are pure in the C subset supported by csalt"});
                     continue;
                 }
 
                 else
                     destVar = call->dest.value();
+            }
+
+            else if (inst->type == TACInstType::RETURN)
+            {
+                returnIndex = i;
+                continue;
             }
 
             else
@@ -68,7 +76,15 @@ bool EliminateDeadInstructions(TACFunction* TACFunc, TACVarUsesInfo& VarUsesInfo
             }
 
             if (!VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar] == 0)
-                TACEditor::deleteInstruction(Block.get(), inst.get(), Message{IRPass::DCE, IRTransformType::DELETED, "definition was unused"});
+                IREditor<TACTypes>::deleteInstruction(Block.get(), inst.get(), Message{Phase::DCE, IRTransformType::DELETED, "definition was unused"});
+        }
+
+        if (returnIndex != -1)
+        {
+            for (int i = Block->Instructions.size() - 1; i > returnIndex; --i)
+            {
+                IREditor<TACTypes>::deleteInstruction(Block.get(), Block->Instructions[i].get(), Message{Phase::DCE, IRTransformType::DELETED, "instruction was after a return statement"});
+            }
         }
 
         if (Block->Instructions.size() != initialSize)
@@ -95,8 +111,23 @@ bool EliminateUnreachableBlocks(TACFunction* TACFunc)
         if (block->ID == entryBlockID)
             continue;
 
+
         if (block->Parents.empty())
-            TACEditor::deleteBlock(block.get(), Message{IRPass::DCE, IRTransformType::DELETED, "block was unreachable"});
+        {
+            for (TACBlock* parent : block->Parents)
+            {
+                IREditor<TACTypes>::removeEdge(parent, block.get());
+                IREditor<TACTypes>::removePhiSource(block.get(), parent);
+            }
+
+            for (TACBlock* child : block->Children)
+            {
+                IREditor<TACTypes>::removeEdge(block.get(), child);
+                IREditor<TACTypes>::removePhiSource(child, block.get());
+            }
+
+            IREditor<TACTypes>::deleteBlock(block.get(), Message{Phase::DCE, IRTransformType::DELETED, "block was unreachable"});
+        }
     }
 
     return TACFunc->Blocks.size() != initialBlocks;
@@ -114,7 +145,7 @@ bool EliminateDeadFunctions(TAC& TAC)
         {
             for (const auto& inst : Block->Instructions)
             {
-                if (inst->type == TACType::CALL)
+                if (inst->type == TACInstType::CALL)
                 {
                     TACCall* call = static_cast<TACCall*>(inst.get());
 
@@ -132,7 +163,7 @@ bool EliminateDeadFunctions(TAC& TAC)
             continue;
 
         if (callCounts[TACFunc->Name] == 0)
-            TACEditor::deleteFunction(TAC, TACFunc.get(), Message{IRPass::DCE, IRTransformType::DELETED, "function was never called"});
+            IREditor<TACTypes>::deleteFunction(TAC, TACFunc.get(), Message{Phase::DCE, IRTransformType::DELETED, "function was never called"});
     };
 
     return initialFuncCount != TAC.size();

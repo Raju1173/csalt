@@ -29,7 +29,9 @@
 #include "RegisterAllocator.h"
 #include "SpillAllocator.h"
 
-inline std::unordered_map<std::string, Phase> phaseMap = {
+static_assert(std::to_underlying(Phase::COUNT) == 24, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+
+inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
     {"ast", Phase::AST},
     {"cfg", Phase::CFG},
@@ -41,22 +43,22 @@ inline std::unordered_map<std::string, Phase> phaseMap = {
     {"tac-phi-ins", Phase::TAC_PHI_INS},
     {"tac-rename", Phase::TAC_RENAME},
     {"tac-opt", Phase::TAC_OPT},
-    {"tac-phires", Phase::TAC_PHI_RES},
+    {"tac-phi-res", Phase::TAC_PHI_RES},
 
     {"folding", Phase::FOLDING},
-    {"algsimp", Phase::ALG_SIMP},
-    {"brnsimp", Phase::BRN_SIMP},
+    {"alg-simp", Phase::ALG_SIMP},
+    {"brn-simp", Phase::BRN_SIMP},
     {"dce", Phase::DCE},
-    {"cfgsimp", Phase::CFG_SIMP},
+    {"cfg-simp", Phase::CFG_SIMP},
     {"gvn", Phase::GVN},
     {"sco", Phase::SCO},
     {"ctfe", Phase::CTFE},
     {"licm", Phase::LICM},
 
     {"mir-const", Phase::MIR_CONST},
+    {"mir-reg-alloc", Phase::MIR_REG_ALLOC},
     {"mir-opt", Phase::MIR_OPT},
 
-    {"reg-alloc", Phase::REG_ALLOC},
     {"fpo", Phase::FPO},
 };
 
@@ -68,47 +70,55 @@ inline bool ParseCompileFlag(std::string arg)
     {
         target = arg.substr(27);
 
-        if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].InteractiveHistoryDump = true;
+        if (targetPhaseMap.contains(target))
+        {
+            gCompilerOptions[targetPhaseMap.at(target)].InteractiveHistoryDump = true;
+            return true;
+        }
     }
 
     else if (arg.starts_with("--interactive-dump-"))
     {
         target = arg.substr(19);
 
-        if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].InteractiveDump = true;
+        if (targetPhaseMap.contains(target))
+        {
+            gCompilerOptions[targetPhaseMap.at(target)].InteractiveDump = true;
+            return true;
+        }
     }
 
     else if (arg.starts_with("--history-dump-"))
     {
         target = arg.substr(15);
 
-        if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].HistoryDump = true;
+        if (targetPhaseMap.contains(target))
+        {
+            gCompilerOptions[targetPhaseMap.at(target)].HistoryDump = true;
+            return true;
+        }
     }
 
     else if (arg.starts_with("--dump-"))
     {
         target = arg.substr(7);
 
-        if (target == "all")
+        if (targetPhaseMap.contains(target))
         {
-            for (const auto& [name, phase] : phaseMap)
-                gCompilerOptions[phase].Dump = true;
+            gCompilerOptions[targetPhaseMap.at(target)].Dump = true;
             return true;
         }
-
-        if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].Dump = true;
     }
 
     else if (arg.starts_with("--enable-"))
     {
         target = arg.substr(9);
 
-        if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].enabled = true;
+        if (targetPhaseMap.contains(target))
+        {
+            gCompilerOptions[targetPhaseMap.at(target)].enabled = true;
+            return true;
+        }
     }
 
     else if (arg.starts_with("--disable-"))
@@ -117,25 +127,26 @@ inline bool ParseCompileFlag(std::string arg)
 
         if (target == "all")
         {
-            for (auto& [name, phase] : phaseMap)
+            for (auto& [name, phase] : targetPhaseMap)
             {
-                if (phase >= Phase::FOLDING && phase <= Phase::LICM)
+                if (getPhaseMetadata(phase).isOptimizationPhase)
                 {
                     gCompilerOptions[phase].enabled = false;
                 }
             }
+
             return true;
         }
 
-        if (phaseMap.contains(target))
-            gCompilerOptions[phaseMap.at(target)].enabled = false;
+        if (targetPhaseMap.contains(target))
+        {
+            gCompilerOptions[targetPhaseMap.at(target)].enabled = false;
+            return true;
+        }
     }
 
     else
-    {
-        std::print(stderr, "Error : Invalid flag '{}'\n", arg);
         return false;
-    }
 
-    return true;
+    return false;
 }

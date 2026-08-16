@@ -1,10 +1,9 @@
 #include <format>
 #include <memory>
 #include <string>
-#include <utility>
 #include <variant>
+#include "Globals.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
 
 bool SimplifyBranches(TAC& TAC)
 {
@@ -16,15 +15,15 @@ bool SimplifyBranches(TAC& TAC)
         {
             for (auto& inst : block->Instructions)
             {
-                if (inst->type == TACType::BRANCH)
+                if (inst->type == TACInstType::BRANCH)
                 {
                     TACBranch* br = static_cast<TACBranch*>(inst.get());
 
                     if (br->TrueTarget == br->FalseTarget)
                     {
-                        Message message = Message{IRPass::BRANCH_SIMPLIFICATION, IRTransformType::REPLACED, std::format("simplified 'cond ? B{} : B{}' to 'jump B{}'", br->TrueTarget->ID, br->FalseTarget->ID, br->TrueTarget->ID)};
+                        Message message = Message{Phase::BRN_SIMP, IRTransformType::REPLACED, std::format("simplified 'cond ? B{} : B{}' to 'jump B{}'", br->TrueTarget->ID, br->FalseTarget->ID, br->TrueTarget->ID)};
 
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACJump>(br->TrueTarget), message);
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::make_unique<TACJump>(br->TrueTarget), message);
 
                         changed = true;
                         break;
@@ -103,19 +102,21 @@ bool SimplifyBranches(TAC& TAC)
                         {
                             jumpInst = std::make_unique<TACJump>(br->TrueTarget);
 
-                            TACEditor::removeEdge(block.get(), br->FalseTarget);
+                            IREditor<TACTypes>::removeEdge(block.get(), br->FalseTarget);
+                            IREditor<TACTypes>::removePhiSource(br->FalseTarget, block.get());
                         }
 
                         else
                         {
                             jumpInst = std::make_unique<TACJump>(br->FalseTarget);
 
-                            TACEditor::removeEdge(block.get(), br->TrueTarget);
+                            IREditor<TACTypes>::removeEdge(block.get(), br->TrueTarget);
+                            IREditor<TACTypes>::removePhiSource(br->TrueTarget, block.get());
                         }
 
-                        std::string info = std::format("constant branch '{} {} {} ? B{} : B{}' simplified to 'jump B{}'", TACValToStr(br->cond.Left), BinaryOpToStr[std::to_underlying(br->cond.Op)], TACValToStr(br->cond.Right), std::to_string(br->TrueTarget->ID), std::to_string(br->FalseTarget->ID), std::to_string(jumpInst->TargetBlock->ID));
+                        std::string info = std::format("constant branch '{} {} {} ? B{} : B{}' simplified to 'jump B{}'", TACValToStr(br->cond.Left), BinaryOpToStr(br->cond.Op), TACValToStr(br->cond.Right), std::to_string(br->TrueTarget->ID), std::to_string(br->FalseTarget->ID), std::to_string(jumpInst->TargetBlock->ID));
 
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::move(jumpInst), Message{IRPass::BRANCH_SIMPLIFICATION, IRTransformType::REPLACED, info});
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::move(jumpInst), Message{Phase::BRN_SIMP, IRTransformType::REPLACED, info});
 
                         changed = true;
                     }
@@ -123,9 +124,6 @@ bool SimplifyBranches(TAC& TAC)
             }
         }
     }
-
-    if (changed)
-        TACEditor::reconstructSSA(TAC);
 
     return changed;
 }

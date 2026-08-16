@@ -1,4 +1,6 @@
 #include "CFGBuilder.h"
+#include "Globals.h"
+#include "IRDebugger.h"
 #include "lexer.h"
 #include "parser.h"
 #include <algorithm>
@@ -86,9 +88,9 @@ std::unique_ptr<CFGBlock> constructBlock(Node& ASTBlockNode, CFGFunction& CFGFun
     return block;
 }
 
-CFG ConstructCFG(Node& AST)
+void ConstructCFG(Node& AST, CFG& CFG)
 {
-    CFG CFG;
+    Debugger::AddIR(CFG);
 
     for (size_t i = 0; i < AST.children.size(); i++)
     {
@@ -112,5 +114,5 @@ CFG ConstructCFG(Node& AST)
         NextBlockID = 1;
     }
 
-    return CFG;
+    Debugger::Notify(Phase::CFG);
 }

@@ -1,5 +1,5 @@
+#include "IRCommon.h"
 #include "MIRGenerator.h"
-#include "MIREditor.h"
 #include "MIRInstructions.h"
 #include <memory>
 #include <variant>
@@ -7,113 +7,116 @@
 
 void OmitFramePointers(MIR& MIR)
 {
-    auto AdjustOffset = [](Operand& Op, MIRFunction* MIRFunc) {
-        if (std::holds_alternative<StackOffset>(Op))
-        {
-            std::get<StackOffset>(Op).RSP = true;
-
-            if (std::get<StackOffset>(Op).Offset > 0)
-                std::get<StackOffset>(Op).Offset -= 8;
-
-            if (!(MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128))
-                std::get<StackOffset>(Op).Offset += MIRFunc->StackFrameSize;
-        }
-    };
-
     for (auto& MIRFunc : MIR)
     {
-        for (int i = MIRFunc->Blocks.size(); i >= 0; i--)
-        {
-            auto& Block = MIRFunc->Blocks[i];
-
-            for (int i = Block->Instructions.size(); i >= 0; i--)
+        auto AdjustOffset = [&MIRFunc](Operand& Op) {
+            if (std::holds_alternative<StackOffset>(Op) && !std::get<StackOffset>(Op).RSP)
             {
-                auto& inst = Block->Instructions[i];
+                std::get<StackOffset>(Op).RSP = true;
+
+                if (std::get<StackOffset>(Op).Offset > 0)
+                    std::get<StackOffset>(Op).Offset -= 8;
+
+                if (!(MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128))
+                    std::get<StackOffset>(Op).Offset += MIRFunc->StackFrameSize;
+            }
+        };
+
+        for (auto& Block : MIRFunc->Blocks)
+        {
+            for (int i = 0; i < Block->Instructions.size(); i++)
+            {
+                MIRInstruction* inst = Block->Instructions[i].get();
 
                 switch (inst->type)
                 {
-                    case MIRType::MOV:
+                    case MIRInstType::MOV:
                         {
-                            MIRMov* mov = static_cast<MIRMov*>(inst.get());
+                            MIRMov* mov = static_cast<MIRMov*>(inst);
 
-                            AdjustOffset(mov->Dest, MIRFunc.get());
-                            AdjustOffset(mov->Source, MIRFunc.get());
+                            AdjustOffset(mov->Dest);
+                            AdjustOffset(mov->Source);
                         }
                         break;
 
-                    case MIRType::ADD:
+                    case MIRInstType::ADD:
                         {
-                            MIRAdd* add = static_cast<MIRAdd*>(inst.get());
+                            MIRAdd* add = static_cast<MIRAdd*>(inst);
 
-                            AdjustOffset(add->Dest, MIRFunc.get());
-                            AdjustOffset(add->Source, MIRFunc.get());
+                            AdjustOffset(add->Dest);
+                            AdjustOffset(add->Source);
                         }
                         break;
 
-                    case MIRType::SUB:
+                    case MIRInstType::SUB:
                         {
-                            MIRSub* sub = static_cast<MIRSub*>(inst.get());
+                            MIRSub* sub = static_cast<MIRSub*>(inst);
 
-                            AdjustOffset(sub->Dest, MIRFunc.get());
-                            AdjustOffset(sub->Source, MIRFunc.get());
+                            AdjustOffset(sub->Dest);
+                            AdjustOffset(sub->Source);
                         }
                         break;
 
-                    case MIRType::MUL:
+                    case MIRInstType::MUL:
                         {
-                            MIRImul* mul = static_cast<MIRImul*>(inst.get());
+                            MIRImul* mul = static_cast<MIRImul*>(inst);
 
-                            AdjustOffset(mul->Dest, MIRFunc.get());
-                            AdjustOffset(mul->Source, MIRFunc.get());
+                            AdjustOffset(mul->Dest);
+                            AdjustOffset(mul->Source);
                         }
                         break;
 
-                    case MIRType::DIV:
+                    case MIRInstType::DIV:
                         {
-                            MIRIdiv* div = static_cast<MIRIdiv*>(inst.get());
+                            MIRIdiv* div = static_cast<MIRIdiv*>(inst);
 
-                            AdjustOffset(div->Divisor, MIRFunc.get());
+                            AdjustOffset(div->Divisor);
                         }
                         break;
 
-                    case MIRType::NEG:
+                    case MIRInstType::NEG:
                         {
-                            MIRNeg* neg = static_cast<MIRNeg*>(inst.get());
+                            MIRNeg* neg = static_cast<MIRNeg*>(inst);
 
-                            AdjustOffset(neg->Dest, MIRFunc.get());
+                            AdjustOffset(neg->Dest);
                         }
                         break;
 
-                    case MIRType::CMP:
+                    case MIRInstType::CMP:
                         {
-                            MIRCmp* cmp = static_cast<MIRCmp*>(inst.get());
+                            MIRCmp* cmp = static_cast<MIRCmp*>(inst);
 
-                            AdjustOffset(cmp->Left, MIRFunc.get());
-                            AdjustOffset(cmp->Right, MIRFunc.get());
+                            AdjustOffset(cmp->Left);
+                            AdjustOffset(cmp->Right);
                         }
                         break;
 
                     // MIR generator and virtual register resolvers dont emit ANY push instructions in between a function, so this push is guaranteed to be from the prologue...
-                    case MIRType::PUSH:
+                    case MIRInstType::PUSH:
                         {
-                            MIREditor::deleteInstruction(Block.get(), inst.get());
+                            MIRInstruction* prologueMov = Block->Instructions[i + 1].get();
+                            MIRInstruction* prologueSub = Block->Instructions[i + 2].get();
 
-                            MIREditor::deleteInstruction(Block.get(), Block->Instructions[i - 1].get());
+                            IREditor<MIRTypes>::deleteInstruction(Block.get(), inst, Message{Phase::FPO, IRTransformType::DELETED, "prologue instruction redundant after stack offsets made relative to rsp"});
+
+                            IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueMov, Message{Phase::FPO, IRTransformType::DELETED, "prologue instruction redundant after stack offsets made relative to rsp"});
 
                             if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
-                                MIREditor::deleteInstruction(Block.get(), Block->Instructions[i - 2].get());
+                                IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueSub, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
                         }
                         break;
 
                     // MIR generator and virtual register resolvers dont emit ANY pop instructions in between a function, so this pop is guaranteed to be from the epilogue...
-                    case MIRType::POP:
+                    case MIRInstType::POP:
                         {
-                            if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
-                                MIREditor::deleteInstruction(Block.get(), inst.get());
-                            else
-                                MIREditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<MIRAdd>(Register::RSP, Immediate{MIRFunc->StackFrameSize}));
+                            MIRInstruction* epilogueMov = Block->Instructions[i - 1].get();
 
-                            MIREditor::deleteInstruction(Block.get(), Block->Instructions[i - 1].get());
+                            IREditor<MIRTypes>::deleteInstruction(Block.get(), epilogueMov, Message{Phase::FPO, IRTransformType::DELETED, "epilogue instruction redundant after stack offsets made relative to rsp"});
+
+                            if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
+                                IREditor<MIRTypes>::deleteInstruction(Block.get(), inst, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
+                            else
+                                IREditor<MIRTypes>::replaceInstruction(Block.get(), inst, std::make_unique<MIRAdd>(Register::RSP, Immediate{MIRFunc->StackFrameSize}), Message{Phase::FPO, IRTransformType::REPLACED, std::format("changed 'pop rbp' to 'add rsp, {}'", MIRFunc->StackFrameSize)});
                         }
                         break;
                 }

@@ -16,14 +16,14 @@ int test()
     {
         z = x + y;
 
-        w = -z;
+        w = -z + i;
 
         c = add(z, w);
 
         i = i + 1;
     }
 
-    return z;
+    return z + w;
 }
 
 int main()

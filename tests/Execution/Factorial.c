@@ -10,6 +10,7 @@ int factorial(int n)
     while (n > 1)
     {
         counter = n;
+        temp = counter;
         temp = 0;
 
         while (counter > 0)

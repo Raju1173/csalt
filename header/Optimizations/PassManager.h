@@ -2,6 +2,7 @@
 #include "IRDebugger.h"
 #include "MIRGenerator.h"
 #include "TACGenerator.h"
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,9 +14,7 @@ template<typename T> union PassFuncUnion
 
 template<typename T> struct Pass
 {
-    std::string Name;
-
-    PhaseOptions phaseOptions;
+    Phase OptimizationPass;
 
     PassFuncUnion<T> Func;
 };
@@ -33,7 +32,7 @@ public:
 
     PassManager(std::vector<PassGroup<T>> OptimizationPipeline) : OptimizationPipeline(OptimizationPipeline){};
 
-    template<typename R> void RunOptimizations(R& IR)
+    template<typename R> void RunOptimizations(R& IR, std::optional<Phase> phase)
     {
         for (PassGroup passGroup : OptimizationPipeline)
         {
@@ -47,7 +46,7 @@ public:
 
                     for (Pass pass : passGroup.Passes)
                     {
-                        if (pass.phaseOptions.enabled)
+                        if (gCompilerOptions[pass.OptimizationPass].enabled)
                         {
                             changed |= pass.Func.RunIter(IR);
                         }
@@ -56,9 +55,9 @@ public:
 
                 for (Pass pass : passGroup.Passes)
                 {
-                    if (pass.phaseOptions.enabled)
+                    if (gCompilerOptions[pass.OptimizationPass].enabled)
                     {
-                        Degubber::TakeSnapshot("AFTER " + pass.Name, IR, pass.phaseOptions);
+                        Debugger::Notify(pass.OptimizationPass);
                         break;
                     }
                 }
@@ -68,17 +67,17 @@ public:
             {
                 for (Pass pass : passGroup.Passes)
                 {
-                    if (pass.phaseOptions.enabled)
+                    if (gCompilerOptions[pass.OptimizationPass].enabled)
                     {
                         pass.Func.Run(IR);
-                    }
 
-                    if (pass.phaseOptions.enabled)
-                    {
-                        Degubber::TakeSnapshot("AFTER " + pass.Name, IR, pass.phaseOptions);
+                        Debugger::Notify(pass.OptimizationPass);
                     }
                 }
             }
         }
+
+        if (phase.has_value())
+            Debugger::Notify(phase.value());
     };
 };

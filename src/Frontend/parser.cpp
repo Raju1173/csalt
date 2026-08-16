@@ -1,3 +1,5 @@
+#include "Globals.h"
+#include "IRDebugger.h"
 #include "lexer.h"
 #include "parser.h"
 #include <cstddef>
@@ -40,8 +42,10 @@ constexpr int precedence(TokenType op)
 
 // To understand how it works, refer to 'parser.md' inside the docs directory...
 
-Node Parse(TokenStream& TokenStream)
+void Parse(TokenStream& TokenStream, Node& AST)
 {
+    Debugger::AddIR(AST);
+
     std::stack<Node> nodeStack;
 
     nodeStack.push(Node{Node{NodeType::PROGRAM, {}, {}}});
@@ -117,7 +121,7 @@ Node Parse(TokenStream& TokenStream)
                                 break;
 
                             case TokenType::EQUAL:
-                                // pos - 1 without bound check is safe because in order for the BLOCK node to be at the top of the stack, the node below it must have consumed an LBRACE token
+                                // pos - 1 without bound check is safe because in order for the BLOCK node to be at the top of the stack, the node below it must have consumed an LBRACE token...
                                 if (TokenStream[pos - 1].type == TokenType::INT)
                                 {
                                     pushNode(NodeType::VAR, cur);
@@ -596,5 +600,7 @@ Node Parse(TokenStream& TokenStream)
         }
     }
 
-    return nodeStack.top();
+    AST = nodeStack.top();
+
+    Debugger::Notify(Phase::AST);
 }

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 enum class TokenType
@@ -39,37 +40,69 @@ enum class TokenType
     END
 };
 
-constexpr std::string_view TokenNames[] = {
-    "IDENTIFIER",
-    "NUMBER",
-    "INT",
-    "RETURN",
-    "IF",
-    "WHILE",
+inline std::string TokenTypeToStr(TokenType type)
+{
+    static_assert(std::to_underlying(TokenType::END) + 1 == 24, "Add/Remove the relevant case from the switch when modifying the TokenType enum!!!");
 
-    "PLUS",
-    "MINUS",
-    "ASTERISK",
-    "SLASH",
+    switch (type)
+    {
+        case TokenType::IDENTIFIER:
+            return "IDENTIFIER";
+        case TokenType::NUMBER:
+            return "NUMBER";
 
-    "EQUAL",
-    "DOUBLE_EQUAL",
-    "NOT_EQUAL",
+        case TokenType::INT:
+            return "INT";
+        case TokenType::RETURN:
+            return "RETURN";
+        case TokenType::IF:
+            return "IF";
+        case TokenType::WHILE:
+            return "WHILE";
 
-    "LESS",
-    "LESS_EQUAL",
-    "GREATER",
-    "GREATER_EQUAL",
+        case TokenType::PLUS:
+            return "PLUS";
+        case TokenType::MINUS:
+            return "MINUS";
+        case TokenType::ASTERISK:
+            return "ASTERISK";
+        case TokenType::SLASH:
+            return "SLASH";
 
-    "LBRACE",
-    "RBRACE",
-    "LPAREN",
-    "RPAREN",
+        case TokenType::EQUAL:
+            return "EQUAL";
+        case TokenType::DOUBLE_EQUAL:
+            return "DOUBLE_EQUAL";
+        case TokenType::NOT_EQUAL:
+            return "NOT_EQUAL";
 
-    "COMMA",
-    "SEMICOLON",
+        case TokenType::LESS:
+            return "LESS";
+        case TokenType::LESS_EQUAL:
+            return "LESS_EQUAL";
+        case TokenType::GREATER:
+            return "GREATER";
+        case TokenType::GREATER_EQUAL:
+            return "GREATER_EQUAL";
 
-    "END"};
+        case TokenType::LBRACE:
+            return "LBRACE";
+        case TokenType::RBRACE:
+            return "RBRACE";
+        case TokenType::LPAREN:
+            return "LPAREN";
+        case TokenType::RPAREN:
+            return "RPAREN";
+
+        case TokenType::COMMA:
+            return "COMMA";
+        case TokenType::SEMICOLON:
+            return "SEMICOLON";
+
+        case TokenType::END:
+            return "END";
+    }
+}
 
 struct Token
 {
@@ -92,4 +125,4 @@ template<> struct hash<Token>
 
 using TokenStream = std::vector<Token>;
 
-TokenStream Tokenize(std::string_view source);
+void Tokenize(std::string source, TokenStream& tokenStream);

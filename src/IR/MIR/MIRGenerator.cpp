@@ -1,4 +1,6 @@
 #include "MIRGenerator.h"
+#include "Globals.h"
+#include "IRDebugger.h"
 #include "MIRInstructions.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
@@ -9,7 +11,6 @@
 #include <print>
 #include <sys/types.h>
 #include <variant>
-#include <ranges>
 #include <vector>
 #include <unordered_map>
 
@@ -22,9 +23,9 @@ Register ArgRegs[] = {
     Register::R9D,
 };
 
-MIR GenerateMachineIR(TAC& TAC)
+void GenerateMachineIR(TAC& TAC, MIR& MIR)
 {
-    MIR MIR;
+    Debugger::AddIR(MIR);
 
     std::unordered_map<TACValue, Operand> VarLocations;
     int NextVirtualReg = 0;
@@ -65,20 +66,20 @@ MIR GenerateMachineIR(TAC& TAC)
 
             for (auto& inst : TACBlock->Instructions)
             {
-                if (inst->type == TACType::ASSIGN)
+                if (inst->type == TACInstType::ASSIGN)
                 {
                     TACAssign* assign = static_cast<TACAssign*>(inst.get());
                     curBlock->Instructions.push_back(std::make_unique<MIRMov>(GetOperand(assign->dest), GetOperand(assign->source)));
                 }
 
-                else if (inst->type == TACType::NEG)
+                else if (inst->type == TACInstType::NEG)
                 {
                     TACNeg* neg = static_cast<TACNeg*>(inst.get());
                     curBlock->Instructions.push_back(std::make_unique<MIRMov>(GetOperand(neg->dest), GetOperand(neg->source)));
                     curBlock->Instructions.push_back(std::make_unique<MIRNeg>(GetOperand(neg->dest)));
                 }
 
-                else if (inst->type == TACType::BINARYOP)
+                else if (inst->type == TACInstType::BINARYOP)
                 {
                     TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
@@ -104,7 +105,7 @@ MIR GenerateMachineIR(TAC& TAC)
                         curBlock->Instructions.push_back(std::make_unique<MIRImul>(dest, right));
                     }
 
-                    else
+                    else if (binary->op == BinaryOp::DIV)
                     {
                         curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, left));
                         curBlock->Instructions.push_back(std::make_unique<MIRCdq>());
@@ -121,9 +122,57 @@ MIR GenerateMachineIR(TAC& TAC)
                         curBlock->Instructions.push_back(std::make_unique<MIRIdiv>(divisor));
                         curBlock->Instructions.push_back(std::make_unique<MIRMov>(dest, Register::EAX));
                     }
+
+                    else
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::R10D, Immediate{0}));
+
+                        bool swapped = false;
+
+                        if (std::holds_alternative<Immediate>(right) && std::holds_alternative<Immediate>(left))
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, left));
+                            curBlock->Instructions.push_back(std::make_unique<MIRCmp>(Register::EAX, right));
+                        }
+
+                        else if (std::holds_alternative<Immediate>(left))
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRCmp>(right, left));
+                            swapped = true;
+                        }
+
+                        else
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRCmp>(left, right));
+                        }
+
+                        switch (binary->op)
+                        {
+                            case BinaryOp::DOUBLE_EQUAL:
+                                curBlock->Instructions.push_back(std::make_unique<MIRSet>(Condition::EQUAL, Register::R10B));
+                                break;
+                            case BinaryOp::NOT_EQUAL:
+                                curBlock->Instructions.push_back(std::make_unique<MIRSet>(Condition::NOT_EQUAL, Register::R10B));
+                                break;
+                            case BinaryOp::LESS:
+                                curBlock->Instructions.push_back(std::make_unique<MIRSet>(swapped ? Condition::GREATER : Condition::LESS, Register::R10B));
+                                break;
+                            case BinaryOp::LESS_EQUAL:
+                                curBlock->Instructions.push_back(std::make_unique<MIRSet>(swapped ? Condition::GREATER_EQUAL : Condition::LESS_EQUAL, Register::R10B));
+                                break;
+                            case BinaryOp::GREATER:
+                                curBlock->Instructions.push_back(std::make_unique<MIRSet>(swapped ? Condition::LESS : Condition::GREATER, Register::R10B));
+                                break;
+                            case BinaryOp::GREATER_EQUAL:
+                                curBlock->Instructions.push_back(std::make_unique<MIRSet>(swapped ? Condition::LESS_EQUAL : Condition::GREATER_EQUAL, Register::R10B));
+                                break;
+                        }
+
+                        curBlock->Instructions.push_back(std::make_unique<MIRMovzx>(dest, Register::R10B));
+                    }
                 }
 
-                else if (inst->type == TACType::CALL)
+                else if (inst->type == TACInstType::CALL)
                 {
                     curFunc->IsLeaf = false;
                     TACCall* call = static_cast<TACCall*>(inst.get());
@@ -135,28 +184,18 @@ MIR GenerateMachineIR(TAC& TAC)
                         MaxOutgoingArgs = extraArgs;
                     }
 
-                    for (size_t i = 6; i < call->args.size(); i++)
-                    {
-                        Operand arg = GetOperand(call->args[i]);
-                        int offset = (i - 6) * 8;
-
-                        if (std::holds_alternative<Immediate>(arg))
-                        {
-                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(StackOffset{offset, .RSP = true}, arg));
-                        }
-                        else
-                        {
-                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, arg));
-                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(StackOffset{offset, .RSP = true}, Register::EAX));
-                        }
-                    }
-
-                    for (size_t i = 0; i < std::min<size_t>(call->args.size(), 6); i++)
+                    for (size_t i = 0; i < 6; i++)
                     {
                         curBlock->Instructions.push_back(std::make_unique<MIRMov>(ArgRegs[i], GetOperand(call->args[i])));
                     }
 
+                    for (size_t i = 6; i < call->args.size(); i++)
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(StackOffset{static_cast<int>((i - 6) * 8), .RSP = true}, GetOperand(call->args[i])));
+                    }
+
                     auto funcIt = std::find_if(MIR.begin(), MIR.end(), [&call](auto& func) { return func->FunctionName == call->functionName; });
+
                     if (funcIt != MIR.end())
                     {
                         curBlock->Instructions.push_back(std::make_unique<MIRCall>(funcIt->get()));
@@ -168,34 +207,47 @@ MIR GenerateMachineIR(TAC& TAC)
                     }
                 }
 
-                else if (inst->type == TACType::BRANCH)
+                else if (inst->type == TACInstType::BRANCH)
                 {
                     TACBranch* branch = static_cast<TACBranch*>(inst.get());
-                    auto CMP = std::make_unique<MIRCmp>();
 
                     Operand left = GetOperand(branch->cond.Left);
                     Operand right = GetOperand(branch->cond.Right);
+
+                    auto leftInt = std::get_if<Immediate>(&left);
+                    auto rightInt = std::get_if<Immediate>(&right);
+
+                    if (branch->cond.Op == BinaryOp::NOT_EQUAL && ((leftInt && leftInt->Value == 0) || (rightInt && rightInt->Value == 0)))
+                    {
+                        if (rightInt)
+                            curBlock->Instructions.push_back(std::make_unique<MIRTest>(left, left));
+                        else
+                            curBlock->Instructions.push_back(std::make_unique<MIRTest>(right, right));
+
+                        curBlock->Instructions.push_back(std::make_unique<MIRCondJump>(Condition::NOT_EQUAL, blockMap[branch->TrueTarget]));
+                        break;
+                    }
+
+
                     bool swapped = false;
 
                     if (std::holds_alternative<Immediate>(right) && std::holds_alternative<Immediate>(left))
                     {
                         curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, left));
-                        CMP->Left = Register::EAX;
-                        CMP->Right = right;
-                    }
-                    else if (std::holds_alternative<Immediate>(left))
-                    {
-                        CMP->Left = right;
-                        CMP->Right = left;
-                        swapped = true;
-                    }
-                    else
-                    {
-                        CMP->Left = left;
-                        CMP->Right = right;
+                        curBlock->Instructions.push_back(std::make_unique<MIRCmp>(Register::EAX, right));
                     }
 
-                    curBlock->Instructions.push_back(std::move(CMP));
+                    else if (std::holds_alternative<Immediate>(left))
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRCmp>(right, left));
+                        swapped = true;
+                    }
+
+                    else
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRCmp>(left, right));
+                    }
+
 
                     auto condJump = std::make_unique<MIRCondJump>();
 
@@ -226,13 +278,13 @@ MIR GenerateMachineIR(TAC& TAC)
                     curBlock->Instructions.push_back(std::make_unique<MIRJump>(blockMap[branch->FalseTarget]));
                 }
 
-                else if (inst->type == TACType::JUMP)
+                else if (inst->type == TACInstType::JUMP)
                 {
                     TACJump* jump = static_cast<TACJump*>(inst.get());
                     curBlock->Instructions.push_back(std::make_unique<MIRJump>(blockMap[jump->TargetBlock]));
                 }
 
-                else if (inst->type == TACType::RETURN)
+                else if (inst->type == TACInstType::RETURN)
                 {
                     TACReturn* ret = static_cast<TACReturn*>(inst.get());
 
@@ -250,8 +302,9 @@ MIR GenerateMachineIR(TAC& TAC)
 
         auto& exitBlock = curFunc->Blocks.back();
 
-        if (!exitBlock->Instructions.empty() && exitBlock->Instructions.back()->type != MIRType::RET)
+        if (exitBlock->Instructions.empty() || exitBlock->Instructions.back()->type != MIRInstType::RET)
         {
+            exitBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, Immediate{0}));
             exitBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::RSP, Register::RBP));
             exitBlock->Instructions.push_back(std::make_unique<MIRPop>(Register::RBP));
             exitBlock->Instructions.push_back(std::make_unique<MIRRet>());
@@ -292,5 +345,5 @@ MIR GenerateMachineIR(TAC& TAC)
         entryBlock->Instructions.insert(entryBlock->Instructions.begin(), std::make_move_iterator(PrologueInstructions.begin()), std::make_move_iterator(PrologueInstructions.end()));
     }
 
-    return MIR;
+    Debugger::Notify(Phase::MIR_CONST);
 }

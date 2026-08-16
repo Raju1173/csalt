@@ -1,10 +1,12 @@
+#include "IRDebugger.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
+#include "TACInstructions.h"
 #include <algorithm>
 #include <format>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
@@ -32,25 +34,21 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
             if (outsideParents.empty())
                 continue;
 
-            TACBlock* preheader = TACEditor::insertBlockBefore(header, Message{IRPass::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", TACFunc->Blocks.size() + 1, header->ID)});
+            TACBlock* preheader = IREditor<TACTypes>::insertBlockBefore(header, Message{Phase::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", std::ranges::max_element(TACFunc->Blocks, {}, &TACBlock::ID)->get()->ID + 1, header->ID)});
 
             for (TACBlock* parent : outsideParents)
             {
-                TACEditor::removeEdge(parent, header);
-
-                TACEditor::addEdge(parent, preheader);
-
-                if (parent->Instructions.back()->type == TACType::JUMP)
+                if (parent->Instructions.back()->type == TACInstType::JUMP)
                 {
-                    auto* jump = static_cast<TACJump*>(parent->Instructions.back().get());
+                    TACJump* jump = static_cast<TACJump*>(parent->Instructions.back().get());
 
                     if (jump->TargetBlock == header)
                         jump->TargetBlock = preheader;
                 }
 
-                else if (parent->Instructions.back()->type == TACType::BRANCH)
+                else if (parent->Instructions.back()->type == TACInstType::BRANCH)
                 {
-                    auto* branch = static_cast<TACBranch*>(parent->Instructions.back().get());
+                    TACBranch* branch = static_cast<TACBranch*>(parent->Instructions.back().get());
 
                     if (branch->TrueTarget == header)
                         branch->TrueTarget = preheader;
@@ -58,17 +56,19 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
                     if (branch->FalseTarget == header)
                         branch->FalseTarget = preheader;
                 }
+
+                IREditor<TACTypes>::removeEdge(parent, header);
+                IREditor<TACTypes>::addEdge(parent, preheader);
+                IREditor<TACTypes>::remapPhiSources(header, parent, {preheader});
             }
 
-            TACEditor::addEdge(preheader, header);
+            IREditor<TACTypes>::addEdge(preheader, header);
 
-            TACEditor::appendInstruction(preheader, std::make_unique<TACJump>(header));
+            IREditor<TACTypes>::appendInstruction(preheader, std::make_unique<TACJump>(header));
 
             preheaderMap[header] = preheader;
         }
     }
-
-    TACEditor::reconstructSSA(TAC);
 
     return preheaderMap;
 }
@@ -90,7 +90,7 @@ void HoistLoopInvariants(TAC& TAC)
             std::unordered_set<TACVariable> invariants;
 
             auto isInvariant = [&](TACValue val) -> bool {
-                if (val.index() == 0 || invariants.contains(std::get<TACVariable>(val)))
+                if (std::holds_alternative<int>(val) || invariants.contains(std::get<TACVariable>(val)))
                 {
                     return true;
                 }
@@ -126,7 +126,7 @@ void HoistLoopInvariants(TAC& TAC)
                         TACVariable destVar;
                         bool canHoist = false;
 
-                        if (inst->type == TACType::ASSIGN)
+                        if (inst->type == TACInstType::ASSIGN)
                         {
                             TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
@@ -137,7 +137,7 @@ void HoistLoopInvariants(TAC& TAC)
                             }
                         }
 
-                        if (inst->type == TACType::NEG)
+                        if (inst->type == TACInstType::NEG)
                         {
                             TACNeg* neg = static_cast<TACNeg*>(inst.get());
 
@@ -148,7 +148,7 @@ void HoistLoopInvariants(TAC& TAC)
                             }
                         }
 
-                        else if (inst->type == TACType::BINARYOP)
+                        else if (inst->type == TACInstType::BINARYOP)
                         {
                             TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
@@ -162,7 +162,7 @@ void HoistLoopInvariants(TAC& TAC)
                             }
                         }
 
-                        else if (inst->type == TACType::CALL)
+                        else if (inst->type == TACInstType::CALL)
                         {
                             TACCall* call = static_cast<TACCall*>(inst.get());
 
@@ -182,7 +182,7 @@ void HoistLoopInvariants(TAC& TAC)
                         {
                             invariants.insert(destVar);
 
-                            TACEditor::moveInstructionBefore(block, inst.get(), preheader, preheader->Instructions.back().get(), Message{IRPass::LICM, IRTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
+                            IREditor<TACTypes>::moveInstructionBefore(block, inst.get(), preheader, preheader->Instructions.back().get(), Message{Phase::LICM, IRTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
 
                             changed = true;
                         }
@@ -191,6 +191,4 @@ void HoistLoopInvariants(TAC& TAC)
             }
         }
     }
-
-    TACEditor::reconstructSSA(TAC);
 }

@@ -20,26 +20,44 @@ enum class BinaryOp
     LESS_EQUAL,
 
     GREATER,
-    GREATER_EQUAL
+    GREATER_EQUAL,
+
+    COUNT
 };
 
-inline std::string BinaryOpToStr[] = {
-    "+",
-    "-",
-    "*",
-    "/",
+inline std::string BinaryOpToStr(BinaryOp Op)
+{
+    static_assert(std::to_underlying(BinaryOp::COUNT) == 10, "Add/Remove the relevant case from the switch when modifying the TokenType enum!!!");
 
-    "==",
-    "!=",
+    switch (Op)
+    {
+        case BinaryOp::PLUS:
+            return "+";
+        case BinaryOp::MINUS:
+            return "-";
+        case BinaryOp::MUL:
+            return "*";
+        case BinaryOp::DIV:
+            return "/";
 
-    "<",
-    "<=",
+        case BinaryOp::DOUBLE_EQUAL:
+            return "==";
+        case BinaryOp::NOT_EQUAL:
+            return "!=";
 
-    ">",
-    ">=",
+        case BinaryOp::LESS:
+            return "<";
+        case BinaryOp::LESS_EQUAL:
+            return "<=";
+
+        case BinaryOp::GREATER:
+            return ">";
+        case BinaryOp::GREATER_EQUAL:
+            return ">=";
+    }
 };
 
-enum class TACType
+enum class TACInstType
 {
     BINARYOP,
     ASSIGN,
@@ -49,7 +67,9 @@ enum class TACType
     BRANCH,
     SELECT,
     CALL,
-    RETURN
+    RETURN,
+
+    COUNT
 };
 
 class TACBlock;
@@ -57,13 +77,13 @@ class TACBlock;
 class TACInstruction
 {
 public:
-    const TACType type;
+    const TACInstType type;
 
     std::vector<Message> History;
 
     DeadSiblings<TACInstruction> deadSiblings;
 
-    TACInstruction(TACType type) : type(type){};
+    TACInstruction(TACInstType type) : type(type){};
 
     virtual ~TACInstruction() = default;
 };
@@ -107,9 +127,9 @@ public:
     BinaryOp op;
     TACValue right;
 
-    TACBinaryOp() : TACInstruction(TACType::BINARYOP){};
+    TACBinaryOp() : TACInstruction(TACInstType::BINARYOP){};
 
-    TACBinaryOp(TACValue dest, TACValue left, BinaryOp op, TACValue right) : TACInstruction(TACType::BINARYOP), dest(dest), left(left), op(op), right(right){};
+    TACBinaryOp(TACValue dest, TACValue left, BinaryOp op, TACValue right) : TACInstruction(TACInstType::BINARYOP), dest(dest), left(left), op(op), right(right){};
 };
 
 class TACNeg : public TACInstruction
@@ -118,9 +138,9 @@ public:
     TACValue dest;
     TACValue source;
 
-    TACNeg() : TACInstruction(TACType::NEG){};
+    TACNeg() : TACInstruction(TACInstType::NEG){};
 
-    TACNeg(TACValue dest, TACValue source) : TACInstruction(TACType::NEG), dest(dest), source(source){};
+    TACNeg(TACValue dest, TACValue source) : TACInstruction(TACInstType::NEG), dest(dest), source(source){};
 };
 
 class TACAssign : public TACInstruction
@@ -129,9 +149,9 @@ public:
     TACValue dest;
     TACValue source;
 
-    TACAssign() : TACInstruction(TACType::ASSIGN){};
+    TACAssign() : TACInstruction(TACInstType::ASSIGN){};
 
-    TACAssign(TACValue dest, TACValue source) : TACInstruction(TACType::ASSIGN), dest(dest), source(source){};
+    TACAssign(TACValue dest, TACValue source) : TACInstruction(TACInstType::ASSIGN), dest(dest), source(source){};
 };
 
 class TACJump : public TACInstruction
@@ -139,9 +159,9 @@ class TACJump : public TACInstruction
 public:
     TACBlock* TargetBlock;
 
-    TACJump() : TACInstruction(TACType::JUMP), TargetBlock(nullptr){};
+    TACJump() : TACInstruction(TACInstType::JUMP), TargetBlock(nullptr){};
 
-    TACJump(TACBlock* targetBlock) : TACInstruction(TACType::JUMP), TargetBlock(targetBlock){};
+    TACJump(TACBlock* targetBlock) : TACInstruction(TACInstType::JUMP), TargetBlock(targetBlock){};
 };
 
 struct PhiArgument
@@ -156,11 +176,11 @@ public:
     TACValue variable;
     std::vector<PhiArgument> args;
 
-    TACPhi() : TACInstruction(TACType::PHI){};
+    TACPhi() : TACInstruction(TACInstType::PHI){};
 
-    TACPhi(TACValue variable) : TACInstruction(TACType::PHI), variable(variable){};
+    TACPhi(TACValue variable) : TACInstruction(TACInstType::PHI), variable(variable){};
 
-    TACPhi(TACValue var, std::vector<PhiArgument> args) : TACInstruction(TACType::PHI), variable(var), args(args){};
+    TACPhi(TACValue var, std::vector<PhiArgument> args) : TACInstruction(TACInstType::PHI), variable(var), args(args){};
 };
 
 struct Comparison
@@ -177,11 +197,11 @@ public:
     TACBlock* TrueTarget;
     TACBlock* FalseTarget;
 
-    TACBranch() : TACInstruction(TACType::BRANCH), cond(), TrueTarget(nullptr), FalseTarget(nullptr){};
+    TACBranch() : TACInstruction(TACInstType::BRANCH), cond(), TrueTarget(nullptr), FalseTarget(nullptr){};
 
-    TACBranch(Comparison cond) : TACInstruction(TACType::BRANCH), cond(cond), TrueTarget(nullptr), FalseTarget(nullptr){};
+    TACBranch(Comparison cond) : TACInstruction(TACInstType::BRANCH), cond(cond), TrueTarget(nullptr), FalseTarget(nullptr){};
 
-    TACBranch(Comparison cond, TACBlock* trueTarget, TACBlock* falseTarget) : TACInstruction(TACType::BRANCH), cond(cond), TrueTarget(trueTarget), FalseTarget(falseTarget){};
+    TACBranch(Comparison cond, TACBlock* trueTarget, TACBlock* falseTarget) : TACInstruction(TACInstType::BRANCH), cond(cond), TrueTarget(trueTarget), FalseTarget(falseTarget){};
 };
 
 class TACSelect : public TACInstruction
@@ -192,9 +212,9 @@ public:
     TACValue TrueVal;
     TACValue FalseVal;
 
-    TACSelect() : TACInstruction(TACType::SELECT){};
+    TACSelect() : TACInstruction(TACInstType::SELECT){};
 
-    TACSelect(TACValue dest, Comparison cond, TACValue trueVal, TACValue falseVal) : TACInstruction(TACType::SELECT), dest(dest), cond(cond), TrueVal(trueVal), FalseVal(falseVal){};
+    TACSelect(TACValue dest, Comparison cond, TACValue trueVal, TACValue falseVal) : TACInstruction(TACInstType::SELECT), dest(dest), cond(cond), TrueVal(trueVal), FalseVal(falseVal){};
 };
 
 class TACCall : public TACInstruction
@@ -204,9 +224,9 @@ public:
     std::string functionName;
     std::vector<TACValue> args;
 
-    TACCall() : TACInstruction(TACType::CALL){};
+    TACCall() : TACInstruction(TACInstType::CALL){};
 
-    TACCall(std::optional<TACValue> dest, std::string functionName, std::vector<TACValue> args) : TACInstruction(TACType::CALL), dest(dest), functionName(functionName), args(args){};
+    TACCall(std::optional<TACValue> dest, std::string functionName, std::vector<TACValue> args) : TACInstruction(TACInstType::CALL), dest(dest), functionName(functionName), args(args){};
 };
 
 class TACReturn : public TACInstruction
@@ -214,32 +234,34 @@ class TACReturn : public TACInstruction
 public:
     std::optional<TACValue> ReturnValue = std::nullopt;
 
-    TACReturn() : TACInstruction(TACType::RETURN){};
+    TACReturn() : TACInstruction(TACInstType::RETURN){};
 
-    TACReturn(std::optional<TACValue> returnValue) : TACInstruction(TACType::RETURN), ReturnValue(returnValue){};
+    TACReturn(std::optional<TACValue> returnValue) : TACInstruction(TACInstType::RETURN), ReturnValue(returnValue){};
 };
 
 inline std::unique_ptr<TACInstruction> cloneTACInstruction(TACInstruction* inst)
 {
+    static_assert(std::to_underlying(TACInstType::COUNT) == 9, "Add another case and increment the count check when adding a new TACInstType!!!");
+
     switch (inst->type)
     {
-        case TACType::ASSIGN:
+        case TACInstType::ASSIGN:
             return std::make_unique<TACAssign>(*static_cast<TACAssign*>(inst));
-        case TACType::JUMP:
+        case TACInstType::JUMP:
             return std::make_unique<TACJump>(*static_cast<TACJump*>(inst));
-        case TACType::BINARYOP:
+        case TACInstType::BINARYOP:
             return std::make_unique<TACBinaryOp>(*static_cast<TACBinaryOp*>(inst));
-        case TACType::RETURN:
+        case TACInstType::RETURN:
             return std::make_unique<TACReturn>(*static_cast<TACReturn*>(inst));
-        case TACType::BRANCH:
+        case TACInstType::BRANCH:
             return std::make_unique<TACBranch>(*static_cast<TACBranch*>(inst));
-        case TACType::CALL:
+        case TACInstType::CALL:
             return std::make_unique<TACCall>(*static_cast<TACCall*>(inst));
-        case TACType::NEG:
+        case TACInstType::NEG:
             return std::make_unique<TACNeg>(*static_cast<TACNeg*>(inst));
-        case TACType::PHI:
+        case TACInstType::PHI:
             return std::make_unique<TACPhi>(*static_cast<TACPhi*>(inst));
-        case TACType::SELECT:
+        case TACInstType::SELECT:
             return std::make_unique<TACSelect>(*static_cast<TACSelect*>(inst));
     }
 

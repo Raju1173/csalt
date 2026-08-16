@@ -1,11 +1,9 @@
 #include "ConstantFolding.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
 #include <cctype>
 #include <format>
 #include <memory>
 #include <print>
-#include <utility>
 
 bool FoldConstants(TAC& TAC)
 {
@@ -17,7 +15,7 @@ bool FoldConstants(TAC& TAC)
         {
             for (auto& inst : block->Instructions)
             {
-                if (inst->type == TACType::BINARYOP)
+                if (inst->type == TACInstType::BINARYOP)
                 {
                     TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
 
@@ -42,11 +40,29 @@ bool FoldConstants(TAC& TAC)
                             case BinaryOp::DIV:
                                 result = *left / *right;
                                 break;
+                            case BinaryOp::DOUBLE_EQUAL:
+                                result = left == right;
+                                break;
+                            case BinaryOp::NOT_EQUAL:
+                                result = left != right;
+                                break;
+                            case BinaryOp::GREATER:
+                                result = left > right;
+                                break;
+                            case BinaryOp::GREATER_EQUAL:
+                                result = left >= right;
+                                break;
+                            case BinaryOp::LESS:
+                                result = left < right;
+                                break;
+                            case BinaryOp::LESS_EQUAL:
+                                result = left <= right;
+                                break;
                         }
 
-                        Message message = Message{IRPass::CONSTANT_FOLDING, IRTransformType::REPLACED, std::format("simplified {} {} {} to {}", *left, BinaryOpToStr[std::to_underlying(bin->op)], *right, result)};
+                        Message message = Message{Phase::FOLDING, IRTransformType::REPLACED, std::format("simplified {} {} {} to {}", *left, BinaryOpToStr(bin->op), *right, result)};
 
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), message);
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), message);
 
                         changed = true;
                     }

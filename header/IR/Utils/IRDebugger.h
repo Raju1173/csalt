@@ -1,12 +1,18 @@
 #pragma once
 
+#include "CFGBuilder.h"
 #include "Globals.h"
 #include "IRFormatters.h"
+#include "MIRGenerator.h"
+#include "TACGenerator.h"
+#include "lexer.h"
+#include "parser.h"
 #include <algorithm>
 #include <iostream>
 #include <print>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 struct IRSnapshot
@@ -15,89 +21,34 @@ struct IRSnapshot
     std::string Snapshot;
 };
 
-class Degubber
+class Debugger
 {
 private:
+    inline static TokenStream* mTokenStream = nullptr;
+    inline static Node* mAST = nullptr;
+    inline static CFG* mCFG = nullptr;
+    inline static TAC* mTAC = nullptr;
+    inline static MIR* mMIR = nullptr;
+    inline static std::string mASMFilePath = "";
+
+    inline static std::unordered_set<Phase> RecievedNotifications;
+
     inline static std::vector<IRSnapshot> StaticIRSnapshots;
     inline static std::vector<IRSnapshot> InteractiveIRSnapshots;
 
+    template<typename R> static void TakeSnapshot(R* IR, Phase phase);
+
 public:
-    template<typename R> static void TakeSnapshot(std::string SnapshotName, R& IR, PhaseOptions phaseOptions)
-    {
-        if (phaseOptions.Dump)
-            StaticIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR)});
-        if (phaseOptions.HistoryDump)
-            StaticIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR, true)});
-        if (phaseOptions.InteractiveDump)
-            InteractiveIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR)});
-        if (phaseOptions.InteractiveHistoryDump)
-            InteractiveIRSnapshots.push_back(IRSnapshot{SnapshotName, FormatIR(IR, true)});
-    };
+    static void AddIR(TokenStream& TokenStream);
+    static void AddIR(Node& AST);
+    static void AddIR(CFG& CFG);
+    static void AddIR(TAC& TAC);
+    static void AddIR(MIR& MIR);
+    static void AddIR(std::string ASMFilePath);
 
-    static void Run()
-    {
-        if (!InteractiveIRSnapshots.empty())
-        {
-            int i = 0;
+    static void Notify(Phase phase);
 
-            std::string prevInput = "n";
+    static void Run();
 
-            while (true)
-            {
-                std::print("\033[2J\033[3J\033[1;1H");
-                std::print("-----{}-----\n\n", InteractiveIRSnapshots[i].Name);
-                std::print("{}", InteractiveIRSnapshots[i].Snapshot);
-                std::print("\nSnapshot : {}/{}\n", i + 1, InteractiveIRSnapshots.size());
-                std::print("\nControls : [n/p [N]] - next/prev N times, [q] - quit, [Enter] - repeat\n\n");
-                std::print("(csalt) ");
-
-                std::string input;
-                std::getline(std::cin, input);
-
-                if (input.empty())
-                    input = prevInput;
-                else
-                    prevInput = input;
-
-                std::istringstream iss(input);
-                std::string cmd;
-                int steps = 1;
-
-                iss >> cmd;
-                if (iss >> steps)
-                {
-                    if (steps < 0)
-                        steps = 0;
-                }
-
-                if (cmd == "n" || cmd == "next")
-                {
-                    i = std::min(i + steps, static_cast<int>(InteractiveIRSnapshots.size()) - 1);
-                }
-
-                else if (cmd == "p" || cmd == "prev")
-                {
-                    i = std::max(i - steps, 0);
-                }
-
-                else if (cmd == "q" || cmd == "quit")
-                {
-                    std::print("\033[2J\033[3J\033[1;1H");
-                    break;
-                }
-            }
-        }
-
-        for (IRSnapshot Snapshot : StaticIRSnapshots)
-        {
-            std::print("-----{}-----\n\n", Snapshot.Name);
-            std::print("{}", Snapshot.Snapshot);
-        }
-    };
-
-    static void ClearSnapshots()
-    {
-        StaticIRSnapshots.clear();
-        InteractiveIRSnapshots.clear();
-    };
+    static void Reset();
 };

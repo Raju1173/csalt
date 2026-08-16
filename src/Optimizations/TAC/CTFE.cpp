@@ -1,6 +1,5 @@
 #include "CTFE.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
 #include <climits>
 #include <format>
 #include <string>
@@ -35,7 +34,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
         {
             switch (inst->type)
             {
-                case TACType::PHI:
+                case TACInstType::PHI:
                     {
                         TACPhi* phi = static_cast<TACPhi*>(inst.get());
 
@@ -51,7 +50,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                     }
                     break;
 
-                case TACType::ASSIGN:
+                case TACInstType::ASSIGN:
                     {
                         TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
@@ -59,7 +58,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                     }
                     break;
 
-                case TACType::NEG:
+                case TACInstType::NEG:
                     {
                         TACNeg* neg = static_cast<TACNeg*>(inst.get());
 
@@ -67,7 +66,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                     }
                     break;
 
-                case TACType::BINARYOP:
+                case TACInstType::BINARYOP:
                     {
                         TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
 
@@ -85,11 +84,29 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                             case BinaryOp::DIV:
                                 varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) / getState(bin->right);
                                 break;
+                            case BinaryOp::DOUBLE_EQUAL:
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) == getState(bin->right);
+                                break;
+                            case BinaryOp::NOT_EQUAL:
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) != getState(bin->right);
+                                break;
+                            case BinaryOp::GREATER:
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) > getState(bin->right);
+                                break;
+                            case BinaryOp::GREATER_EQUAL:
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) >= getState(bin->right);
+                                break;
+                            case BinaryOp::LESS:
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) < getState(bin->right);
+                                break;
+                            case BinaryOp::LESS_EQUAL:
+                                varStates[std::get<TACVariable>(bin->dest).SSAName] = getState(bin->left) <= getState(bin->right);
+                                break;
                         }
                     }
                     break;
 
-                case TACType::CALL:
+                case TACInstType::CALL:
                     {
                         TACCall* call = static_cast<TACCall*>(inst.get());
 
@@ -107,7 +124,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                     }
                     break;
 
-                case TACType::BRANCH:
+                case TACInstType::BRANCH:
                     {
                         TACBranch* br = static_cast<TACBranch*>(inst.get());
 
@@ -149,7 +166,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                     }
                     break;
 
-                case TACType::JUMP:
+                case TACInstType::JUMP:
                     {
                         TACJump* jump = static_cast<TACJump*>(inst.get());
 
@@ -159,7 +176,7 @@ int Execute(TAC& TAC, TACFunction* Func, std::vector<int> args)
                     }
                     break;
 
-                case TACType::RETURN:
+                case TACInstType::RETURN:
                     {
                         TACReturn* ret = static_cast<TACReturn*>(inst.get());
 
@@ -181,7 +198,7 @@ void EvaluateConstantFunctions(TAC& TAC)
         {
             for (auto& inst : Block->Instructions)
             {
-                if (inst->type == TACType::CALL)
+                if (inst->type == TACInstType::CALL)
                 {
                     TACCall* call = static_cast<TACCall*>(inst.get());
 
@@ -220,7 +237,7 @@ void EvaluateConstantFunctions(TAC& TAC)
 
                             argsString += ")";
 
-                            TACEditor::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{IRPass::CTFE, IRTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments '{}{}' to {}", call->functionName, argsString, returnVal)});
+                            IREditor<TACTypes>::replaceInstruction(Block.get(), inst.get(), std::make_unique<TACAssign>(call->dest.value(), returnVal), Message{Phase::CTFE, IRTransformType::REPLACED, std::format("evaluated function call with compile time constant arguments '{}{}' to {}", call->functionName, argsString, returnVal)});
                         }
                     }
                 }

@@ -1,6 +1,11 @@
 #include "IRFormatters.h"
+#include "Globals.h"
+#include "IRCommon.h"
 #include "MIRGenerator.h"
+#include "MIRInstructions.h"
 #include "TACGenerator.h"
+#include "lexer.h"
+#include "parser.h"
 #include <fstream>
 #include <string>
 #include <format>
@@ -14,9 +19,9 @@ std::string FormatTokens(TokenStream& tokenStream)
     for (const Token& t : tokenStream)
     {
         if (t.type == TokenType::IDENTIFIER || t.type == TokenType::NUMBER)
-            out += std::format("{}({})\n", TokenNames[std::to_underlying(t.type)], t.lexeme);
+            out += std::format("{}({})\n", TokenTypeToStr(t.type), t.lexeme);
         else
-            out += std::format("{}\n", TokenNames[std::to_underlying(t.type)]);
+            out += std::format("{}\n", TokenTypeToStr(t.type));
     }
 
     out += "\n\n";
@@ -33,12 +38,12 @@ std::string FormatNode(Node& node, int depth = 0)
 
     if (node.type == NodeType::NUMBER || node.type == NodeType::IDENTIFIER || node.type == NodeType::CALL || node.type == NodeType::BINARY_OP || node.type == NodeType::VAR || node.type == NodeType::FUNCTION || node.type == NodeType::UNARY_OP)
     {
-        out += std::format("{} ({})\n", NodeNames[std::to_underlying(node.type)], (node.type == NodeType::BINARY_OP || node.type == NodeType::UNARY_OP) ? TokenNames[std::to_underlying(node.token.type)] : node.token.lexeme);
+        out += std::format("{} ({})\n", NodeTypeToStr(node.type), (node.type == NodeType::BINARY_OP || node.type == NodeType::UNARY_OP) ? TokenTypeToStr(node.token.type) : node.token.lexeme);
     }
 
     else
     {
-        out += std::format("{}\n", NodeNames[std::to_underlying(node.type)]);
+        out += std::format("{}\n", NodeTypeToStr(node.type));
     }
 
     for (size_t i = 0; i < node.children.size(); i++)
@@ -146,7 +151,7 @@ std::string FormatMessage(Message& msg)
 
     // └ = U+2514
     // ─ = U+2500
-    out += std::format("\033[0m      └─{}{:<11}\033[0m BY \033[0;96m{:<33}\033[0m : {}\n", color, "[" + IRTransformationToStr(msg.TranformationType) + "]", "[" + PassToStr(msg.Pass) + "]", msg.Info);
+    out += std::format("\033[0m      └─{}{:<11}\033[0m BY \033[0;96m{:<33}\033[0m : {}\n", color, "[" + IRTransformTypeToStr(msg.TranformationType) + "]", "[" + getPhaseMetadata(msg.Pass).name + "]", msg.Info);
 
     return out;
 }
@@ -157,7 +162,7 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
 
     switch (inst->type)
     {
-        case TACType::PHI:
+        case TACInstType::PHI:
             {
                 TACPhi* phi = static_cast<TACPhi*>(inst);
 
@@ -175,7 +180,7 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
             }
             break;
 
-        case TACType::ASSIGN:
+        case TACInstType::ASSIGN:
             {
                 TACAssign* assign = static_cast<TACAssign*>(inst);
 
@@ -183,7 +188,7 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
             }
             break;
 
-        case TACType::NEG:
+        case TACInstType::NEG:
             {
                 TACNeg* neg = static_cast<TACNeg*>(inst);
 
@@ -191,15 +196,15 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
             }
             break;
 
-        case TACType::BINARYOP:
+        case TACInstType::BINARYOP:
             {
                 TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst);
 
-                out += std::format("    {} = {} {} {}\n", TACValToStr(binary->dest), TACValToStr(binary->left), BinaryOpToStr[std::to_underlying(binary->op)], TACValToStr(binary->right));
+                out += std::format("    {} = {} {} {}\n", TACValToStr(binary->dest), TACValToStr(binary->left), BinaryOpToStr(binary->op), TACValToStr(binary->right));
             }
             break;
 
-        case TACType::CALL:
+        case TACInstType::CALL:
             {
                 TACCall* call = static_cast<TACCall*>(inst);
 
@@ -222,23 +227,23 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
             }
             break;
 
-        case TACType::BRANCH:
+        case TACInstType::BRANCH:
             {
                 TACBranch* branch = static_cast<TACBranch*>(inst);
 
-                out += std::format("    branch ({} {} {}) ? B{} : B{}\n", TACValToStr(branch->cond.Left), BinaryOpToStr[std::to_underlying(branch->cond.Op)], TACValToStr(branch->cond.Right), branch->TrueTarget->ID, branch->FalseTarget->ID);
+                out += std::format("    branch ({} {} {}) ? B{} : B{}\n", TACValToStr(branch->cond.Left), BinaryOpToStr(branch->cond.Op), TACValToStr(branch->cond.Right), branch->TrueTarget->ID, branch->FalseTarget->ID);
             }
             break;
 
-        case TACType::SELECT:
+        case TACInstType::SELECT:
             {
                 TACSelect* select = static_cast<TACSelect*>(inst);
 
-                out += std::format("    {} = select ({} {} {}) ? {} : {}\n", TACValToStr(select->dest), TACValToStr(select->cond.Left), BinaryOpToStr[std::to_underlying(select->cond.Op)], TACValToStr(select->cond.Right), TACValToStr(select->TrueVal), TACValToStr(select->FalseVal));
+                out += std::format("    {} = select ({} {} {}) ? {} : {}\n", TACValToStr(select->dest), TACValToStr(select->cond.Left), BinaryOpToStr(select->cond.Op), TACValToStr(select->cond.Right), TACValToStr(select->TrueVal), TACValToStr(select->FalseVal));
             }
             break;
 
-        case TACType::JUMP:
+        case TACInstType::JUMP:
             {
                 TACJump* jump = static_cast<TACJump*>(inst);
 
@@ -246,7 +251,7 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
             }
             break;
 
-        case TACType::RETURN:
+        case TACInstType::RETURN:
             {
                 TACReturn* ret = static_cast<TACReturn*>(inst);
 
@@ -452,7 +457,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
 
     switch (inst->type)
     {
-        case MIRType::MOV:
+        case MIRInstType::MOV:
             {
                 MIRMov* mov = static_cast<MIRMov*>(inst);
 
@@ -460,7 +465,15 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::ADD:
+        case MIRInstType::MOVZX:
+            {
+                MIRMovzx* movzx = static_cast<MIRMovzx*>(inst);
+
+                out += std::format("    movzx {}, {}\n", OperandString(movzx->Dest), OperandString(movzx->Source));
+            }
+            break;
+
+        case MIRInstType::ADD:
             {
                 MIRAdd* add = static_cast<MIRAdd*>(inst);
 
@@ -468,7 +481,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::SUB:
+        case MIRInstType::SUB:
             {
                 MIRSub* sub = static_cast<MIRSub*>(inst);
 
@@ -476,7 +489,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::MUL:
+        case MIRInstType::MUL:
             {
                 MIRImul* mul = static_cast<MIRImul*>(inst);
 
@@ -484,7 +497,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::DIV:
+        case MIRInstType::DIV:
             {
                 MIRIdiv* div = static_cast<MIRIdiv*>(inst);
 
@@ -492,7 +505,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::NEG:
+        case MIRInstType::NEG:
             {
                 MIRNeg* neg = static_cast<MIRNeg*>(inst);
 
@@ -500,7 +513,15 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::CMP:
+        case MIRInstType::XOR:
+            {
+                MIRXor* xorInst = static_cast<MIRXor*>(inst);
+
+                out += std::format("    xor {}, {}\n", OperandString(xorInst->Dest), OperandString(xorInst->Source));
+            }
+            break;
+
+        case MIRInstType::CMP:
             {
                 MIRCmp* cmp = static_cast<MIRCmp*>(inst);
 
@@ -508,7 +529,15 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::PUSH:
+        case MIRInstType::TEST:
+            {
+                MIRTest* test = static_cast<MIRTest*>(inst);
+
+                out += std::format("    test {}, {}\n", OperandString(test->Left), OperandString(test->Right));
+            }
+            break;
+
+        case MIRInstType::PUSH:
             {
                 MIRPush* push = static_cast<MIRPush*>(inst);
 
@@ -516,7 +545,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::POP:
+        case MIRInstType::POP:
             {
                 MIRPop* pop = static_cast<MIRPop*>(inst);
 
@@ -524,7 +553,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::JMP:
+        case MIRInstType::JMP:
             {
                 MIRJump* jump = static_cast<MIRJump*>(inst);
 
@@ -532,7 +561,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::CJMP:
+        case MIRInstType::CJMP:
             {
                 MIRCondJump* jump = static_cast<MIRCondJump*>(inst);
 
@@ -564,7 +593,7 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::CALL:
+        case MIRInstType::CALL:
             {
                 MIRCall* call = static_cast<MIRCall*>(inst);
 
@@ -572,13 +601,45 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
-        case MIRType::RET:
+        case MIRInstType::SET:
+            {
+                MIRSet* set = static_cast<MIRSet*>(inst);
+
+                out += "    ";
+
+                switch (set->Cond)
+                {
+                    case Condition::EQUAL:
+                        out += "sete ";
+                        break;
+                    case Condition::NOT_EQUAL:
+                        out += "setne ";
+                        break;
+                    case Condition::LESS:
+                        out += "setl ";
+                        break;
+                    case Condition::LESS_EQUAL:
+                        out += "setle ";
+                        break;
+                    case Condition::GREATER:
+                        out += "setg ";
+                        break;
+                    case Condition::GREATER_EQUAL:
+                        out += "setge ";
+                        break;
+                }
+
+                out += std::format("{}\n", OperandString(set->Dest));
+            }
+            break;
+
+        case MIRInstType::RET:
             {
                 out += "    ret\n";
             }
             break;
 
-        case MIRType::CDQ:
+        case MIRInstType::CDQ:
             {
                 out += "    cdq\n";
             }

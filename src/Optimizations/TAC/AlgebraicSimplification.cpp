@@ -1,20 +1,22 @@
 #include <format>
 #include <memory>
+#include <string>
 #include <variant>
+#include "IREditor.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
 #include "ConstantFolding.h"
+#include "TACInstructions.h"
 
 bool SimplifyAlgebra(TAC& TAC)
 {
     bool changed = false;
 
-    std::unordered_map<TACValue, TACValue> negDefs;
-
     for (auto& Function : TAC)
     {
         for (auto& block : Function->Blocks)
         {
+            std::unordered_map<TACValue, TACValue> negDefs;
+
             for (auto& inst : block->Instructions)
             {
                 bool replaceWithAssign = false;
@@ -23,10 +25,9 @@ bool SimplifyAlgebra(TAC& TAC)
 
                 TACValue result;
                 std::unique_ptr<TACBinaryOp> resultBinary;
-
                 std::string info;
 
-                if (inst->type == TACType::NEG)
+                if (inst->type == TACInstType::NEG)
                 {
                     auto* neg = static_cast<TACNeg*>(inst.get());
 
@@ -38,17 +39,21 @@ bool SimplifyAlgebra(TAC& TAC)
                     }
 
                     else
-                        negDefs[std::get<TACVariable>(neg->dest)] = neg->source;
+                    {
+                        if (auto* var = std::get_if<TACVariable>(&neg->dest))
+                        {
+                            negDefs[*var] = neg->source;
+                        }
+                    }
 
                     if (replaceWithAssign)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(neg->dest, result), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
-
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(neg->dest, result), Message{Phase::ALG_SIMP, IRTransformType::REPLACED, info});
                         changed = true;
                     }
                 }
 
-                else if (inst->type == TACType::BINARYOP)
+                else if (inst->type == TACInstType::BINARYOP)
                 {
                     TACBinaryOp* bin = static_cast<TACBinaryOp*>(inst.get());
 
@@ -75,23 +80,24 @@ bool SimplifyAlgebra(TAC& TAC)
                             else if (!right && negDefs.contains(bin->right))
                             {
                                 resultBinary = std::make_unique<TACBinaryOp>(bin->dest, bin->left, BinaryOp::MINUS, negDefs[bin->right]);
-                                info = std::format("simplified '{} + ({})-{}' to '{} - {}'", TACValToStr(bin->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
-                                changed = true;
+                                info = std::format("simplified '{} + {}(-{})' to '{} - {}'", TACValToStr(bin->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
+                                replaceWithBinary = true;
                             }
 
                             else if (!left && negDefs.contains(bin->left))
                             {
                                 resultBinary = std::make_unique<TACBinaryOp>(bin->dest, bin->right, BinaryOp::MINUS, negDefs[bin->left]);
-                                info = std::format("simplified '({})-{} + {}' to '{} - {}'", TACValToStr(bin->left), TACValToStr(resultBinary->right), TACValToStr(bin->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
-                                changed = true;
+                                info = std::format("simplified '{}(-{}) + {}' to '{} - {}'", TACValToStr(bin->left), TACValToStr(resultBinary->right), TACValToStr(bin->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
+                                replaceWithBinary = true;
                             }
 
                             else if (!left && !right)
                             {
-                                if ((negDefs.contains(bin->left) && negDefs[bin->left] == bin->right) || (negDefs.contains(bin->right) && negDefs[bin->right] == bin->left))
+                                if ((negDefs.contains(bin->left) && negDefs[bin->left] == bin->right) ||
+                                    (negDefs.contains(bin->right) && negDefs[bin->right] == bin->left))
                                 {
                                     result = 0;
-                                    info = std::format("simplified 'x + -x' to '0'");
+                                    info = "simplified 'x + -x' to '0'";
                                     replaceWithAssign = true;
                                 }
                             }
@@ -122,13 +128,12 @@ bool SimplifyAlgebra(TAC& TAC)
                             else if (!left && negDefs.contains(bin->right))
                             {
                                 resultBinary = std::make_unique<TACBinaryOp>(bin->dest, bin->left, BinaryOp::PLUS, negDefs[bin->right]);
-                                info = std::format("simplified '{} - ({})-{}' to '{} + {}'", TACValToStr(bin->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
-                                changed = true;
+                                info = std::format("simplified '{} - {}(-{})' to '{} + {}'", TACValToStr(bin->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
+                                replaceWithBinary = true;
                             }
                             break;
 
                         case BinaryOp::MUL:
-                            // XOR because we dont algebraic simplification to take constant folding's job...
                             if ((left && *left == 0) ^ (right && *right == 0))
                             {
                                 result = 0;
@@ -138,14 +143,14 @@ bool SimplifyAlgebra(TAC& TAC)
 
                             else if ((left && *left == 1) ^ (right && *right == 1))
                             {
-                                result = *left == 1 ? bin->right : bin->left;
+                                result = (left && *left == 1) ? bin->right : bin->left;
                                 info = std::format("simplified '{} * {}' to '{}'", TACValToStr(bin->left), TACValToStr(bin->right), TACValToStr(result));
                                 replaceWithAssign = true;
                             }
 
                             else if ((left && *left == -1 && !right) || (right && *right == -1 && !left))
                             {
-                                result = *left == -1 ? bin->right : bin->left;
+                                result = (left && *left == -1) ? bin->right : bin->left;
                                 info = std::format("simplified '{} * {}' to 'neg {}'", TACValToStr(bin->left), TACValToStr(bin->right), TACValToStr(result));
                                 replaceWithNeg = true;
                             }
@@ -153,8 +158,8 @@ bool SimplifyAlgebra(TAC& TAC)
                             else if (negDefs.contains(bin->left) && negDefs.contains(bin->right))
                             {
                                 resultBinary = std::make_unique<TACBinaryOp>(bin->dest, negDefs[bin->left], bin->op, negDefs[bin->right]);
-                                info = std::format("simplified '({})-{} * ({})-{}' to '{} * {}'", TACValToStr(bin->left), TACValToStr(resultBinary->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
-                                changed = true;
+                                info = std::format("simplified '{}(-{}) * {}(-{})' to '{} * {}'", TACValToStr(bin->left), TACValToStr(resultBinary->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
+                                replaceWithBinary = true;
                             }
                             break;
 
@@ -193,8 +198,22 @@ bool SimplifyAlgebra(TAC& TAC)
                             else if (negDefs.contains(bin->left) && negDefs.contains(bin->right))
                             {
                                 resultBinary = std::make_unique<TACBinaryOp>(bin->dest, negDefs[bin->left], bin->op, negDefs[bin->right]);
-                                info = std::format("simplified '({})-{} / ({})-{}' to '{} / {}'", TACValToStr(bin->left), TACValToStr(resultBinary->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
-                                changed = true;
+                                info = std::format("simplified '{}(-{}) / {}(-{})' to '{} / {}'", TACValToStr(bin->left), TACValToStr(resultBinary->left), TACValToStr(bin->right), TACValToStr(resultBinary->right), TACValToStr(resultBinary->left), TACValToStr(resultBinary->right));
+                                replaceWithBinary = true;
+                            }
+                            break;
+
+                        case BinaryOp::GREATER:
+                        case BinaryOp::GREATER_EQUAL:
+                        case BinaryOp::LESS:
+                        case BinaryOp::LESS_EQUAL:
+                        case BinaryOp::NOT_EQUAL:
+                        case BinaryOp::DOUBLE_EQUAL:
+                            if (!left && !right && bin->left == bin->right)
+                            {
+                                result = bin->op == BinaryOp::NOT_EQUAL || bin->op == BinaryOp::GREATER || bin->op == BinaryOp::LESS ? 0 : 1;
+                                info = std::format("simplified '{} {} {}' to '{}'", TACValToStr(bin->left), BinaryOpToStr(bin->op), TACValToStr(bin->right), TACValToStr(result));
+                                replaceWithAssign = true;
                             }
                             break;
 
@@ -204,29 +223,24 @@ bool SimplifyAlgebra(TAC& TAC)
 
                     if (replaceWithAssign)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
-
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::make_unique<TACAssign>(bin->dest, result), Message{Phase::ALG_SIMP, IRTransformType::REPLACED, info});
                         changed = true;
                     }
 
-                    if (replaceWithBinary)
+                    else if (replaceWithBinary)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::move(resultBinary), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
-
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::move(resultBinary), Message{Phase::ALG_SIMP, IRTransformType::REPLACED, info});
                         changed = true;
                     }
 
                     else if (replaceWithNeg)
                     {
-                        TACEditor::replaceInstruction(block.get(), inst.get(), std::make_unique<TACNeg>(bin->dest, result), Message{IRPass::ALGEBRAIC_SIMPLIFICATION, IRTransformType::REPLACED, info});
-
+                        IREditor<TACTypes>::replaceInstruction(block.get(), inst.get(), std::make_unique<TACNeg>(bin->dest, result), Message{Phase::ALG_SIMP, IRTransformType::REPLACED, info});
                         changed = true;
                     }
                 }
             }
         }
-
-        negDefs.clear();
     }
 
     return changed;

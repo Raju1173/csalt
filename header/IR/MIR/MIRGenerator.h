@@ -2,9 +2,12 @@
 
 #include "TACGenerator.h"
 #include "MIRInstructions.h"
+#include "IREditor.h"
 #include "MIRAnalyses.h"
 #include <memory>
 #include <vector>
+
+template<typename IRTypes> class IREditor;
 
 class MIRBlock
 {
@@ -26,7 +29,7 @@ public:
 
     MIRBlock(size_t ID, MIRFunction* function) : ID(ID), Function(function){};
 
-    friend class MIREditor;
+    template<typename IRTypes> friend class IREditor;
 };
 
 class MIRFunction
@@ -57,9 +60,9 @@ private:
 public:
     MIRLivenessInfo& getLivenessInfo();
 
-    MIRUseDefInfo& getUseDefInfo();
+    template<typename IRTypes> friend class IREditor;
 };
 
 using MIR = std::vector<std::unique_ptr<MIRFunction>>;
 
-MIR GenerateMachineIR(TAC& TAC);
+void GenerateMachineIR(TAC& TAC, MIR& MIR);

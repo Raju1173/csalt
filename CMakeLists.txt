@@ -35,16 +35,19 @@ target_link_libraries(FRONTEND PUBLIC projectConfigs)
 
 add_library(IR STATIC
     src/IR/CFG/CFGBuilder.cpp
+
     src/IR/TAC/SSAConstructor.cpp
     src/IR/TAC/TACGenerator.cpp
     src/IR/TAC/TACAnalyses.cpp
-    src/IR/TAC/TACEditor.cpp
+
     src/IR/MIR/MIRGenerator.cpp
     src/IR/MIR/MIRAnalyses.cpp
-    src/IR/MIR/MIREditor.cpp
     src/IR/MIR/RegisterAllocator.cpp
     src/IR/MIR/SpillAllocator.cpp
+
+    src/IR/Utils/IREditor.cpp
     src/IR/Utils/IRFormatters.cpp
+    src/IR/Utils/IRDebugger.cpp
 )
 
 target_link_libraries(IR PUBLIC FRONTEND projectConfigs)
@@ -61,6 +64,8 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/GVN.cpp
     ${TAC}/LICM.cpp
     ${TAC}/CTFE.cpp
+
+    ${MIR}/FramePointerOmission.cpp
 )
 
 target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)

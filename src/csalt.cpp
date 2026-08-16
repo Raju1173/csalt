@@ -1,5 +1,4 @@
 #include "csalt.h"
-#include "MIREditor.h"
 
 int main(int argc, char** argv)
 {
@@ -9,12 +8,16 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    // CTFE stays disabled by default and during benchmarks since its basically a cheat code...
     gCompilerOptions[Phase::CTFE].enabled = false;
 
     for (int i = 1; i < argc - 1; i++)
     {
         if (!ParseCompileFlag(std::string(argv[i])))
+        {
+            std::print(stderr, "Error : Invalid flag '{}'\n", std::string(argv[i]));
             return 1;
+        }
     }
 
     std::ifstream file(argv[argc - 1]);
@@ -27,23 +30,21 @@ int main(int argc, char** argv)
 
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    TokenStream TokenStream = Tokenize(source);
-    Degubber::TakeSnapshot("TOKEN STREAM", TokenStream, gCompilerOptions[Phase::TOK]);
+    TokenStream TokenStream;
+    Tokenize(source, TokenStream);
 
-    Node AST = Parse(TokenStream);
-    Degubber::TakeSnapshot("ABSTRACT SYNTAX TREE", AST, gCompilerOptions[Phase::AST]);
+    Node AST;
+    Parse(TokenStream, AST);
 
-    CFG CFG = ConstructCFG(AST);
-    Degubber::TakeSnapshot("CONTROL FLOW GRAPH", CFG, gCompilerOptions[Phase::CFG]);
+    CFG CFG;
+    ConstructCFG(AST, CFG);
 
-    TAC TAC = GenerateTAC(CFG);
-    Degubber::TakeSnapshot("TAC AFTER CONSTRUCTION", TAC, gCompilerOptions[Phase::TAC_CONST]);
+    TAC TAC;
+    GenerateTAC(CFG, TAC);
 
     InsertPhiNodes(TAC);
-    Degubber::TakeSnapshot("TAC AFTER PHI INSERTION", TAC, gCompilerOptions[Phase::TAC_PHI_INS]);
 
     RenameVariables(TAC);
-    Degubber::TakeSnapshot("TAC AFTER SSA RENAMING", TAC, gCompilerOptions[Phase::TAC_RENAME]);
 
     // clang-format off
     PassManager<::TAC> TACPassManager(
@@ -51,72 +52,62 @@ int main(int argc, char** argv)
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
-                    // CTFE stays disabled by default an during benchmarks since its basically a cheat code...
-                    {Pass<::TAC>{"Compile Time Function Evaluation", gCompilerOptions[Phase::CTFE], {.Run = EvaluateConstantFunctions}}},
+                    {Pass<::TAC>{Phase::CTFE, {.Run = EvaluateConstantFunctions}}},
                 }},
 
             PassGroup<::TAC>{
                 .IterateToFixedPoint = true,
                 .Passes = {
-                    {Pass<::TAC>{"Constant Folding", gCompilerOptions[Phase::FOLDING], {.RunIter = FoldConstants}}},
-                    {Pass<::TAC>{"Algebraic Simplification", gCompilerOptions[Phase::ALG_SIMP], {.RunIter = SimplifyAlgebra}}},
-                    {Pass<::TAC>{"Branch Simplification", gCompilerOptions[Phase::BRN_SIMP], {.RunIter = SimplifyBranches}}},
-                    {Pass<::TAC>{"Control Flow Simplification", gCompilerOptions[Phase::CFG_SIMP], {.RunIter = SimplifyControlFlow}}},
-                    {Pass<::TAC>{"Dead Code Elimination", gCompilerOptions[Phase::DCE], {.RunIter = RemoveDeadCode}}},
-                    {Pass<::TAC>{"Global Value Numbering", gCompilerOptions[Phase::GVN], {.RunIter = GVN}}},
+                    {Pass<::TAC>{Phase::FOLDING, {.RunIter = FoldConstants}}},
+                    {Pass<::TAC>{Phase::ALG_SIMP, {.RunIter = SimplifyAlgebra}}},
+                    {Pass<::TAC>{Phase::BRN_SIMP, {.RunIter = SimplifyBranches}}},
+                    {Pass<::TAC>{Phase::CFG_SIMP, {.RunIter = SimplifyControlFlow}}},
+                    {Pass<::TAC>{Phase::DCE, {.RunIter = RemoveDeadCode}}},
+                    {Pass<::TAC>{Phase::GVN, {.RunIter = GVN}}},
                 }},
 
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
-                    {Pass<::TAC>{"Loop Invariant Code Motion", gCompilerOptions[Phase::LICM], {.Run = HoistLoopInvariants}}},
+                    {Pass<::TAC>{Phase::LICM, {.Run = HoistLoopInvariants}}},
                 }},
         });
     // clang-format on
 
-    TACPassManager.RunOptimizations(TAC);
-    Degubber::TakeSnapshot("TAC AFTER OPTIMIZATIONS", TAC, gCompilerOptions[Phase::TAC_OPT]);
+    TACPassManager.RunOptimizations(TAC, Phase::TAC_OPT);
 
     ResolvePhiNodes(TAC);
-    Degubber::TakeSnapshot("TAC AFTER PHI RESOLUTION", TAC, gCompilerOptions[Phase::TAC_PHI_RES]);
-    Degubber::TakeSnapshot("TAC", TAC, gCompilerOptions[Phase::TAC]);
 
-    MIR MIR = GenerateMachineIR(TAC);
-    Degubber::TakeSnapshot("MIR AFTER CONSTRUCTION", MIR, gCompilerOptions[Phase::MIR_CONST]);
+    MIR MIR;
+    GenerateMachineIR(TAC, MIR);
 
-    if (gCompilerOptions[Phase::REG_ALLOC].enabled)
-    {
+    if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
         ResolveVRegsLinearScan(MIR);
-        Degubber::TakeSnapshot("MIR AFTER LINEAR SCAN REGISTER ALLOCATION", MIR, gCompilerOptions[Phase::REG_ALLOC]);
-    }
-
     else
-    {
         ResolveVRegsSpillAll(MIR);
-        Degubber::TakeSnapshot("MIR AFTER SPILL ALLOCATION", MIR, gCompilerOptions[Phase::REG_ALLOC]);
-    }
 
-    /*
-    PassManager<::MIR> MIRPassManager({PassGroup<::MIR>{
-        .IterateToFixedPoint = false,
-        .Passes = {
-            {Pass<::MIR>{"Frame Pointer Omission", !opts.disableFPO, false, {.Run = OmitFramePointers}}},
-        }}});
+    // clang-format off
+    PassManager<::MIR> MIRPassManager(
+        {
+            PassGroup<::MIR>{
+                .IterateToFixedPoint = false,
+                .Passes = {
+                    {Pass<::MIR>{Phase::FPO, {.Run = OmitFramePointers}}},
+                }},
+        });
+    // clang-format on
 
-    MIRPassManager.RunOptimizations(MIR);
-    DumpIf(opts.dumpMIR || opts.dumpMIROpt, MIR);
-    */
+    MIRPassManager.RunOptimizations(MIR, Phase::MIR_OPT);
 
     std::string AssemblyFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "s";
 
     EmitAssembly(MIR, AssemblyFilePath);
-    Degubber::TakeSnapshot("ASSEMBLY", AssemblyFilePath, gCompilerOptions[Phase::ASM]);
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 2);
 
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
 
-    Degubber::Run();
+    Debugger::Run();
 
     PrintOutput(ExecutableFilePath);
 

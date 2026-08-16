@@ -36,18 +36,18 @@ struct TACVarUsesInfo
     std::unordered_map<TACValue, size_t> VarUses;
 };
 
-struct TACLoop
-{
-    TACBlock* Header;
-    TACBlock* End;
-    std::unordered_set<TACBlock*> Blocks;
-};
-
 struct TACDefBlocksInfo
 {
     bool isValid = false;
 
     std::unordered_map<TACValue, std::unordered_set<TACBlock*>> DefBlocks;
+};
+
+struct TACLoop
+{
+    TACBlock* Header;
+    TACBlock* End;
+    std::unordered_set<TACBlock*> Blocks;
 };
 
 struct TACLoopInfo

@@ -33,6 +33,7 @@ AllowShortCompoundRequirementOnASingleLine: true
 
 AlwaysBreakTemplateDeclarations: No
 SpaceAfterTemplateKeyword: false
+RequiresClausePosition: SingleLine
 
 BinPackArguments: false
 BinPackParameters: false

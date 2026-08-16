@@ -1,51 +1,10 @@
 #pragma once
 
+#include "Globals.h"
 #include <iterator>
 #include <memory>
 #include <print>
 #include <string>
-
-enum class IRPass
-{
-    CONSTANT_FOLDING,
-    ALGEBRAIC_SIMPLIFICATION,
-    BRANCH_SIMPLIFICATION,
-    CONTROL_FLOW_SIMPLIFICATION,
-    DCE,
-    GVN,
-    LICM,
-    SCO,
-    CTFE,
-
-    SSA_RECONSTRUCTION,
-};
-
-inline std::string PassToStr(IRPass pass)
-{
-    switch (pass)
-    {
-        case IRPass::CONSTANT_FOLDING:
-            return "CONSTANT FOLDING";
-        case IRPass::ALGEBRAIC_SIMPLIFICATION:
-            return "ALGEBRAIC SIMPLIFICATION";
-        case IRPass::BRANCH_SIMPLIFICATION:
-            return "BRANCH SIMPLIFICATION";
-        case IRPass::CONTROL_FLOW_SIMPLIFICATION:
-            return "CONTROL FLOW SIMPLIFICATION";
-        case IRPass::DCE:
-            return "DEAD CODE ELIMINATION";
-        case IRPass::GVN:
-            return "GLOBAL VALUE NUMBERING";
-        case IRPass::LICM:
-            return "LOOP INVARIANT CODE MOTION";
-        case IRPass::SCO:
-            return "SIBLING CALL OPTIMIZATION";
-        case IRPass::CTFE:
-            return "COMPILE TIME FUNCTION EXECUTION";
-        case IRPass::SSA_RECONSTRUCTION:
-            return "SSA RECONSTRUCTION";
-    }
-}
 
 enum class IRTransformType
 {
@@ -58,11 +17,15 @@ enum class IRTransformType
 
     REPLACED,
     RENAMED,
+
+    COUNT
 };
 
-inline std::string IRTransformationToStr(IRTransformType op)
+inline std::string IRTransformTypeToStr(IRTransformType transform)
 {
-    switch (op)
+    static_assert(std::to_underlying(IRTransformType::COUNT) == 6, "Add/Remove the relevant case from the switch when modifying the IRTransformType enum!!!");
+
+    switch (transform)
     {
         case IRTransformType::MOVED:
             return "MOVED";
@@ -81,7 +44,7 @@ inline std::string IRTransformationToStr(IRTransformType op)
 
 struct Message
 {
-    IRPass Pass;
+    Phase Pass;
     IRTransformType TranformationType;
     std::string Info;
 };
@@ -97,7 +60,7 @@ public:
 
     DeadSiblings(DeadSiblings& other){};
 
-    void absorbLeftSibling(std::unique_ptr<T>& deadElement)
+    void absorbLeftSiblingCorpse(std::unique_ptr<T>& deadElement)
     {
         auto deadPreceding = std::move(deadElement->deadSiblings.preceding);
         auto deadTrailing = std::move(deadElement->deadSiblings.trailing);
@@ -114,7 +77,7 @@ public:
         preceding = std::move(combined);
     }
 
-    void absorbRightSibling(std::unique_ptr<T>& deadElement)
+    void absorbRightSiblingCorpse(std::unique_ptr<T>& deadElement)
     {
         auto deadPreceding = std::move(deadElement->deadSiblings.preceding);
         auto deadTrailing = std::move(deadElement->deadSiblings.trailing);

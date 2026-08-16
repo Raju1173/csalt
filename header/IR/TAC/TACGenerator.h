@@ -2,6 +2,7 @@
 
 #include "CFGBuilder.h"
 #include "IRCommon.h"
+#include "IREditor.h"
 #include "TACInstructions.h"
 #include "TACAnalyses.h"
 #include <vector>
@@ -29,7 +30,7 @@ public:
 
     TACBlock(size_t ID, TACFunction* function) : ID(ID), Function(function){};
 
-    friend class TACEditor;
+    template<typename IRTypes> friend class IREditor;
 };
 
 class TACFunction
@@ -65,9 +66,9 @@ public:
 
     TACLoopInfo& getLoopInfo();
 
-    friend class TACEditor;
+    template<typename IRTypes> friend class IREditor;
 };
 
 using TAC = std::vector<std::unique_ptr<TACFunction>>;
 
-TAC GenerateTAC(CFG& CFG);
+void GenerateTAC(CFG& CFG, TAC& TAC);

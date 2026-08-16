@@ -28,11 +28,12 @@ CSalt only supports 6 features of C :
 - functions
 - return
 
-Keeping the fronted super small *(like a grain of sea salt)* makes implementing complex optimizations extremely simple and some even become almost trivial
+Keeping the fronted super small *(like a grain of **sea salt**)* makes implementing complex optimizations extremely simple and some even become almost trivial
 
 # Unsupported Features
 
 - else blocks *(important, use consequent if blocks)*
+- any bitwise or logical operator *(important)*
 - Variable shadowing *(important)*
 - Any unary operator except '-'
 - Structs
@@ -55,8 +56,45 @@ Keeping the fronted super small *(like a grain of sea salt)* makes implementing 
 
 `csalt fileName`
 
-### You can inspect the output of every single compilation step individually using flags :
+### Every IR can be inspected at every single compilation step individually using flags :
 
-`csalt dump-tok dump-ast dump-cfg dump-tac dump-asm fileName`\
-or\
-`csalt dump-all fileName`
+```
+csalt   --dump-tok
+
+        --dump-ast
+
+        --dump-cfg
+
+        --dump-tac-const
+        --dump-tac-phi-ins
+        --dump-tac-rename
+        --dump-tac-opt
+        --dump-tac-phi-res
+
+        --dump-mir-const
+        --dump-mir-reg-alloc
+        --dump-mir-opt
+
+        --dump-asm
+
+        [fileName].c
+```
+
+### Any optimization pass can be enabled and disabled using :
+
+```
+csalt   --disable/enable-folding
+        --disable/enable-alg-simp
+        --disable/enable-brn-simp
+        --disable/enable-cfg-simp
+        --disable/enable-dce
+        --disable/enable-gvn
+        --disable/enable-sco
+        --disable/enable-licm
+        --disable/enable-ctfe (disabled by default)
+
+        --disable/enable-reg-alloc
+        --disable/enable-fpo
+
+        [fileName].c
+```

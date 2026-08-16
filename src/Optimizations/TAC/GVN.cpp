@@ -1,6 +1,7 @@
 #include "CFGBuilder.h"
+#include "MIRInstructions.h"
 #include "TACGenerator.h"
-#include "TACEditor.h"
+#include "TACInstructions.h"
 #include <algorithm>
 #include <format>
 #include <map>
@@ -38,9 +39,11 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
     std::vector<FunctionCallKey> addedCalls;
 
     auto tryPropagate = [](TACValue& val) {
-        if (Copies.contains(val))
+        auto it = Copies.find(val);
+
+        if (it != Copies.end())
         {
-            val = Copies[val];
+            val = it->second;
             return true;
         }
 
@@ -48,7 +51,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
     };
 
     auto replaceWithAssign = [&block, &addedCopies, &changed](std::unique_ptr<TACInstruction>& inst, const TACValue& dest, const TACValue& source) {
-        TACEditor::replaceInstruction(block, inst.get(), std::make_unique<TACAssign>(dest, source), Message{IRPass::GVN, IRTransformType::REPLACED, std::format("TODO: ADD MESSAGE")});
+        IREditor<TACTypes>::replaceInstruction(block, inst.get(), std::make_unique<TACAssign>(dest, source), Message{Phase::GVN, IRTransformType::REPLACED, std::format("TODO: ADD MESSAGE")});
 
         Copies[dest] = source;
         addedCopies.push_back(dest);
@@ -60,7 +63,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
     {
         switch (inst->type)
         {
-            case TACType::ASSIGN:
+            case TACInstType::ASSIGN:
                 {
                     TACAssign* assign = static_cast<TACAssign*>(inst.get());
 
@@ -71,7 +74,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                 }
                 break;
 
-            case TACType::NEG:
+            case TACInstType::NEG:
                 {
                     TACNeg* neg = static_cast<TACNeg*>(inst.get());
 
@@ -88,7 +91,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                 }
                 break;
 
-            case TACType::BINARYOP:
+            case TACInstType::BINARYOP:
                 {
                     TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 
@@ -98,8 +101,10 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                     TACValue left = binary->left;
                     TACValue right = binary->right;
 
-                    if ((binary->op == BinaryOp::PLUS || binary->op == BinaryOp::MUL) && left > right)
+                    if ((binary->op == BinaryOp::PLUS || binary->op == BinaryOp::MUL || binary->op == BinaryOp::DOUBLE_EQUAL || binary->op == BinaryOp::NOT_EQUAL) && left > right)
+                    {
                         std::swap(left, right);
+                    }
 
                     ExpressionKey key = {binary->op, left, right};
 
@@ -114,7 +119,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                 }
                 break;
 
-            case TACType::CALL:
+            case TACInstType::CALL:
                 {
                     TACCall* call = static_cast<TACCall*>(inst.get());
 
@@ -138,7 +143,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                 }
                 break;
 
-            case TACType::BRANCH:
+            case TACInstType::BRANCH:
                 {
                     TACBranch* branch = static_cast<TACBranch*>(inst.get());
 
@@ -147,26 +152,29 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
                 }
                 break;
 
-            case TACType::RETURN:
+            case TACInstType::RETURN:
                 {
                     TACReturn* ret = static_cast<TACReturn*>(inst.get());
 
-                    changed |= tryPropagate(ret->ReturnValue.value());
+                    if (ret->ReturnValue.has_value())
+                        changed |= tryPropagate(ret->ReturnValue.value());
                 }
                 break;
         }
     }
 
-    for (auto domChild : DomTreeInfo.DominatorTree[block])
+    for (TACBlock* domChild : DomTreeInfo.DominatorTree[block])
     {
         changed |= WalkTACDomTree(domChild, DomTreeInfo);
     }
 
-    for (const auto& key : addedCopies)
+    for (TACValue& key : addedCopies)
         Copies.erase(key);
-    for (const auto& key : addedExpressions)
+    for (ExpressionKey& key : addedExpressions)
         Expressions.erase(key);
-    for (const auto& key : addedCalls)
+    for (TACValue& key : addedNegDefs)
+        NegDefs.erase(key);
+    for (FunctionCallKey& key : addedCalls)
         Calls.erase(key);
 
     return changed;

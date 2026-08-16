@@ -1,5 +1,7 @@
 #include "TACGenerator.h"
 #include "CFGBuilder.h"
+#include "IRDebugger.h"
+#include "TACInstructions.h"
 #include "lexer.h"
 #include "parser.h"
 #include <algorithm>
@@ -172,9 +174,9 @@ TACValue flattenUnaryOpNode(Node& UnaryOpNode, std::vector<std::unique_ptr<TACIn
     return returnVal;
 }
 
-TAC GenerateTAC(CFG& CFG)
+void GenerateTAC(CFG& CFG, TAC& TAC)
 {
-    TAC TAC;
+    Debugger::AddIR(TAC);
 
     for (CFGFunction& CFGFunc : CFG)
     {
@@ -297,7 +299,30 @@ TAC GenerateTAC(CFG& CFG)
 
             if (CFGBlock->Condition.has_value())
             {
-                flattenBinaryOpNode(CFGBlock->Condition->children[0], curBlock->Instructions);
+                if (CFGBlock->Condition->children[0].type == NodeType::BINARY_OP)
+                    flattenBinaryOpNode(CFGBlock->Condition->children[0], curBlock->Instructions);
+
+                else
+                {
+                    auto binaryOp = std::make_unique<TACBinaryOp>();
+
+                    if (CFGBlock->Condition->children[0].type == NodeType::UNARY_OP)
+                        binaryOp->left = flattenUnaryOpNode(CFGBlock->Condition->children[0], curBlock->Instructions);
+
+                    else if (CFGBlock->Condition->children[0].token.type == TokenType::NUMBER)
+                        binaryOp->left = std::stoi(CFGBlock->Condition->children[0].token.lexeme);
+
+                    else if (CFGBlock->Condition->children[0].token.type == TokenType::IDENTIFIER)
+                        binaryOp->left = TACVariable{CFGBlock->Condition->children[0].token.lexeme};
+
+                    binaryOp->op = BinaryOp::NOT_EQUAL;
+
+                    binaryOp->right = 0;
+
+                    binaryOp->dest = GetTemp();
+
+                    curBlock->Instructions.push_back(std::move(binaryOp));
+                }
 
                 TACBinaryOp* TACBinOp = static_cast<TACBinaryOp*>(curBlock->Instructions.back().get());
 
@@ -335,5 +360,5 @@ TAC GenerateTAC(CFG& CFG)
         NextTemp = 0;
     }
 
-    return TAC;
+    Debugger::Notify(Phase::TAC_CONST);
 }
