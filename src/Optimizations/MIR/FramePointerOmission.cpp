@@ -91,6 +91,15 @@ void OmitFramePointers(MIR& MIR)
                         }
                         break;
 
+                    case MIRInstType::TEST:
+                        {
+                            MIRTest* test = static_cast<MIRTest*>(inst);
+
+                            AdjustOffset(test->Left);
+                            AdjustOffset(test->Right);
+                        }
+                        break;
+
                     // MIR generator and virtual register resolvers dont emit ANY push instructions in between a function, so this push is guaranteed to be from the prologue...
                     case MIRInstType::PUSH:
                         {
@@ -103,6 +112,8 @@ void OmitFramePointers(MIR& MIR)
 
                             if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
                                 IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueSub, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
+
+                            i--;
                         }
                         break;
 

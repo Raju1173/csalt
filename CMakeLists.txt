@@ -78,3 +78,6 @@ target_link_libraries(BACKEND PUBLIC OPTIMIZATIONS projectConfigs)
 
 add_executable(csalt src/csalt.cpp)
 target_link_libraries(csalt PRIVATE BACKEND)
+
+add_executable(csalt-tester src/csaltTester.cpp)
+target_link_libraries(csalt-tester PRIVATE projectConfigs)

@@ -30,7 +30,7 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
     std::unordered_map<TACValue, Operand> VarLocations;
     int NextVirtualReg = 0;
 
-    auto GetOperand = [&](TACValue& TACVal) -> Operand {
+    auto GetOperand = [&NextVirtualReg, &VarLocations](TACValue& TACVal) -> Operand {
         if (std::holds_alternative<int>(TACVal))
             return Immediate{std::get<int>(TACVal)};
 
@@ -184,14 +184,14 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
                         MaxOutgoingArgs = extraArgs;
                     }
 
-                    for (size_t i = 0; i < 6; i++)
+                    for (size_t i = 0; i < std::min(call->args.size(), static_cast<size_t>(6)); i++)
                     {
                         curBlock->Instructions.push_back(std::make_unique<MIRMov>(ArgRegs[i], GetOperand(call->args[i])));
                     }
 
                     for (size_t i = 6; i < call->args.size(); i++)
                     {
-                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(StackOffset{static_cast<int>((i - 6) * 8), .RSP = true}, GetOperand(call->args[i])));
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(StackOffset{.Offset = static_cast<int>((i - 6) * 8), .RSP = true}, GetOperand(call->args[i])));
                     }
 
                     auto funcIt = std::find_if(MIR.begin(), MIR.end(), [&call](auto& func) { return func->FunctionName == call->functionName; });
@@ -225,6 +225,7 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
                             curBlock->Instructions.push_back(std::make_unique<MIRTest>(right, right));
 
                         curBlock->Instructions.push_back(std::make_unique<MIRCondJump>(Condition::NOT_EQUAL, blockMap[branch->TrueTarget]));
+                        curBlock->Instructions.push_back(std::make_unique<MIRJump>(blockMap[branch->FalseTarget]));
                         break;
                     }
 

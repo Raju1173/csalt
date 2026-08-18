@@ -75,7 +75,7 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
     std::vector<std::string> pushed;
 
     auto renameUse = [](TACValue& val) {
-        if (val.index() == 1)
+        if (std::holds_alternative<TACVariable>(val))
         {
             TACVariable& var = std::get<TACVariable>(val);
 
@@ -143,6 +143,16 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                 }
 
             case TACInstType::NEG:
+                {
+                    TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
+
+                    renameUse(binary->left);
+                    renameUse(binary->right);
+                    renameDef(std::get<TACVariable>(binary->dest));
+                    break;
+                }
+
+            case TACInstType::BINARYOP:
                 {
                     TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
 

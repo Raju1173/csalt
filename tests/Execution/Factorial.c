@@ -1,3 +1,5 @@
+// EXPECTED : 479001600
+
 // BUG (fixed) : parameters were not being initialized explicitly in any of the IRs, so phi insertion got messed up if the only definition coming of a variable from the entry block was the parameter, which the phi insertion algo couldnt see...
 int factorial(int n)
 {

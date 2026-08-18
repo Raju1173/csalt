@@ -1,3 +1,5 @@
+// EXPECTED : 37
+
 int getLastPrime(int maxLimit)
 {
     int currentNum;

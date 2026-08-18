@@ -1,3 +1,5 @@
+// EXPECTED : -7
+
 int main()
 {
     int a;

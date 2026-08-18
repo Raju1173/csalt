@@ -1,3 +1,5 @@
+// EXPECTED : -6765
+
 int fib(int n)
 {
     if (n <= 1)
@@ -14,6 +16,6 @@ int main()
 
     if (-a - 1 + -2 + -(3 + 4) == -8)
     {
-        return -fib(20); // Expected : -6765
+        return -fib(20);
     }
 }

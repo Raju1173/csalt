@@ -1,3 +1,5 @@
+// EXPECTED : 11
+
 int absoluteValue(int val)
 {
     if (val < 0)

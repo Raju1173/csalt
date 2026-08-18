@@ -238,7 +238,7 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 
 void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)
 {
-    std::string cmd = "gcc " + ASMFilePath + " -o " + ExecFilePath + ".out";
+    std::string cmd = "gcc " + ASMFilePath + " -o " + ExecFilePath;
 
     std::system(cmd.c_str());
 }
@@ -251,7 +251,7 @@ void PrintOutput(std::string ExecFilePath)
     {
         ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
 
-        execl(("./" + ExecFilePath + ".out").c_str(), ("./" + ExecFilePath + ".out").c_str(), nullptr);
+        execl(("./" + ExecFilePath).c_str(), ("./" + ExecFilePath).c_str(), nullptr);
 
         _exit(1);
     }

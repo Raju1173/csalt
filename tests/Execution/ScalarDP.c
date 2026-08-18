@@ -1,3 +1,5 @@
+// EXPECTED : 5768
+
 int countpaths(int targetsteps)
 {
     int dp0;
@@ -44,5 +46,5 @@ int countpaths(int targetsteps)
 
 int main()
 {
-    return countpaths(15); //Expected : 5768
+    return countpaths(15);
 }

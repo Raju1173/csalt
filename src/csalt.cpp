@@ -103,7 +103,7 @@ int main(int argc, char** argv)
 
     EmitAssembly(MIR, AssemblyFilePath);
 
-    std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 2);
+    std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "out";
 
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
 

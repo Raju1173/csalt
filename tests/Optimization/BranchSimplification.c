@@ -1,3 +1,5 @@
+// EXPECTED : 3
+
 int main()
 {
     int x = 0;
