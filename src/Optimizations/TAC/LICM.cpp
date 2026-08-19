@@ -1,4 +1,3 @@
-#include "IRDebugger.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
 #include <algorithm>
@@ -95,11 +94,9 @@ void HoistLoopInvariants(TAC& TAC)
                     return true;
                 }
 
-                TACVariable& var = std::get<TACVariable>(val);
-
-                if (DefBlocksInfo.DefBlocks.find(var) != DefBlocksInfo.DefBlocks.end())
+                if (DefBlocksInfo.DefBlocks.find(val) != DefBlocksInfo.DefBlocks.end())
                 {
-                    if (!Loop.Blocks.contains(*DefBlocksInfo.DefBlocks.find(var)->second.begin()))
+                    if (!Loop.Blocks.contains(*DefBlocksInfo.DefBlocks.find(val)->second.begin()))
                     {
                         return true;
                     }
@@ -126,62 +123,38 @@ void HoistLoopInvariants(TAC& TAC)
                         TACVariable destVar;
                         bool canHoist = false;
 
-                        if (inst->type == TACInstType::ASSIGN)
-                        {
-                            TACAssign* assign = static_cast<TACAssign*>(inst.get());
+                        TACInstOperands operands = GetTACInstOperands(inst.get());
 
-                            if (isInvariant(assign->source))
+                        bool allOperandsInvariant = std::all_of(operands.Uses.begin(), operands.Uses.end(), [&isInvariant](auto& op) { return isInvariant(*op); });
+
+                        if (allOperandsInvariant)
+                        {
+                            if (inst->type == TACInstType::BINARYOP)
                             {
-                                destVar = std::get<TACVariable>(assign->dest);
-                                canHoist = true;
+                                TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
+
+                                if (binary->op == BinaryOp::DIV)
+                                    continue;
                             }
-                        }
 
-                        if (inst->type == TACInstType::NEG)
-                        {
-                            TACNeg* neg = static_cast<TACNeg*>(inst.get());
-
-                            if (isInvariant(neg->source))
+                            if (operands.Def == nullptr)
                             {
-                                destVar = std::get<TACVariable>(neg->dest);
-                                canHoist = true;
-                            }
-                        }
-
-                        else if (inst->type == TACInstType::BINARYOP)
-                        {
-                            TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
-
-                            if (binary->op != BinaryOp::DIV)
-                            {
-                                if (isInvariant(binary->left) && isInvariant(binary->right))
-                                {
-                                    destVar = std::get<TACVariable>(binary->dest);
+                                // all function calls are guaranteed to be pure due to the restricted scope of the compiler
+                                if (inst->type == TACInstType::CALL)
                                     canHoist = true;
-                                }
+                                else
+                                    continue;
                             }
-                        }
 
-                        else if (inst->type == TACInstType::CALL)
-                        {
-                            TACCall* call = static_cast<TACCall*>(inst.get());
-
-                            if (call->dest.has_value())
+                            if (!canHoist)
                             {
-                                bool allArgsInvariant = std::all_of(call->args.begin(), call->args.end(), [&](const auto& arg) { return isInvariant(arg); });
-
-                                if (allArgsInvariant)
-                                {
-                                    destVar = std::get<TACVariable>(call->dest.value());
-                                    canHoist = true;
-                                }
+                                invariants.insert(std::get<TACVariable>(*operands.Def));
+                                canHoist = true;
                             }
                         }
 
                         if (canHoist)
                         {
-                            invariants.insert(destVar);
-
                             IREditor<TACTypes>::moveInstructionBefore(block, inst.get(), preheader, preheader->Instructions.back().get(), Message{Phase::LICM, IRTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
 
                             changed = true;

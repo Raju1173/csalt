@@ -29,7 +29,6 @@ int countpaths(int targetsteps)
         return dp2;
     }
 
-    // BUG (fixed) : assembly generator emmitted "cmp StackValue, StackValue"
     while (step < targetsteps + 1)
     {
         current = dp0 + dp1 + dp2;

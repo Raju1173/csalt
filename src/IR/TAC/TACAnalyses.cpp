@@ -1,4 +1,5 @@
 #include "TACGenerator.h"
+#include "TACInstructions.h"
 
 TACDominatorInfo& TACFunction::getDominatorInfo()
 {
@@ -201,69 +202,9 @@ TACVarUsesInfo& TACFunction::getVarUsesInfo()
         {
             for (const auto& inst : Block->Instructions)
             {
-                switch (inst->type)
+                for (TACValue* val : GetTACInstOperands(inst.get()).Uses)
                 {
-                    case TACInstType::PHI:
-                        {
-                            TACPhi* phi = static_cast<TACPhi*>(inst.get());
-
-                            for (PhiArgument& arg : phi->args)
-                                VarUsesInfo.VarUses[arg.Value]++;
-                        }
-                        break;
-
-                    case TACInstType::ASSIGN:
-                        {
-                            TACAssign* assign = static_cast<TACAssign*>(inst.get());
-
-                            VarUsesInfo.VarUses[assign->source]++;
-                        }
-                        break;
-
-                    case TACInstType::NEG:
-                        {
-                            TACNeg* neg = static_cast<TACNeg*>(inst.get());
-
-                            VarUsesInfo.VarUses[neg->source]++;
-                        }
-                        break;
-
-                    case TACInstType::BINARYOP:
-                        {
-                            TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
-
-                            VarUsesInfo.VarUses[binary->left]++;
-                            VarUsesInfo.VarUses[binary->right]++;
-                        }
-                        break;
-
-                    case TACInstType::CALL:
-                        {
-                            TACCall* call = static_cast<TACCall*>(inst.get());
-
-                            for (const auto& arg : call->args)
-                            {
-                                VarUsesInfo.VarUses[arg]++;
-                            }
-                        }
-                        break;
-
-                    case TACInstType::BRANCH:
-                        {
-                            TACBranch* branch = static_cast<TACBranch*>(inst.get());
-
-                            VarUsesInfo.VarUses[branch->cond.Left]++;
-                            VarUsesInfo.VarUses[branch->cond.Right]++;
-                        }
-                        break;
-
-                    case TACInstType::RETURN:
-                        {
-                            TACReturn* ret = static_cast<TACReturn*>(inst.get());
-
-                            VarUsesInfo.VarUses[ret->ReturnValue.value()]++;
-                        }
-                        break;
+                    VarUsesInfo.VarUses[*val]++;
                 }
             }
         }
@@ -286,50 +227,9 @@ TACDefBlocksInfo& TACFunction::getDefBlocksInfo()
         {
             for (const auto& inst : Block->Instructions)
             {
-                switch (inst->type)
+                if (GetTACInstOperands(inst.get()).Def != nullptr)
                 {
-                    case TACInstType::PHI:
-                        {
-                            TACPhi* phi = static_cast<TACPhi*>(inst.get());
-
-                            DefBlocksInfo.DefBlocks[phi->variable].insert(Block.get());
-                        }
-                        break;
-
-                    case TACInstType::ASSIGN:
-                        {
-                            TACAssign* assign = static_cast<TACAssign*>(inst.get());
-
-                            DefBlocksInfo.DefBlocks[assign->dest].insert(Block.get());
-                        }
-                        break;
-
-                    case TACInstType::NEG:
-                        {
-                            TACNeg* neg = static_cast<TACNeg*>(inst.get());
-
-                            DefBlocksInfo.DefBlocks[neg->dest].insert(Block.get());
-                        }
-                        break;
-
-                    case TACInstType::BINARYOP:
-                        {
-                            TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
-
-                            DefBlocksInfo.DefBlocks[binary->dest].insert(Block.get());
-                        }
-                        break;
-
-                    case TACInstType::CALL:
-                        {
-                            TACCall* call = static_cast<TACCall*>(inst.get());
-
-                            if (call->dest.has_value())
-                            {
-                                DefBlocksInfo.DefBlocks[call->dest.value()].insert(Block.get());
-                            }
-                        }
-                        break;
+                    DefBlocksInfo.DefBlocks[*GetTACInstOperands(inst.get()).Def].insert(Block.get());
                 }
             }
         }

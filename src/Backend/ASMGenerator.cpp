@@ -1,3 +1,4 @@
+#include "Globals.h"
 #include "IRDebugger.h"
 #include "MIRGenerator.h"
 #include <fstream>
@@ -245,6 +246,9 @@ void EmitExecutable(std::string ASMFilePath, std::string ExecFilePath)
 
 void PrintOutput(std::string ExecFilePath)
 {
+    if (gCompilerOptions[Phase::OUTPUT].enabled == false)
+        return;
+
     pid_t pid = fork();
 
     if (pid == 0)

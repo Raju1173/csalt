@@ -74,25 +74,49 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 {
     std::vector<std::string> pushed;
 
-    auto renameUse = [](TACValue& val) {
-        if (std::holds_alternative<TACVariable>(val))
+    for (auto& inst : Block->Instructions)
+    {
+        for (TACValue* val : GetTACInstOperands(inst.get()).Uses)
         {
-            TACVariable& var = std::get<TACVariable>(val);
-
-            if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
-                return;
-
-            std::stack<int>& VersionStack = VarStacks[var.OriginalName].first;
-
-            if (!VersionStack.empty())
+            if (inst->type != TACInstType::PHI)
             {
-                var.SSAName = var.OriginalName + std::to_string(VersionStack.top());
+                if (std::holds_alternative<TACVariable>(*val))
+                {
+                    TACVariable& var = std::get<TACVariable>(*val);
+
+                    if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
+                        continue;
+
+                    std::stack<int>& VersionStack = VarStacks[var.OriginalName].first;
+
+                    if (!VersionStack.empty())
+                    {
+                        var.SSAName = var.OriginalName + std::to_string(VersionStack.top());
+                    }
+                }
             }
         }
-    };
 
-    auto renamePhiArgs = [&Block](TACBlock* targetBlock) {
-        for (auto& targetInst : targetBlock->Instructions)
+        if (GetTACInstOperands(inst.get()).Def != nullptr)
+        {
+            TACVariable& var = std::get<TACVariable>(*GetTACInstOperands(inst.get()).Def);
+
+            if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
+                continue;
+
+            auto& [versionStack, versionCounter] = VarStacks[var.OriginalName];
+
+            versionStack.push(versionCounter);
+            versionCounter++;
+
+            var.SSAName = var.OriginalName + std::to_string(versionStack.top());
+            pushed.push_back(var.OriginalName);
+        }
+    }
+
+    for (TACBlock* child : Block->Children)
+    {
+        for (auto& targetInst : child->Instructions)
         {
             if (targetInst->type == TACInstType::PHI)
             {
@@ -106,115 +130,6 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
                 }
             }
         }
-    };
-
-    for (auto& inst : Block->Instructions)
-    {
-        auto renameDef = [&pushed](TACVariable& var) {
-            if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
-                return;
-
-            auto& [versionStack, versionCounter] = VarStacks[var.OriginalName];
-
-            versionStack.push(versionCounter);
-            versionCounter++;
-
-            var.SSAName = var.OriginalName + std::to_string(versionStack.top());
-            pushed.push_back(var.OriginalName);
-        };
-
-        switch (inst->type)
-        {
-            case TACInstType::PHI:
-                {
-                    TACPhi* phi = static_cast<TACPhi*>(inst.get());
-
-                    renameDef(std::get<TACVariable>(phi->variable));
-                    break;
-                }
-
-            case TACInstType::ASSIGN:
-                {
-                    TACAssign* assign = static_cast<TACAssign*>(inst.get());
-
-                    renameUse(assign->source);
-                    renameDef(std::get<TACVariable>(assign->dest));
-                    break;
-                }
-
-            case TACInstType::NEG:
-                {
-                    TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
-
-                    renameUse(binary->left);
-                    renameUse(binary->right);
-                    renameDef(std::get<TACVariable>(binary->dest));
-                    break;
-                }
-
-            case TACInstType::BINARYOP:
-                {
-                    TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst.get());
-
-                    renameUse(binary->left);
-                    renameUse(binary->right);
-                    renameDef(std::get<TACVariable>(binary->dest));
-                    break;
-                }
-
-            case TACInstType::CALL:
-                {
-                    TACCall* call = static_cast<TACCall*>(inst.get());
-
-                    for (TACValue& arg : call->args)
-                    {
-                        renameUse(arg);
-                    }
-
-                    if (call->dest.has_value())
-                    {
-                        renameDef(std::get<TACVariable>(call->dest.value()));
-                    }
-                    break;
-                }
-
-            case TACInstType::BRANCH:
-                {
-                    TACBranch* branch = static_cast<TACBranch*>(inst.get());
-
-                    renameUse(branch->cond.Left);
-                    renameUse(branch->cond.Right);
-                    break;
-                }
-
-            case TACInstType::SELECT:
-                {
-                    TACSelect* select = static_cast<TACSelect*>(inst.get());
-
-                    renameUse(select->cond.Left);
-                    renameUse(select->cond.Right);
-                    renameUse(select->TrueVal);
-                    renameUse(select->FalseVal);
-                    renameDef(std::get<TACVariable>(select->dest));
-                    break;
-                }
-
-            case TACInstType::RETURN:
-                {
-                    TACReturn* ret = static_cast<TACReturn*>(inst.get());
-
-                    if (ret->ReturnValue.has_value())
-                    {
-                        renameUse(ret->ReturnValue.value());
-                    }
-                    break;
-                }
-        }
-    }
-
-    for (TACBlock* child : Block->Children)
-    {
-        renamePhiArgs(child);
     }
 
     for (size_t i = 0; i < DomTreeInfo.DominatorTree[Block].size(); i++)

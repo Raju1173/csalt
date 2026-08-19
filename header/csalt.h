@@ -29,7 +29,7 @@
 #include "RegisterAllocator.h"
 #include "SpillAllocator.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 24, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 25, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -60,6 +60,8 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"mir-opt", Phase::MIR_OPT},
 
     {"fpo", Phase::FPO},
+
+    {"output", Phase::OUTPUT},
 };
 
 inline bool ParseCompileFlag(std::string arg)

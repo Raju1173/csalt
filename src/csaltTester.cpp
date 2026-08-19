@@ -8,6 +8,7 @@
 #include <sys/syscall.h>
 #include <sys/user.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 #include <filesystem>
 #include <csalt.h>
@@ -19,19 +20,36 @@ bool tryParse(std::string str, int& out)
     return ec == std::errc{} && ptr == str.data() + str.size();
 }
 
-bool compileTest(std::string flags, std::string filePath)
+struct CompileResult
 {
-    std::string compileCommand = "csalt " + flags + " " + filePath + " > /dev/null 2>&1";
+    bool timedOut;
+    bool success;
+};
+
+CompileResult compileTest(std::string flags, std::string filePath)
+{
+    std::string compileCommand = "timeout 1s csalt --disable-output " + flags + " " + filePath + " > /dev/null 2>&1";
 
     int status = std::system(compileCommand.c_str());
 
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    if (WIFEXITED(status))
+    {
+        if (WEXITSTATUS(status) == 124)
+        {
+            return {true, false};
+        }
+
+        return {false, WEXITSTATUS(status) == 0};
+    }
+
+    return {false, false};
 }
 
 struct TestResult
 {
     bool success;
     bool crashed;
+    bool timedOut;
     int actualOutput;
 };
 
@@ -58,20 +76,55 @@ TestResult compareTestOutput(std::string ExecFilePath, int expected)
     else
     {
         int status;
+        auto startTime = std::chrono::steady_clock::now();
 
-        waitpid(pid, &status, 0);
+        auto waitWithTimeout = [&startTime, &pid, &status]() -> bool {
+            while (true)
+            {
+                int res = waitpid(pid, &status, WNOHANG);
+
+                if (res > 0)
+                    return true;
+                if (res == -1)
+                    return false;
+
+                auto now = std::chrono::steady_clock::now();
+
+                if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 1000)
+                {
+                    return false;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        };
+
+        if (!waitWithTimeout())
+        {
+            kill(pid, SIGKILL);
+
+            waitpid(pid, &status, 0);
+
+            return {false, false, true, -1};
+        }
 
         ptrace(PTRACE_SETOPTIONS, pid, nullptr, PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD);
 
         struct user_regs_struct regs;
 
         bool crashed = false;
-        int actualOutput;
+        bool timedOut = false;
+        int actualOutput = -1;
 
         while (true)
         {
             ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
-            waitpid(pid, &status, 0);
+
+            if (!waitWithTimeout())
+            {
+                timedOut = true;
+                break;
+            }
 
             if (WIFEXITED(status))
             {
@@ -98,6 +151,7 @@ TestResult compareTestOutput(std::string ExecFilePath, int expected)
                     }
 
                     ptrace(PTRACE_SYSCALL, pid, nullptr, sig);
+
                     continue;
                 }
 
@@ -111,10 +165,19 @@ TestResult compareTestOutput(std::string ExecFilePath, int expected)
             }
         }
 
+        if (timedOut)
+        {
+            kill(pid, SIGKILL);
+
+            waitpid(pid, &status, 0);
+
+            return {false, false, true, -1};
+        }
+
         ptrace(PTRACE_KILL, pid, nullptr, nullptr);
         waitpid(pid, &status, 0);
 
-        return {!crashed && (actualOutput == expected), crashed, actualOutput};
+        return {!crashed && (actualOutput == expected), crashed, false, actualOutput};
     }
 }
 
@@ -122,7 +185,7 @@ int main(int argc, char** argv)
 {
     if (argc < 2)
     {
-        std::print("Error : tests directory path not given\n");
+        std::print("ERROR : tests directory path not given\n");
         return 1;
     }
 
@@ -177,25 +240,40 @@ int main(int argc, char** argv)
             auto runTestCase = [&](std::string flags) {
                 std::string allFlags = flags + permanentFlags;
 
-                if (!compileTest(allFlags, child.path().string()))
+                CompileResult compileResult = compileTest(allFlags, child.path().string());
+
+                if (compileResult.timedOut)
                 {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | Flags: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Failed", REASON_WIDTH, allFlags);
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Timed Out", REASON_WIDTH, allFlags);
+                    allFlagsPassed = false;
+                    return;
+                }
+
+                else if (!compileResult.success)
+                {
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Failed", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                     return;
                 }
 
                 TestResult testResult = compareTestOutput(ExecutableFilePath, expectedOutput);
 
-                if (testResult.crashed)
+                if (testResult.timedOut)
                 {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | Flags: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "SEGFAULT / CRASHED", REASON_WIDTH, allFlags);
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION TIMED OUT", REASON_WIDTH, allFlags);
+                    allFlagsPassed = false;
+                }
+
+                else if (testResult.crashed)
+                {
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "SEGFAULT / CRASHED", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                 }
 
                 else if (!testResult.success)
                 {
-                    std::string reason = std::format("Expected: {}, Recieved: {}", expectedOutput, testResult.actualOutput);
-                    std::print("{:<{}} | {:<{}} | {:<{}} | Flags: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, reason, REASON_WIDTH, allFlags);
+                    std::string reason = std::format("EXPECTED: {}, RECIEVED: {}", expectedOutput, testResult.actualOutput);
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, reason, REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                 }
             };

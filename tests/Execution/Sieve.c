@@ -21,7 +21,6 @@ int getLastPrime(int maxLimit)
             {
                 if (isPrime == 1)
                 {
-                    // BUG (fixed) : parser didnt handle EXPR node encountering a left paranthesis
                     if ((currentNum / divisor) * divisor == currentNum)
                     {
                         isPrime = 0;

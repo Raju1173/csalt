@@ -2,6 +2,8 @@
 
 #include "IRCommon.h"
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 #include <memory>
@@ -266,4 +268,96 @@ inline std::unique_ptr<TACInstruction> cloneTACInstruction(TACInstruction* inst)
     }
 
     return nullptr;
+}
+
+struct TACInstOperands
+{
+    std::unordered_set<TACValue*> Operands;
+
+    TACValue* Def = nullptr;
+    std::unordered_set<TACValue*> Uses;
+
+    TACInstOperands(){};
+
+    TACInstOperands(TACValue* def, std::unordered_set<TACValue*> uses) : Def(def), Uses(uses)
+    {
+        Operands.insert(Def);
+        Operands.insert(Uses.begin(), Uses.end());
+    };
+};
+
+inline TACInstOperands GetTACInstOperands(TACInstruction* inst)
+{
+    static_assert(std::to_underlying(TACInstType::COUNT) == 9, "Add another case and increment the count check when adding a new TACInstType!!!");
+
+    switch (inst->type)
+    {
+        case TACInstType::ASSIGN:
+            {
+                TACAssign* assign = static_cast<TACAssign*>(inst);
+                return {&assign->dest, {&assign->source}};
+            }
+        case TACInstType::BINARYOP:
+            {
+                TACBinaryOp* binary = static_cast<TACBinaryOp*>(inst);
+                return {&binary->dest, {&binary->left, &binary->right}};
+            }
+        case TACInstType::RETURN:
+            {
+                TACReturn* ret = static_cast<TACReturn*>(inst);
+                if (ret->ReturnValue.has_value())
+                    return {nullptr, {&ret->ReturnValue.value()}};
+                else
+                    return {};
+            }
+        case TACInstType::BRANCH:
+            {
+                TACBranch* branch = static_cast<TACBranch*>(inst);
+                return {nullptr, {&branch->cond.Left, &branch->cond.Right}};
+            }
+        case TACInstType::CALL:
+            {
+                TACCall* call = static_cast<TACCall*>(inst);
+
+                std::unordered_set<TACValue*> pointerArgs;
+
+                for (TACValue& val : call->args)
+                {
+                    pointerArgs.insert(&val);
+                }
+
+                if (call->dest.has_value())
+                    return {&call->dest.value(), pointerArgs};
+                else
+                    return {nullptr, pointerArgs};
+            }
+        case TACInstType::NEG:
+            {
+                TACNeg* neg = static_cast<TACNeg*>(inst);
+                return {&neg->dest, {&neg->source}};
+            }
+        case TACInstType::PHI:
+            {
+                TACPhi* phi = static_cast<TACPhi*>(inst);
+
+                std::unordered_set<TACValue*> pointerArgs;
+
+                for (PhiArgument& arg : phi->args)
+                {
+                    pointerArgs.insert(&arg.Value);
+                }
+
+                return {&phi->variable, pointerArgs};
+            }
+        case TACInstType::SELECT:
+            {
+                TACSelect* select = static_cast<TACSelect*>(inst);
+                return {&select->dest, {&select->cond.Left, &select->cond.Right}};
+            }
+
+        case TACInstType::JUMP:
+            return {};
+    }
+
+    return {};
 }

@@ -28,108 +28,42 @@ void OmitFramePointers(MIR& MIR)
             {
                 MIRInstruction* inst = Block->Instructions[i].get();
 
-                switch (inst->type)
+                // MIR generator and virtual register resolvers dont emit ANY push instructions in between a function, so this push is guaranteed to be from the prologue...
+                if (inst->type == MIRInstType::PUSH)
                 {
-                    case MIRInstType::MOV:
-                        {
-                            MIRMov* mov = static_cast<MIRMov*>(inst);
+                    MIRInstruction* prologueMov = Block->Instructions[i + 1].get();
+                    MIRInstruction* prologueSub = Block->Instructions[i + 2].get();
 
-                            AdjustOffset(mov->Dest);
-                            AdjustOffset(mov->Source);
-                        }
-                        break;
+                    IREditor<MIRTypes>::deleteInstruction(Block.get(), inst, Message{Phase::FPO, IRTransformType::DELETED, "prologue instruction redundant after stack offsets made relative to rsp"});
 
-                    case MIRInstType::ADD:
-                        {
-                            MIRAdd* add = static_cast<MIRAdd*>(inst);
+                    IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueMov, Message{Phase::FPO, IRTransformType::DELETED, "prologue instruction redundant after stack offsets made relative to rsp"});
 
-                            AdjustOffset(add->Dest);
-                            AdjustOffset(add->Source);
-                        }
-                        break;
+                    if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
+                        IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueSub, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
 
-                    case MIRInstType::SUB:
-                        {
-                            MIRSub* sub = static_cast<MIRSub*>(inst);
+                    i--;
 
-                            AdjustOffset(sub->Dest);
-                            AdjustOffset(sub->Source);
-                        }
-                        break;
+                    continue;
+                }
 
-                    case MIRInstType::MUL:
-                        {
-                            MIRImul* mul = static_cast<MIRImul*>(inst);
+                // MIR generator and virtual register resolvers dont emit ANY pop instructions in between a function, so this pop is guaranteed to be from the epilogue...
+                else if (inst->type == MIRInstType::POP)
+                {
+                    MIRInstruction* epilogueMov = Block->Instructions[i - 1].get();
 
-                            AdjustOffset(mul->Dest);
-                            AdjustOffset(mul->Source);
-                        }
-                        break;
+                    IREditor<MIRTypes>::deleteInstruction(Block.get(), epilogueMov, Message{Phase::FPO, IRTransformType::DELETED, "epilogue instruction redundant after stack offsets made relative to rsp"});
 
-                    case MIRInstType::DIV:
-                        {
-                            MIRIdiv* div = static_cast<MIRIdiv*>(inst);
+                    if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
+                        IREditor<MIRTypes>::deleteInstruction(Block.get(), inst, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
+                    else
+                        IREditor<MIRTypes>::replaceInstruction(Block.get(), inst, std::make_unique<MIRAdd>(Register::RSP, Immediate{MIRFunc->StackFrameSize}), Message{Phase::FPO, IRTransformType::REPLACED, std::format("changed 'pop rbp' to 'add rsp, {}'", MIRFunc->StackFrameSize)});
 
-                            AdjustOffset(div->Divisor);
-                        }
-                        break;
+                    continue;
+                }
 
-                    case MIRInstType::NEG:
-                        {
-                            MIRNeg* neg = static_cast<MIRNeg*>(inst);
-
-                            AdjustOffset(neg->Dest);
-                        }
-                        break;
-
-                    case MIRInstType::CMP:
-                        {
-                            MIRCmp* cmp = static_cast<MIRCmp*>(inst);
-
-                            AdjustOffset(cmp->Left);
-                            AdjustOffset(cmp->Right);
-                        }
-                        break;
-
-                    case MIRInstType::TEST:
-                        {
-                            MIRTest* test = static_cast<MIRTest*>(inst);
-
-                            AdjustOffset(test->Left);
-                            AdjustOffset(test->Right);
-                        }
-                        break;
-
-                    // MIR generator and virtual register resolvers dont emit ANY push instructions in between a function, so this push is guaranteed to be from the prologue...
-                    case MIRInstType::PUSH:
-                        {
-                            MIRInstruction* prologueMov = Block->Instructions[i + 1].get();
-                            MIRInstruction* prologueSub = Block->Instructions[i + 2].get();
-
-                            IREditor<MIRTypes>::deleteInstruction(Block.get(), inst, Message{Phase::FPO, IRTransformType::DELETED, "prologue instruction redundant after stack offsets made relative to rsp"});
-
-                            IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueMov, Message{Phase::FPO, IRTransformType::DELETED, "prologue instruction redundant after stack offsets made relative to rsp"});
-
-                            if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
-                                IREditor<MIRTypes>::deleteInstruction(Block.get(), prologueSub, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
-
-                            i--;
-                        }
-                        break;
-
-                    // MIR generator and virtual register resolvers dont emit ANY pop instructions in between a function, so this pop is guaranteed to be from the epilogue...
-                    case MIRInstType::POP:
-                        {
-                            MIRInstruction* epilogueMov = Block->Instructions[i - 1].get();
-
-                            IREditor<MIRTypes>::deleteInstruction(Block.get(), epilogueMov, Message{Phase::FPO, IRTransformType::DELETED, "epilogue instruction redundant after stack offsets made relative to rsp"});
-
-                            if (MIRFunc->IsLeaf && MIRFunc->StackFrameSize <= 128)
-                                IREditor<MIRTypes>::deleteInstruction(Block.get(), inst, Message{Phase::FPO, IRTransformType::DELETED, std::format("stack frame adjustment unnecessary for leaf function with stack frame size of {}(less than 128)", MIRFunc->StackFrameSize)});
-                            else
-                                IREditor<MIRTypes>::replaceInstruction(Block.get(), inst, std::make_unique<MIRAdd>(Register::RSP, Immediate{MIRFunc->StackFrameSize}), Message{Phase::FPO, IRTransformType::REPLACED, std::format("changed 'pop rbp' to 'add rsp, {}'", MIRFunc->StackFrameSize)});
-                        }
-                        break;
+                for (Operand* operand : GetMIRInstOperands(inst).Operands)
+                {
+                    AdjustOffset(*operand);
                 }
             }
         }

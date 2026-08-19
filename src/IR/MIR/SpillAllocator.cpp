@@ -31,12 +31,14 @@ void ResolveVRegsSpillAll(MIR& MIR)
             {
                 MIRInstruction* inst = block->Instructions[i].get();
 
+                for (Operand* operand : GetMIRInstOperands(inst).Operands)
+                {
+                    resolveOperand(*operand);
+                }
+
                 if (inst->type == MIRInstType::MOV)
                 {
                     MIRMov* mov = static_cast<MIRMov*>(inst);
-
-                    resolveOperand(mov->Dest);
-                    resolveOperand(mov->Source);
 
                     if (std::holds_alternative<StackOffset>(mov->Dest) && std::holds_alternative<StackOffset>(mov->Source))
                     {
@@ -50,9 +52,6 @@ void ResolveVRegsSpillAll(MIR& MIR)
                 {
                     MIRAdd* add = static_cast<MIRAdd*>(inst);
 
-                    resolveOperand(add->Dest);
-                    resolveOperand(add->Source);
-
                     if (std::holds_alternative<StackOffset>(add->Dest) && std::holds_alternative<StackOffset>(add->Source))
                     {
                         IREditor<MIRTypes>::addInstructionBefore(block.get(), inst, std::make_unique<MIRMov>(Register::R10D, add->Source));
@@ -64,9 +63,6 @@ void ResolveVRegsSpillAll(MIR& MIR)
                 else if (inst->type == MIRInstType::SUB)
                 {
                     MIRSub* sub = static_cast<MIRSub*>(inst);
-
-                    resolveOperand(sub->Dest);
-                    resolveOperand(sub->Source);
 
                     if (std::holds_alternative<StackOffset>(sub->Dest) && std::holds_alternative<StackOffset>(sub->Source))
                     {
@@ -80,9 +76,6 @@ void ResolveVRegsSpillAll(MIR& MIR)
                 {
                     MIRImul* mul = static_cast<MIRImul*>(inst);
 
-                    resolveOperand(mul->Dest);
-                    resolveOperand(mul->Source);
-
                     if (std::holds_alternative<StackOffset>(mul->Dest))
                     {
                         IREditor<MIRTypes>::addInstructionBefore(block.get(), inst, std::make_unique<MIRMov>(Register::R10D, mul->Dest));
@@ -92,26 +85,9 @@ void ResolveVRegsSpillAll(MIR& MIR)
                     }
                 }
 
-                else if (inst->type == MIRInstType::DIV)
-                {
-                    MIRIdiv* div = static_cast<MIRIdiv*>(inst);
-
-                    resolveOperand(div->Divisor);
-                }
-
-                else if (inst->type == MIRInstType::NEG)
-                {
-                    MIRNeg* neg = static_cast<MIRNeg*>(inst);
-
-                    resolveOperand(neg->Dest);
-                }
-
                 else if (inst->type == MIRInstType::XOR)
                 {
                     MIRXor* xorInst = static_cast<MIRXor*>(inst);
-
-                    resolveOperand(xorInst->Dest);
-                    resolveOperand(xorInst->Source);
 
                     if (std::holds_alternative<StackOffset>(xorInst->Dest) && std::holds_alternative<StackOffset>(xorInst->Source))
                     {
@@ -125,9 +101,6 @@ void ResolveVRegsSpillAll(MIR& MIR)
                 {
                     MIRCmp* cmp = static_cast<MIRCmp*>(inst);
 
-                    resolveOperand(cmp->Left);
-                    resolveOperand(cmp->Right);
-
                     if (std::holds_alternative<StackOffset>(cmp->Left) && std::holds_alternative<StackOffset>(cmp->Right))
                     {
                         IREditor<MIRTypes>::addInstructionBefore(block.get(), inst, std::make_unique<MIRMov>(Register::R10D, cmp->Left));
@@ -139,9 +112,6 @@ void ResolveVRegsSpillAll(MIR& MIR)
                 else if (inst->type == MIRInstType::TEST)
                 {
                     MIRTest* test = static_cast<MIRTest*>(inst);
-
-                    resolveOperand(test->Left);
-                    resolveOperand(test->Right);
 
                     if (std::holds_alternative<StackOffset>(test->Left) && std::holds_alternative<StackOffset>(test->Right))
                     {

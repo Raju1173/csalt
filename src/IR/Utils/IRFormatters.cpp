@@ -10,7 +10,6 @@
 #include <string>
 #include <format>
 #include <algorithm>
-#include <utility>
 
 std::string FormatTokens(TokenStream& tokenStream)
 {

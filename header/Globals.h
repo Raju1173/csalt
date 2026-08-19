@@ -35,6 +35,8 @@ enum class Phase
 
     FPO,
 
+    OUTPUT,
+
     COUNT,
 };
 
@@ -68,7 +70,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 24, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 25, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -127,5 +129,8 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
 
         case Phase::FPO:
             return {.name = "FRAME POINTER OMISSION", .isMIRPhase = true, .isOptimizationPhase = true};
+
+        case Phase::OUTPUT:
+            return {.name = "OUTPUT"};
     }
 }
