@@ -14,7 +14,7 @@ MIRLivenessInfo& MIRFunction::getLivenessInfo()
         LivenessInfo.Liveness.clear();
         LivenessInfo.isValid = true;
 
-        std::unordered_map<VirtualRegister*, MIROperandLiveInterval> liveMap;
+        std::unordered_map<int, MIROperandLiveInterval> liveMap;
 
         int instructionIndex = 0;
 
@@ -22,27 +22,31 @@ MIRLivenessInfo& MIRFunction::getLivenessInfo()
         {
             for (auto& inst : block->Instructions)
             {
-                auto processVReg = [&liveMap, &instructionIndex](VirtualRegister* vreg) {
-                    if (liveMap.find(vreg) == liveMap.end())
+                auto processVReg = [&liveMap, instructionIndex](VirtualRegister& vreg) {
+                    if (liveMap.find(vreg.ID) == liveMap.end())
                     {
-                        liveMap[vreg] = {vreg, instructionIndex, instructionIndex};
+                        liveMap[vreg.ID] = {&vreg, instructionIndex, instructionIndex};
                     }
 
                     else
                     {
-                        liveMap[vreg].end = instructionIndex;
+                        liveMap[vreg.ID].end = instructionIndex;
                     }
                 };
 
-                if (GetMIRInstOperands(inst.get()).Def != nullptr && std::get_if<VirtualRegister>(GetMIRInstOperands(inst.get()).Def) != nullptr)
+                MIRInstOperands operands = GetMIRInstOperands(inst.get());
+
+                if (operands.Def != nullptr && std::get_if<VirtualRegister>(operands.Def) != nullptr)
                 {
-                    processVReg(&std::get<VirtualRegister>(*GetMIRInstOperands(inst.get()).Def));
+                    processVReg(std::get<VirtualRegister>(*operands.Def));
                 }
 
-                for (Operand* use : GetMIRInstOperands(inst.get()).Uses)
+                for (Operand* use : operands.Uses)
                 {
                     if (std::get_if<VirtualRegister>(use) != nullptr)
-                        processVReg(&std::get<VirtualRegister>(*use));
+                    {
+                        processVReg(std::get<VirtualRegister>(*use));
+                    }
                 }
 
                 inst->id = instructionIndex++;
@@ -51,7 +55,7 @@ MIRLivenessInfo& MIRFunction::getLivenessInfo()
 
         LivenessInfo.Liveness.reserve(liveMap.size());
 
-        for (auto& [vreg, interval] : liveMap)
+        for (auto& [id, interval] : liveMap)
         {
             LivenessInfo.Liveness.push_back(interval);
         }
