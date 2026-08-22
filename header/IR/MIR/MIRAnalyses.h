@@ -7,11 +7,19 @@
 class MIRBlock;
 class MIRFunction;
 
+struct MIROperandLiveInterval
+{
+    VirtualRegister* vreg;
+
+    int start;
+    int end;
+};
+
 struct MIRLivenessInfo
 {
     bool isValid = false;
 
-    //
+    std::vector<MIROperandLiveInterval> Liveness;
 };
 
 struct MIRMetaData
