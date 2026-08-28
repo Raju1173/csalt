@@ -3,6 +3,7 @@
 #include "TACAnalyses.h"
 #include "MIRAnalyses.h"
 #include <concepts>
+#include <optional>
 
 class TACFunction;
 class TACBlock;
@@ -137,6 +138,8 @@ public:
     static void addInstructionAfter(Block* block, Instruction* target, std::unique_ptr<Instruction> inst, std::optional<Message> msg = std::nullopt);
 
     static void replaceInstruction(Block* block, Instruction* oldInst, std::unique_ptr<Instruction> newInst, std::optional<Message> msg = std::nullopt);
+
+    static void cloneInstructionTo(Instruction* inst, Block* destBlock, std::optional<Message> msg = std::nullopt);
 
     static void moveInstructionTo(Block* srcBlock, Instruction* inst, Block* destBlock, std::optional<Message> message = std::nullopt);
 

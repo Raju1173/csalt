@@ -62,6 +62,7 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/ControlFlowSimplification.cpp
     ${TAC}/DCE.cpp
     ${TAC}/GVN.cpp
+    ${TAC}/LoopInversion.cpp
     ${TAC}/LICM.cpp
     ${TAC}/CTFE.cpp
 

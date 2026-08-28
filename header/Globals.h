@@ -16,7 +16,9 @@ enum class Phase
     TAC_CONST,
     TAC_PHI_INS,
     TAC_RENAME,
-    TAC_OPT,
+    TAC_PRE_SSA_OPT,
+    TAC_POST_SSA_OPT,
+    TAC_EDGE_SPLIT,
     TAC_PHI_RES,
 
     FOLDING,
@@ -27,6 +29,7 @@ enum class Phase
     GVN,
     SCO,
     CTFE,
+    LOOP_INV,
     LICM,
 
     MIR_CONST,
@@ -70,7 +73,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 25, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 28, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -93,8 +96,12 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "TAC AFTER PHI INSERTION", .isTACPhase = true};
         case Phase::TAC_RENAME:
             return {.name = "TAC AFTER SSA RENAMING", .isTACPhase = true};
-        case Phase::TAC_OPT:
-            return {.name = "TAC AFTER OPTIMIZATIONS", .isTACPhase = true};
+        case Phase::TAC_PRE_SSA_OPT:
+            return {.name = "TAC AFTER PRE SSA OPTIMIZATIONS", .isTACPhase = true};
+        case Phase::TAC_POST_SSA_OPT:
+            return {.name = "TAC AFTER POST SSA OPTIMIZATIONS", .isTACPhase = true};
+        case Phase::TAC_EDGE_SPLIT:
+            return {.name = "TAC AFTER CRITICAL EDGE SPLITTING", .isTACPhase = true};
         case Phase::TAC_PHI_RES:
             return {.name = "TAC AFTER PHI RESOLUTION", .isTACPhase = true};
 
@@ -114,6 +121,8 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "SIBLING CALL OPTIMIZATION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::CTFE:
             return {.name = "COMPILE TIME FUNCTION EXECUTION", .isTACPhase = true, .isOptimizationPhase = true};
+        case Phase::LOOP_INV:
+            return {.name = "LOOP INVERSION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::LICM:
             return {.name = "LOOP INVARIANT CODE MOTION", .isTACPhase = true, .isOptimizationPhase = true};
 

@@ -1,5 +1,6 @@
 #include "SSAConstructor.h"
 #include "IRDebugger.h"
+#include "IREditor.h"
 #include "TACAnalyses.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
@@ -159,6 +160,85 @@ void RenameVariables(TAC& TAC)
     Debugger::Notify(Phase::TAC_RENAME);
 }
 
+void SplitCriticalEdges(TAC& TAC)
+{
+    for (auto& TACFunc : TAC)
+    {
+        std::vector<std::pair<TACBlock*, TACBlock*>> criticalEdges;
+
+        for (auto& block : TACFunc->Blocks)
+        {
+            bool hasPhi = false;
+
+            for (auto& inst : block->Instructions)
+            {
+                if (inst->type == TACInstType::PHI)
+                {
+                    hasPhi = true;
+                    break;
+                }
+            }
+
+            if (hasPhi && block->Parents.size() > 1)
+            {
+                for (TACBlock* parent : block->Parents)
+                {
+                    if (parent->Children.size() > 1)
+                        criticalEdges.push_back(std::make_pair(parent, block.get()));
+                }
+            }
+        }
+
+        for (auto [src, dst] : criticalEdges)
+        {
+            auto splitBlock = std::make_unique<TACBlock>(TACFunc->Blocks.size() + 1, TACFunc.get());
+
+            splitBlock.get()->Instructions.push_back(std::make_unique<TACJump>(dst));
+
+            IREditor<TACTypes>::removeEdge(src, dst);
+            IREditor<TACTypes>::addEdge(src, splitBlock.get());
+            IREditor<TACTypes>::addEdge(splitBlock.get(), dst);
+
+            if (!src->Instructions.empty())
+            {
+                if (src->Instructions.back().get()->type == TACInstType::BRANCH)
+                {
+                    TACBranch* branch = static_cast<TACBranch*>(src->Instructions.back().get());
+
+                    if (branch->TrueTarget == dst)
+                        branch->TrueTarget = splitBlock.get();
+
+                    if (branch->FalseTarget == dst)
+                        branch->FalseTarget = splitBlock.get();
+                }
+
+                else if (src->Instructions.back().get()->type == TACInstType::JUMP)
+                {
+                    TACJump* jump = static_cast<TACJump*>(src->Instructions.back().get());
+
+                    jump->TargetBlock = splitBlock.get();
+                }
+            }
+
+            for (auto& inst : dst->Instructions)
+            {
+                if (inst->type == TACInstType::PHI)
+                {
+                    for (PhiArgument& arg : static_cast<TACPhi*>(inst.get())->args)
+                    {
+                        if (arg.SourceBlock == src)
+                            arg.SourceBlock = splitBlock.get();
+                    }
+                }
+            }
+
+            TACFunc->Blocks.push_back(std::move(splitBlock));
+        }
+    }
+
+    Debugger::Notify(Phase::TAC_EDGE_SPLIT);
+}
+
 void ResolvePhiNodes(TAC& TAC)
 {
     for (auto& TACFunc : TAC)
@@ -198,7 +278,6 @@ void ResolvePhiNodes(TAC& TAC)
             std::erase_if(block->Instructions, [](const auto& inst) { return inst->type == TACInstType::PHI; });
         }
     }
-
 
     Debugger::Notify(Phase::TAC_PHI_RES);
     Debugger::Notify(Phase::TAC);

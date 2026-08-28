@@ -95,6 +95,21 @@ template<typename IRTypes> void IREditor<IRTypes>::replaceInstruction(Block* blo
         Debugger::Notify(msg->Pass);
 }
 
+template<typename IRTypes> void IREditor<IRTypes>::cloneInstructionTo(Instruction* inst, Block* destBlock, std::optional<Message> msg)
+{
+    std::unique_ptr<Instruction> instCopy;
+
+    if constexpr (std::same_as<IRTypes, TACTypes>)
+        instCopy = cloneTACInstruction(inst);
+    else if constexpr (std::same_as<IRTypes, MIRTypes>)
+        instCopy = cloneMIRInstruction(inst);
+
+    appendInstruction(destBlock, std::move(instCopy), msg);
+
+    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
+        Debugger::Notify(msg->Pass);
+}
+
 template<typename IRTypes> void IREditor<IRTypes>::moveInstructionTo(Block* srcBlock, Instruction* inst, Block* destBlock, std::optional<Message> msg)
 {
     std::unique_ptr<Instruction> instCopy;
@@ -198,7 +213,6 @@ template<typename IRTypes> void IREditor<IRTypes>::addEdge(Block* From, Block* T
     }
 
     invalidateControlFlowAnalyses(From->Function->Metadata);
-    invalidateControlFlowAnalyses(To->Function->Metadata);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::removeEdge(Block* From, Block* To)
@@ -207,7 +221,6 @@ template<typename IRTypes> void IREditor<IRTypes>::removeEdge(Block* From, Block
     std::erase(To->Parents, From);
 
     invalidateControlFlowAnalyses(From->Function->Metadata);
-    invalidateControlFlowAnalyses(To->Function->Metadata);
 }
 
 template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockBefore(Block* target, std::optional<Message> msg)
@@ -222,8 +235,6 @@ template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockBefore(
     {
         newBlockPtr->History.push_back(msg.value());
     }
-
-    invalidateAllAnalyses(target->Function->Metadata);
 
     if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
         Debugger::Notify(msg->Pass);

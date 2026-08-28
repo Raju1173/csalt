@@ -281,7 +281,9 @@ struct TACInstOperands
 
     TACInstOperands(TACValue* def, std::unordered_set<TACValue*> uses) : Def(def), Uses(uses)
     {
-        Operands.insert(Def);
+        if (Def != nullptr)
+            Operands.insert(Def);
+
         Operands.insert(Uses.begin(), Uses.end());
     };
 };

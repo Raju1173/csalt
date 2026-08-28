@@ -22,21 +22,13 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
 
             std::vector<TACBlock*> outsideParents;
 
-            for (TACBlock* parent : header->Parents)
-            {
-                if (!loop.Blocks.contains(parent))
-                {
-                    outsideParents.push_back(parent);
-                }
-            }
-
-            if (outsideParents.empty())
-                continue;
-
             TACBlock* preheader = IREditor<TACTypes>::insertBlockBefore(header, Message{Phase::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", std::ranges::max_element(TACFunc->Blocks, {}, &TACBlock::ID)->get()->ID + 1, header->ID)});
 
-            for (TACBlock* parent : outsideParents)
+            for (TACBlock* parent : header->Parents)
             {
+                if (loop.Blocks.contains(parent))
+                    continue;
+
                 if (parent->Instructions.back()->type == TACInstType::JUMP)
                 {
                     TACJump* jump = static_cast<TACJump*>(parent->Instructions.back().get());

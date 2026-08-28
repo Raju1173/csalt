@@ -1,4 +1,5 @@
 #include "csalt.h"
+#include "IREditor.h"
 
 int main(int argc, char** argv)
 {
@@ -42,12 +43,25 @@ int main(int argc, char** argv)
     TAC TAC;
     GenerateTAC(CFG, TAC);
 
+    // clang-format off
+    PassManager<::TAC> TACPassManagerPreSSA(
+        {
+            PassGroup<::TAC>{
+                .IterateToFixedPoint = false,
+                .Passes = {
+                    {Pass<::TAC>{Phase::LOOP_INV, {.Run = InvertLoops}}},
+                }},
+        });
+    // clang-format on
+
+    TACPassManagerPreSSA.RunOptimizations(TAC, Phase::TAC_PRE_SSA_OPT);
+
     InsertPhiNodes(TAC);
 
     RenameVariables(TAC);
 
     // clang-format off
-    PassManager<::TAC> TACPassManager(
+    PassManager<::TAC> TACPassManagerPostSSA(
         {
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
@@ -74,7 +88,9 @@ int main(int argc, char** argv)
         });
     // clang-format on
 
-    TACPassManager.RunOptimizations(TAC, Phase::TAC_OPT);
+    TACPassManagerPostSSA.RunOptimizations(TAC, Phase::TAC_POST_SSA_OPT);
+
+    SplitCriticalEdges(TAC);
 
     ResolvePhiNodes(TAC);
 

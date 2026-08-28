@@ -40,7 +40,7 @@ TACDominatorInfo& TACFunction::getDominatorInfo()
             {
                 TACBlock* curBlock = Blocks[j].get();
 
-                if (&curBlock == &entryBlock)
+                if (curBlock == entryBlock)
                     continue;
 
                 std::unordered_set<TACBlock*> NewDominators;
@@ -134,7 +134,7 @@ void ComputeBlockFrontiers(TACBlock* Block, TACDominatorInfo& DomInfo, TACDomina
         {
             TACJump* jump = static_cast<TACJump*>(Block->Instructions.back().get());
 
-            if (!DomInfo.Dominators[jump->TargetBlock].contains(Block))
+            if (!DomInfo.Dominators[jump->TargetBlock].contains(Block) || jump->TargetBlock == Block)
             {
                 FrontierInfo.Frontiers[Block].push_back(jump->TargetBlock);
             }
@@ -144,12 +144,12 @@ void ComputeBlockFrontiers(TACBlock* Block, TACDominatorInfo& DomInfo, TACDomina
         {
             TACBranch* br = static_cast<TACBranch*>(Block->Instructions.back().get());
 
-            if (!DomInfo.Dominators[br->TrueTarget].contains(Block))
+            if (!DomInfo.Dominators[br->TrueTarget].contains(Block) || br->TrueTarget == Block)
             {
                 FrontierInfo.Frontiers[Block].push_back(br->TrueTarget);
             }
 
-            if (!DomInfo.Dominators[br->FalseTarget].contains(Block))
+            if (!DomInfo.Dominators[br->FalseTarget].contains(Block) || br->FalseTarget == Block)
             {
                 FrontierInfo.Frontiers[Block].push_back(br->FalseTarget);
             }

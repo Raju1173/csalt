@@ -28,8 +28,9 @@
 #include "Globals.h"
 #include "RegisterAllocator.h"
 #include "SpillAllocator.h"
+#include "LoopInversion.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 25, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 28, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -42,7 +43,9 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tac-const", Phase::TAC_CONST},
     {"tac-phi-ins", Phase::TAC_PHI_INS},
     {"tac-rename", Phase::TAC_RENAME},
-    {"tac-opt", Phase::TAC_OPT},
+    {"tac-pre-ssa-opt", Phase::TAC_PRE_SSA_OPT},
+    {"tac-post-ssa-opt", Phase::TAC_POST_SSA_OPT},
+    {"tac-edge-split", Phase::TAC_EDGE_SPLIT},
     {"tac-phi-res", Phase::TAC_PHI_RES},
 
     {"folding", Phase::FOLDING},
@@ -53,6 +56,7 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"gvn", Phase::GVN},
     {"sco", Phase::SCO},
     {"ctfe", Phase::CTFE},
+    {"loop-inv", Phase::LOOP_INV},
     {"licm", Phase::LICM},
 
     {"mir-const", Phase::MIR_CONST},
