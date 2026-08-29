@@ -4,6 +4,7 @@
 #include "TACAnalyses.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <print>
@@ -191,7 +192,7 @@ void SplitCriticalEdges(TAC& TAC)
 
         for (auto [src, dst] : criticalEdges)
         {
-            auto splitBlock = std::make_unique<TACBlock>(TACFunc->Blocks.size() + 1, TACFunc.get());
+            auto splitBlock = std::make_unique<TACBlock>(std::ranges::max_element(TACFunc->Blocks, {}, &TACBlock::ID)->get()->ID + 1, TACFunc.get());
 
             splitBlock.get()->Instructions.push_back(std::make_unique<TACJump>(dst));
 
@@ -232,7 +233,7 @@ void SplitCriticalEdges(TAC& TAC)
                 }
             }
 
-            TACFunc->Blocks.push_back(std::move(splitBlock));
+            TACFunc->Blocks.insert(std::find_if(TACFunc->Blocks.begin(), TACFunc->Blocks.end(), [&dst](auto& block) { return dst == block.get(); }), std::move(splitBlock));
         }
     }
 
@@ -280,5 +281,4 @@ void ResolvePhiNodes(TAC& TAC)
     }
 
     Debugger::Notify(Phase::TAC_PHI_RES);
-    Debugger::Notify(Phase::TAC);
 }

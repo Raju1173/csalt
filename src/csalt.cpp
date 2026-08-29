@@ -84,6 +84,7 @@ int main(int argc, char** argv)
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{Phase::LICM, {.Run = HoistLoopInvariants}}},
+                    {Pass<::TAC>{Phase::SCO, {.Run = MarkSiblingCalls}}},
                 }},
         });
     // clang-format on
@@ -93,6 +94,8 @@ int main(int argc, char** argv)
     SplitCriticalEdges(TAC);
 
     ResolvePhiNodes(TAC);
+
+    Debugger::Notify(Phase::TAC);
 
     MIR MIR;
     GenerateMachineIR(TAC, MIR);
@@ -115,12 +118,12 @@ int main(int argc, char** argv)
 
     MIRPassManager.RunOptimizations(MIR, Phase::MIR_OPT);
 
-    std::string AssemblyFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "s";
+    Debugger::Notify(Phase::MIR);
 
+    std::string AssemblyFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "s";
     EmitAssembly(MIR, AssemblyFilePath);
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "out";
-
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
 
     Debugger::Run();

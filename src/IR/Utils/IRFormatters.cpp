@@ -10,6 +10,7 @@
 #include <string>
 #include <format>
 #include <algorithm>
+#include <variant>
 
 std::string FormatTokens(TokenStream& tokenStream)
 {
@@ -212,7 +213,7 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
                 else
                     out += "    ";
 
-                out += std::format("call {}(", call->functionName);
+                out += std::format("{}call {}(", (call->isSiblingCall ? "sibling_" : ""), call->functionName);
 
                 for (size_t i = 0; i < call->args.size(); i++)
                 {
@@ -556,7 +557,11 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             {
                 MIRJump* jump = static_cast<MIRJump*>(inst);
 
-                out += std::format("    jmp B{}\n", jump->TargetBlock->ID);
+                if (std::holds_alternative<MIRBlock*>(jump->Target))
+                    out += std::format("    jmp B{}\n", std::get<MIRBlock*>(jump->Target)->ID);
+
+                if (std::holds_alternative<MIRFunction*>(jump->Target))
+                    out += std::format("    jmp {}\n", std::get<MIRFunction*>(jump->Target)->FunctionName);
             }
             break;
 

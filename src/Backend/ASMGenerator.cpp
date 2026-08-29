@@ -134,7 +134,11 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                         {
                             MIRJump* jump = static_cast<MIRJump*>(inst.get());
 
-                            out << "    jmp ." << function->FunctionName << "L" << jump->TargetBlock->ID << "\n";
+                            if (std::holds_alternative<MIRBlock*>(jump->Target))
+                                out << "    jmp ." << function->FunctionName << "L" << std::get<MIRBlock*>(jump->Target)->ID << "\n";
+
+                            else if (std::holds_alternative<MIRFunction*>(jump->Target))
+                                out << "    jmp " << std::get<MIRFunction*>(jump->Target)->FunctionName << "\n";
                         }
                         break;
 

@@ -226,6 +226,8 @@ public:
     std::string functionName;
     std::vector<TACValue> args;
 
+    bool isSiblingCall = false;
+
     TACCall() : TACInstruction(TACInstType::CALL){};
 
     TACCall(std::optional<TACValue> dest, std::string functionName, std::vector<TACValue> args) : TACInstruction(TACInstType::CALL), dest(dest), functionName(functionName), args(args){};

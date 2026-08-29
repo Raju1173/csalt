@@ -64,8 +64,10 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
         {
             MIRBlock* curBlock = blockMap[TACBlock.get()];
 
-            for (auto& inst : TACBlock->Instructions)
+            for (size_t i = 0; i < TACBlock->Instructions.size(); i++)
             {
+                auto& inst = TACBlock->Instructions[i];
+
                 if (inst->type == TACInstType::ASSIGN)
                 {
                     TACAssign* assign = static_cast<TACAssign*>(inst.get());
@@ -175,6 +177,7 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
                 else if (inst->type == TACInstType::CALL)
                 {
                     curFunc->IsLeaf = false;
+
                     TACCall* call = static_cast<TACCall*>(inst.get());
 
                     int extraArgs = call->args.size() > 6 ? call->args.size() - 6 : 0;
@@ -195,6 +198,17 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
                     }
 
                     auto funcIt = std::find_if(MIR.begin(), MIR.end(), [&call](auto& func) { return func->FunctionName == call->functionName; });
+
+                    if (call->isSiblingCall)
+                    {
+                        curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::RSP, Register::RBP));
+                        curBlock->Instructions.push_back(std::make_unique<MIRPop>(Register::RBP));
+                        curBlock->Instructions.push_back(std::make_unique<MIRJump>(std::find_if(MIR.begin(), MIR.end(), [&call](auto& func) { return call->functionName == func->FunctionName; })->get()));
+
+                        i++;
+
+                        continue;
+                    }
 
                     if (funcIt != MIR.end())
                     {
@@ -303,7 +317,9 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
 
         auto& exitBlock = curFunc->Blocks.back();
 
-        if (exitBlock->Instructions.empty() || exitBlock->Instructions.back()->type != MIRInstType::RET)
+        MIRInstruction* lastInst = !exitBlock->Instructions.empty() ? exitBlock->Instructions.back().get() : nullptr;
+
+        if (lastInst == nullptr || (lastInst->type != MIRInstType::RET && lastInst->type != MIRInstType::JMP && !std::holds_alternative<MIRFunction*>(static_cast<MIRJump*>(lastInst)->Target)))
         {
             exitBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, Immediate{0}));
             exitBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::RSP, Register::RBP));

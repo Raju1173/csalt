@@ -308,10 +308,12 @@ public:
 class MIRJump : public MIRInstruction
 {
 public:
-    MIRBlock* TargetBlock;
+    std::variant<MIRBlock*, MIRFunction*> Target;
 
     MIRJump() : MIRInstruction(MIRInstType::JMP){};
-    MIRJump(MIRBlock* targetBlock) : MIRInstruction(MIRInstType::JMP), TargetBlock(targetBlock){};
+
+    MIRJump(MIRBlock* targetBlock) : MIRInstruction(MIRInstType::JMP), Target(targetBlock){};
+    MIRJump(MIRFunction* targetFunction) : MIRInstruction(MIRInstType::JMP), Target(targetFunction){};
 };
 
 class MIRPush : public MIRInstruction

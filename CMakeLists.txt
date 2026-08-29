@@ -65,6 +65,7 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/LoopInversion.cpp
     ${TAC}/LICM.cpp
     ${TAC}/CTFE.cpp
+    ${TAC}/SCO.cpp
 
     ${MIR}/FramePointerOmission.cpp
 )
