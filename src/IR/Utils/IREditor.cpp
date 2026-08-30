@@ -1,6 +1,5 @@
 #include "IRDebugger.h"
 #include "MIRInstructions.h"
-#include "SSAConstructor.h"
 #include "TACInstructions.h"
 #include <algorithm>
 #include <concepts>
@@ -25,10 +24,6 @@ template<typename IRTypes> void IREditor<IRTypes>::addInstructionBefore(Block* b
     if (msg.has_value())
         inst->History.push_back(msg.value());
 
-    inst->deadSiblings.preceding.insert(inst->deadSiblings.preceding.begin(), std::make_move_iterator(target->deadSiblings.preceding.begin()), std::make_move_iterator(target->deadSiblings.preceding.end()));
-
-    target->deadSiblings.preceding.clear();
-
     block->Instructions.insert(std::find_if(block->Instructions.begin(), block->Instructions.end(), [&target](auto& i) { return i.get() == target; }), std::move(inst));
 
     invalidateDataFlowAnalyses(block->Function->Metadata);
@@ -41,10 +36,6 @@ template<typename IRTypes> void IREditor<IRTypes>::addInstructionAfter(Block* bl
 {
     if (msg.has_value())
         inst->History.push_back(msg.value());
-
-    inst->deadSiblings.trailing.insert(inst->deadSiblings.trailing.end(), std::make_move_iterator(target->deadSiblings.trailing.begin()), std::make_move_iterator(target->deadSiblings.trailing.end()));
-
-    target->deadSiblings.trailing.clear();
 
     block->Instructions.insert(std::next(std::find_if(block->Instructions.begin(), block->Instructions.end(), [&target](auto& i) { return i.get() == target; })), std::move(inst));
 
@@ -66,28 +57,6 @@ template<typename IRTypes> void IREditor<IRTypes>::replaceInstruction(Block* blo
     auto& oldInstPtr = *std::find_if(block->Instructions.begin(), block->Instructions.end(), [&oldInst](auto& i) { return i.get() == oldInst; });
 
     invalidateDataFlowAnalyses(block->Function->Metadata);
-
-    if constexpr (std::same_as<IRTypes, TACTypes>)
-    {
-        switch (oldInst->type)
-        {
-            case TACInstType::BRANCH:
-            case TACInstType::JUMP:
-                invalidateControlFlowAnalyses(block->Function->Metadata);
-                break;
-        }
-    }
-
-    else if constexpr (std::same_as<IRTypes, MIRTypes>)
-    {
-        switch (oldInst->type)
-        {
-            case MIRInstType::CJMP:
-            case MIRInstType::JMP:
-                invalidateControlFlowAnalyses(block->Function->Metadata);
-                break;
-        }
-    }
 
     oldInstPtr = std::move(newInst);
 
@@ -174,28 +143,6 @@ template<typename IRTypes> void IREditor<IRTypes>::deleteInstruction(Block* bloc
 
     invalidateDataFlowAnalyses(block->Function->Metadata);
 
-    if constexpr (std::same_as<IRTypes, TACTypes>)
-    {
-        switch (inst->type)
-        {
-            case TACInstType::BRANCH:
-            case TACInstType::JUMP:
-                invalidateControlFlowAnalyses(block->Function->Metadata);
-                break;
-        }
-    }
-
-    else if constexpr (std::same_as<IRTypes, MIRTypes>)
-    {
-        switch (inst->type)
-        {
-            case MIRInstType::CJMP:
-            case MIRInstType::JMP:
-                invalidateControlFlowAnalyses(block->Function->Metadata);
-                break;
-        }
-    }
-
     auto instIt = std::find_if(block->Instructions.begin(), block->Instructions.end(), [&inst](auto& i) { return i.get() == inst; });
 
     cascadeDeletion<Instruction>(block->Instructions, instIt - block->Instructions.begin(), &block->LastDeadInstruction);
@@ -225,16 +172,31 @@ template<typename IRTypes> void IREditor<IRTypes>::removeEdge(Block* From, Block
 
 template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockBefore(Block* target, std::optional<Message> msg)
 {
-    auto newBlock = std::make_unique<Block>(std::ranges::max_element(target->Function->Blocks, {}, &Block::ID)->get()->ID + 1, target->Function);
+    auto newBlock = std::make_unique<Block>(target->Function->NextBlockID++, target->Function);
 
     Block* newBlockPtr = newBlock.get();
 
     target->Function->Blocks.insert(std::find_if(target->Function->Blocks.begin(), target->Function->Blocks.end(), [&target](auto& b) { return b.get() == target; }), std::move(newBlock));
 
     if (msg.has_value())
-    {
         newBlockPtr->History.push_back(msg.value());
-    }
+
+    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
+        Debugger::Notify(msg->Pass);
+
+    return newBlockPtr;
+}
+
+template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockAfter(Block* target, std::optional<Message> msg)
+{
+    auto newBlock = std::make_unique<Block>(target->Function->NextBlockID++, target->Function);
+
+    Block* newBlockPtr = newBlock.get();
+
+    target->Function->Blocks.insert(std::next(std::find_if(target->Function->Blocks.begin(), target->Function->Blocks.end(), [&target](auto& b) { return b.get() == target; })), std::move(newBlock));
+
+    if (msg.has_value())
+        newBlockPtr->History.push_back(msg.value());
 
     if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
         Debugger::Notify(msg->Pass);
@@ -320,6 +282,65 @@ template<typename IRTypes> void IREditor<IRTypes>::remapPhiSources(Block* block,
         }
 
         phi->args = updatedArgs;
+    }
+}
+
+template<typename IRTypes> void IREditor<IRTypes>::redirectPhiSourcesInto(Block* targetBlock, Block* intermediateBlock, std::vector<Block*>& redirectedParents) requires std::same_as<IRTypes, TACTypes>
+{
+    if (redirectedParents.empty())
+        return;
+
+    for (auto& inst : targetBlock->Instructions)
+    {
+        if (inst->type != TACInstType::PHI)
+            break;
+
+        TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+        std::vector<PhiArgument> redirectedArgs;
+        std::vector<PhiArgument> remainingArgs;
+
+        for (PhiArgument& arg : phi->args)
+        {
+            if (std::find(redirectedParents.begin(), redirectedParents.end(), arg.SourceBlock) != redirectedParents.end())
+                redirectedArgs.push_back(arg);
+            else
+                remainingArgs.push_back(arg);
+        }
+
+        if (redirectedArgs.empty())
+            continue;
+
+        if (redirectedArgs.size() == 1)
+        {
+            remainingArgs.push_back(PhiArgument{intermediateBlock, redirectedArgs[0].Value});
+            phi->args = remainingArgs;
+        }
+
+        else
+        {
+            TACVariable newTemp = TACVariable{"t." + std::to_string(targetBlock->Function->NextTemp++)};
+
+            auto newPhi = std::make_unique<TACPhi>(newTemp, redirectedArgs);
+
+            TACInstruction* firstNonPhiInst = nullptr;
+
+            size_t i = 0;
+
+            while (i < intermediateBlock->Instructions.size() && intermediateBlock->Instructions[i]->type == TACInstType::PHI)
+            {
+                firstNonPhiInst = intermediateBlock->Instructions[i].get();
+                i++;
+            }
+
+            if (firstNonPhiInst != nullptr)
+                addInstructionAfter(intermediateBlock, firstNonPhiInst, std::move(newPhi));
+            else
+                appendInstruction(intermediateBlock, std::move(newPhi));
+
+            remainingArgs.push_back(PhiArgument{intermediateBlock, newTemp});
+            phi->args = remainingArgs;
+        }
     }
 }
 

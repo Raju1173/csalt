@@ -73,7 +73,9 @@ std::unique_ptr<CFGBlock> constructBlock(Node& ASTBlockNode, CFGFunction& CFGFun
             break;
     }
 
-    if (!block->Condition.has_value() && !block->TransitionNext.has_value())
+    bool hasReturn = (!block->Statements.empty() && block->Statements.back().type == NodeType::RETURN);
+
+    if (!block->Condition.has_value() && !block->TransitionNext.has_value() && !hasReturn)
     {
         if (exitTarget != nullptr)
         {

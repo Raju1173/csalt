@@ -27,6 +27,7 @@ enum class Phase
     DCE,
     CFG_SIMP,
     GVN,
+    TRE,
     SCO,
     CTFE,
     LOOP_INV,
@@ -73,7 +74,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 28, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 29, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -119,6 +120,8 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "GLOBAL VALUE NUMBERING", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::SCO:
             return {.name = "SIBLING CALL OPTIMIZATION", .isTACPhase = true, .isOptimizationPhase = true};
+        case Phase::TRE:
+            return {.name = "TAIL RECURSION ELIMINATION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::CTFE:
             return {.name = "COMPILE TIME FUNCTION EXECUTION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::LOOP_INV:

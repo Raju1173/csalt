@@ -19,22 +19,23 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
         for (TACLoop& loop : LoopInfo.Loops)
         {
             TACBlock* header = loop.Header;
-
             std::vector<TACBlock*> outsideParents;
-
-            TACBlock* preheader = IREditor<TACTypes>::insertBlockBefore(header, Message{Phase::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", std::ranges::max_element(TACFunc->Blocks, {}, &TACBlock::ID)->get()->ID + 1, header->ID)});
 
             for (TACBlock* parent : header->Parents)
             {
-                if (loop.Blocks.contains(parent))
-                    continue;
+                if (!loop.Blocks.contains(parent))
+                    outsideParents.push_back(parent);
+            }
 
+            TACBlock* preheader = IREditor<TACTypes>::insertBlockBefore(header, Message{Phase::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", TACFunc->NextBlockID + 1, header->ID)});
+
+            for (TACBlock* parent : outsideParents)
+            {
                 if (parent->Instructions.back()->type == TACInstType::JUMP)
                 {
                     TACJump* jump = static_cast<TACJump*>(parent->Instructions.back().get());
 
-                    if (jump->TargetBlock == header)
-                        jump->TargetBlock = preheader;
+                    jump->TargetBlock = preheader;
                 }
 
                 else if (parent->Instructions.back()->type == TACInstType::BRANCH)
@@ -50,11 +51,11 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
 
                 IREditor<TACTypes>::removeEdge(parent, header);
                 IREditor<TACTypes>::addEdge(parent, preheader);
-                IREditor<TACTypes>::remapPhiSources(header, parent, {preheader});
             }
 
-            IREditor<TACTypes>::addEdge(preheader, header);
+            IREditor<TACTypes>::redirectPhiSourcesInto(header, preheader, outsideParents);
 
+            IREditor<TACTypes>::addEdge(preheader, header);
             IREditor<TACTypes>::appendInstruction(preheader, std::make_unique<TACJump>(header));
 
             preheaderMap[header] = preheader;
@@ -105,7 +106,7 @@ void HoistLoopInvariants(TAC& TAC)
 
                 for (TACBlock* block : Loop.Blocks)
                 {
-                    if (!DomInfo.Dominators[Loop.End].contains(block))
+                    if (!std::all_of(Loop.Latches.begin(), Loop.Latches.end(), [&DomInfo, &block](TACBlock* latch) { return DomInfo.Dominators[latch].contains(block); }))
                         continue;
 
                     for (int i = block->Instructions.size() - 1; i >= 0; --i)

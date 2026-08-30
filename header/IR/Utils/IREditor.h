@@ -155,6 +155,8 @@ public:
 
     static Block* insertBlockBefore(Block* target, std::optional<Message> msg = std::nullopt);
 
+    static Block* insertBlockAfter(Block* target, std::optional<Message> msg = std::nullopt);
+
     static void deleteBlock(Block* block, std::optional<Message> msg = std::nullopt);
 
     static void deleteFunction(IR& IR, Function* function, std::optional<Message> msg = std::nullopt);
@@ -162,4 +164,6 @@ public:
     static void removePhiSource(Block* block, Block* parent) requires std::same_as<IRTypes, TACTypes>;
 
     static void remapPhiSources(Block* block, Block* oldParent, const std::vector<Block*>& newParents) requires std::same_as<IRTypes, TACTypes>;
+
+    static void redirectPhiSourcesInto(Block* targetBlock, Block* intermediateBlock, std::vector<Block*>& redirectedParents) requires std::same_as<IRTypes, TACTypes>;
 };

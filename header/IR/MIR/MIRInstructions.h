@@ -164,7 +164,7 @@ class MIRInstruction
 public:
     int id = -1;
 
-    MIRInstType type;
+    const MIRInstType type;
 
     std::vector<Message> History;
 

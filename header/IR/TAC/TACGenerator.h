@@ -49,6 +49,7 @@ public:
     std::unique_ptr<TACBlock> LastDeadBlock;
 
     size_t NextTemp = 0;
+    size_t NextBlockID = 1;
 
     TACFunction(std::string name, std::vector<std::string> parameters) : Name(name), Parameters(parameters){};
 

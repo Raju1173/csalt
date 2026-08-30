@@ -360,6 +360,8 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
         PrologueInstructions.push_back(std::make_unique<MIRSub>(Register::RSP, Immediate{curFunc->StackFrameSize}));
 
         entryBlock->Instructions.insert(entryBlock->Instructions.begin(), std::make_move_iterator(PrologueInstructions.begin()), std::make_move_iterator(PrologueInstructions.end()));
+
+        MIR.back()->NextBlockID = MIR.back()->Blocks.size() + 1;
     }
 
     Debugger::Notify(Phase::MIR_CONST);

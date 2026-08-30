@@ -52,6 +52,8 @@ public:
 
     std::unique_ptr<MIRBlock> LastDeadBlock;
 
+    size_t NextBlockID = 1;
+
     MIRFunction(std::string name, std::vector<std::string> parameters) : FunctionName(name), Parameters(parameters){};
 
 private:

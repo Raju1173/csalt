@@ -358,6 +358,7 @@ void GenerateTAC(CFG& CFG, TAC& TAC)
         std::reverse(TAC.back()->Blocks.begin(), TAC.back()->Blocks.end());
 
         TAC.back()->NextTemp = NextTemp;
+        TAC.back()->NextBlockID = TAC.back()->Blocks.size() + 1;
 
         NextTemp = 0;
     }

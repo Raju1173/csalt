@@ -34,8 +34,7 @@ void InvertLoops(TAC& TAC)
                     {
                         TACJump* jump = static_cast<TACJump*>(insts.back().get());
 
-                        if (jump->TargetBlock == loop.Header)
-                            jump->TargetBlock = guardBlock;
+                        jump->TargetBlock = guardBlock;
                     }
 
                     else if (insts.back()->type == TACInstType::BRANCH)
@@ -44,6 +43,7 @@ void InvertLoops(TAC& TAC)
 
                         if (branch->TrueTarget == loop.Header)
                             branch->TrueTarget = guardBlock;
+
                         if (branch->FalseTarget == loop.Header)
                             branch->FalseTarget = guardBlock;
                     }
@@ -98,20 +98,23 @@ void InvertLoops(TAC& TAC)
             IREditor<TACTypes>::addEdge(guardBlock, guardCond->TrueTarget);
             IREditor<TACTypes>::addEdge(guardBlock, guardCond->FalseTarget);
 
-            if (!loop.End->Instructions.empty() && loop.End->Instructions.back()->type == TACInstType::JUMP)
+            for (TACBlock* latch : loop.Latches)
             {
-                TACJump* endJump = static_cast<TACJump*>(loop.End->Instructions.back().get());
+                if (!latch->Instructions.empty() && latch->Instructions.back()->type == TACInstType::JUMP)
+                {
+                    TACJump* endJump = static_cast<TACJump*>(latch->Instructions.back().get());
 
-                IREditor<TACTypes>::removeEdge(loop.End, endJump->TargetBlock);
-                IREditor<TACTypes>::deleteInstruction(loop.End, endJump);
+                    IREditor<TACTypes>::removeEdge(latch, endJump->TargetBlock);
+                    IREditor<TACTypes>::deleteInstruction(latch, endJump);
+                }
+
+                cloneHeaderTo(latch);
+
+                TACBranch* latchCond = static_cast<TACBranch*>(latch->Instructions.back().get());
+
+                IREditor<TACTypes>::addEdge(latch, latchCond->TrueTarget);
+                IREditor<TACTypes>::addEdge(latch, latchCond->FalseTarget);
             }
-
-            cloneHeaderTo(loop.End);
-
-            TACBranch* endCond = static_cast<TACBranch*>(loop.End->Instructions.back().get());
-
-            IREditor<TACTypes>::addEdge(loop.End, endCond->TrueTarget);
-            IREditor<TACTypes>::addEdge(loop.End, endCond->FalseTarget);
 
             std::vector<TACBlock*> headerParents = loop.Header->Parents;
             std::vector<TACBlock*> headerChildren = loop.Header->Children;
@@ -122,7 +125,7 @@ void InvertLoops(TAC& TAC)
             for (TACBlock* child : headerChildren)
                 IREditor<TACTypes>::removeEdge(loop.Header, child);
 
-            IREditor<TACTypes>::deleteBlock(loop.Header, Message{Phase::LOOP_INV, IRTransformType::DELETED, "merged loop header into loop's end block"});
+            IREditor<TACTypes>::deleteBlock(loop.Header, Message{Phase::LOOP_INV, IRTransformType::DELETED, "merged loop header into latches"});
         }
     }
 }

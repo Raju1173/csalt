@@ -7,6 +7,7 @@
 #include "BranchSimplification.h"
 #include "ControlFlowSimplification.h"
 #include "FramePointerOmission.h"
+#include "TRE.h"
 #include "SCO.h"
 #include "CTFE.h"
 #include "LICM.h"
@@ -30,7 +31,7 @@
 #include "SpillAllocator.h"
 #include "LoopInversion.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 28, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 29, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -54,6 +55,7 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"dce", Phase::DCE},
     {"cfg-simp", Phase::CFG_SIMP},
     {"gvn", Phase::GVN},
+    {"tre", Phase::TRE},
     {"sco", Phase::SCO},
     {"ctfe", Phase::CTFE},
     {"loop-inv", Phase::LOOP_INV},

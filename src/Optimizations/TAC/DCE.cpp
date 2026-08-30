@@ -114,13 +114,16 @@ bool EliminateUnreachableBlocks(TACFunction* TACFunc)
 
         if (block->Parents.empty())
         {
-            for (TACBlock* parent : block->Parents)
+            std::vector<TACBlock*> blockParents = block->Parents;
+            std::vector<TACBlock*> blockChildren = block->Children;
+
+            for (TACBlock* parent : blockParents)
             {
                 IREditor<TACTypes>::removeEdge(parent, block.get());
                 IREditor<TACTypes>::removePhiSource(block.get(), parent);
             }
 
-            for (TACBlock* child : block->Children)
+            for (TACBlock* child : blockChildren)
             {
                 IREditor<TACTypes>::removeEdge(block.get(), child);
                 IREditor<TACTypes>::removePhiSource(child, block.get());

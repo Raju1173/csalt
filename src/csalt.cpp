@@ -49,6 +49,7 @@ int main(int argc, char** argv)
             PassGroup<::TAC>{
                 .IterateToFixedPoint = false,
                 .Passes = {
+                    {Pass<::TAC>{Phase::TRE, {.Run = EliminateTailRecursions}}},
                     {Pass<::TAC>{Phase::LOOP_INV, {.Run = InvertLoops}}},
                 }},
         });

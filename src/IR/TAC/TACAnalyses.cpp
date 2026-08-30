@@ -262,8 +262,9 @@ TACLoopInfo& TACFunction::getLoopInfo()
     if (!LoopInfo.isValid)
     {
         LoopInfo.isValid = true;
-
         LoopInfo.Loops.clear();
+
+        std::unordered_map<TACBlock*, std::vector<TACBlock*>> backedgesToHeader;
 
         for (auto& Block : Blocks)
         {
@@ -271,12 +272,27 @@ TACLoopInfo& TACFunction::getLoopInfo()
             {
                 if (DominatorInfo.Dominators[Block.get()].contains(child))
                 {
-                    // csalt doesnt support continue, break or goto, thus, every single loop is guaranteed to have only one backedge...
-                    LoopInfo.Loops.push_back(TACLoop{child, Block.get(), {child, Block.get()}});
-
-                    findLoopBlocks(LoopInfo.Loops.back(), Block.get());
+                    backedgesToHeader[child].push_back(Block.get());
                 }
             }
+        }
+
+        for (auto& [header, latches] : backedgesToHeader)
+        {
+            TACLoop loop;
+
+            loop.Header = header;
+            loop.Latches = latches;
+
+            loop.Blocks.insert(header);
+
+            for (TACBlock* latch : latches)
+            {
+                loop.Blocks.insert(latch);
+                findLoopBlocks(loop, latch);
+            }
+
+            LoopInfo.Loops.push_back(loop);
         }
     }
 

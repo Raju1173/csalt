@@ -192,13 +192,13 @@ void SplitCriticalEdges(TAC& TAC)
 
         for (auto [src, dst] : criticalEdges)
         {
-            auto splitBlock = std::make_unique<TACBlock>(std::ranges::max_element(TACFunc->Blocks, {}, &TACBlock::ID)->get()->ID + 1, TACFunc.get());
+            TACBlock* splitBlock = IREditor<TACTypes>::insertBlockBefore(dst);
 
-            splitBlock.get()->Instructions.push_back(std::make_unique<TACJump>(dst));
+            IREditor<TACTypes>::appendInstruction(splitBlock, std::make_unique<TACJump>(dst));
 
             IREditor<TACTypes>::removeEdge(src, dst);
-            IREditor<TACTypes>::addEdge(src, splitBlock.get());
-            IREditor<TACTypes>::addEdge(splitBlock.get(), dst);
+            IREditor<TACTypes>::addEdge(src, splitBlock);
+            IREditor<TACTypes>::addEdge(splitBlock, dst);
 
             if (!src->Instructions.empty())
             {
@@ -207,17 +207,17 @@ void SplitCriticalEdges(TAC& TAC)
                     TACBranch* branch = static_cast<TACBranch*>(src->Instructions.back().get());
 
                     if (branch->TrueTarget == dst)
-                        branch->TrueTarget = splitBlock.get();
+                        branch->TrueTarget = splitBlock;
 
                     if (branch->FalseTarget == dst)
-                        branch->FalseTarget = splitBlock.get();
+                        branch->FalseTarget = splitBlock;
                 }
 
                 else if (src->Instructions.back().get()->type == TACInstType::JUMP)
                 {
                     TACJump* jump = static_cast<TACJump*>(src->Instructions.back().get());
 
-                    jump->TargetBlock = splitBlock.get();
+                    jump->TargetBlock = splitBlock;
                 }
             }
 
@@ -228,12 +228,10 @@ void SplitCriticalEdges(TAC& TAC)
                     for (PhiArgument& arg : static_cast<TACPhi*>(inst.get())->args)
                     {
                         if (arg.SourceBlock == src)
-                            arg.SourceBlock = splitBlock.get();
+                            arg.SourceBlock = splitBlock;
                     }
                 }
             }
-
-            TACFunc->Blocks.insert(std::find_if(TACFunc->Blocks.begin(), TACFunc->Blocks.end(), [&dst](auto& block) { return dst == block.get(); }), std::move(splitBlock));
         }
     }
 

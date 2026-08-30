@@ -46,7 +46,7 @@ struct TACDefBlocksInfo
 struct TACLoop
 {
     TACBlock* Header;
-    TACBlock* End;
+    std::vector<TACBlock*> Latches;
     std::unordered_set<TACBlock*> Blocks;
 };
 
