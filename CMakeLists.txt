@@ -67,6 +67,7 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/CTFE.cpp
     ${TAC}/TRE.cpp
     ${TAC}/SCO.cpp
+    ${TAC}/FunctionInlining.cpp
 
     ${MIR}/FramePointerOmission.cpp
 )

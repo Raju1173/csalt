@@ -1,3 +1,4 @@
+#include "IRCommon.h"
 #include "IRDebugger.h"
 #include "MIRInstructions.h"
 #include "TACInstructions.h"
@@ -202,6 +203,31 @@ template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockAfter(B
         Debugger::Notify(msg->Pass);
 
     return newBlockPtr;
+}
+
+template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::cloneBlockBefore(Block* source, Block* target, std::optional<Message> msg)
+{
+    std::unique_ptr<Block> clonedBlock = std::make_unique<Block>(target->Function->NextBlockID++, target->Function);
+
+    Block* clonedBlockPtr = clonedBlock.get();
+
+    for (auto& inst : source->Instructions)
+    {
+        if constexpr (std::same_as<IRTypes, TACTypes>)
+            clonedBlock->Instructions.push_back(cloneTACInstruction(inst.get()));
+        else if constexpr (std::same_as<IRTypes, MIRTypes>)
+            clonedBlock->Instructions.push_back(cloneMIRInstruction(inst.get()));
+    }
+
+    target->Function->Blocks.insert(std::find_if(target->Function->Blocks.begin(), target->Function->Blocks.end(), [&target](auto& b) { return b.get() == target; }), std::move(clonedBlock));
+
+    if (msg.has_value())
+        clonedBlock->History.push_back(msg.value());
+
+    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
+        Debugger::Notify(msg->Pass);
+
+    return clonedBlockPtr;
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::deleteBlock(Block* block, std::optional<Message> msg)

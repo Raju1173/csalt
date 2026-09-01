@@ -30,6 +30,7 @@
 #include "RegisterAllocator.h"
 #include "SpillAllocator.h"
 #include "LoopInversion.h"
+#include "FunctionInlining.h"
 
 static_assert(std::to_underlying(Phase::COUNT) == 29, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 

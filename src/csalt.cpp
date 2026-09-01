@@ -1,5 +1,4 @@
 #include "csalt.h"
-#include "IREditor.h"
 
 int main(int argc, char** argv)
 {
@@ -51,6 +50,7 @@ int main(int argc, char** argv)
                 .Passes = {
                     {Pass<::TAC>{Phase::TRE, {.Run = EliminateTailRecursions}}},
                     {Pass<::TAC>{Phase::LOOP_INV, {.Run = InvertLoops}}},
+                    {Pass<::TAC>{Phase::LOOP_INV, {.Run = InlineFunctions}}},
                 }},
         });
     // clang-format on

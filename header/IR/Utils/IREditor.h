@@ -157,6 +157,8 @@ public:
 
     static Block* insertBlockAfter(Block* target, std::optional<Message> msg = std::nullopt);
 
+    static Block* cloneBlockBefore(Block* source, Block* target, std::optional<Message> msg = std::nullopt);
+
     static void deleteBlock(Block* block, std::optional<Message> msg = std::nullopt);
 
     static void deleteFunction(IR& IR, Function* function, std::optional<Message> msg = std::nullopt);
