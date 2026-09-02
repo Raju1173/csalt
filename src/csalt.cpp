@@ -50,7 +50,7 @@ int main(int argc, char** argv)
                 .Passes = {
                     {Pass<::TAC>{Phase::TRE, {.Run = EliminateTailRecursions}}},
                     {Pass<::TAC>{Phase::LOOP_INV, {.Run = InvertLoops}}},
-                    {Pass<::TAC>{Phase::LOOP_INV, {.Run = InlineFunctions}}},
+                    {Pass<::TAC>{Phase::INLINING, {.Run = InlineFunctions}}},
                 }},
         });
     // clang-format on

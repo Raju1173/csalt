@@ -222,7 +222,7 @@ template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::cloneBlockBefore(B
     target->Function->Blocks.insert(std::find_if(target->Function->Blocks.begin(), target->Function->Blocks.end(), [&target](auto& b) { return b.get() == target; }), std::move(clonedBlock));
 
     if (msg.has_value())
-        clonedBlock->History.push_back(msg.value());
+        clonedBlockPtr->History.push_back(msg.value());
 
     if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
         Debugger::Notify(msg->Pass);
@@ -345,7 +345,7 @@ template<typename IRTypes> void IREditor<IRTypes>::redirectPhiSourcesInto(Block*
 
         else
         {
-            TACVariable newTemp = TACVariable{"t." + std::to_string(targetBlock->Function->NextTemp++)};
+            TACVariable newTemp = TACVariable{std::get<TACVariable>(phi->variable).OriginalName, "t." + std::to_string(targetBlock->Function->NextTemp++)};
 
             auto newPhi = std::make_unique<TACPhi>(newTemp, redirectedArgs);
 
@@ -360,7 +360,7 @@ template<typename IRTypes> void IREditor<IRTypes>::redirectPhiSourcesInto(Block*
             }
 
             if (firstNonPhiInst != nullptr)
-                addInstructionAfter(intermediateBlock, firstNonPhiInst, std::move(newPhi));
+                addInstructionBefore(intermediateBlock, firstNonPhiInst, std::move(newPhi));
             else
                 appendInstruction(intermediateBlock, std::move(newPhi));
 
