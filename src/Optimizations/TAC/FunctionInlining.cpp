@@ -4,6 +4,7 @@
 #include "TACGenerator.h"
 #include "TACInstructions.h"
 #include <algorithm>
+#include <cassert>
 #include <map>
 #include <memory>
 #include <string>
@@ -15,26 +16,41 @@ void InlineFunctions(TAC& TAC)
 {
     for (auto& TACFunc : TAC)
     {
-        std::vector<std::pair<TACInstruction*, TACBlock*>> calls;
+        std::vector<TACInstruction*> calls;
 
         for (auto& Block : TACFunc->Blocks)
         {
-            for (size_t i = 0; i < Block->Instructions.size(); i++)
+            for (auto& inst : Block->Instructions)
             {
-                if (Block->Instructions[i]->type == TACInstType::CALL)
+                if (inst->type == TACInstType::CALL)
                 {
-                    calls.push_back({Block->Instructions[i].get(), Block.get()});
+                    if (static_cast<TACCall*>(inst.get())->functionName != TACFunc->Name)
+                        calls.push_back(inst.get());
                 }
             }
         }
 
         std::unordered_map<std::string, int> inlineCount;
 
-        for (auto& [callInst, splitStartBlock] : calls)
+        for (TACInstruction* callInst : calls)
         {
             TACCall* call = static_cast<TACCall*>(callInst);
 
-            size_t callIndex = static_cast<size_t>(std::find_if(splitStartBlock->Instructions.begin(), splitStartBlock->Instructions.end(), [&callInst](auto& inst) { return callInst == inst.get(); }) - splitStartBlock->Instructions.begin());
+            TACBlock* splitStartBlock = nullptr;
+            size_t callIndex = 0;
+
+            for (auto& block : TACFunc->Blocks)
+            {
+                auto foundBlock = std::find_if(block->Instructions.begin(), block->Instructions.end(), [&callInst](auto& inst) { return inst.get() == callInst; });
+
+                if (foundBlock != block->Instructions.end())
+                {
+                    splitStartBlock = block.get();
+
+                    callIndex = static_cast<size_t>(foundBlock - block->Instructions.begin());
+                    break;
+                }
+            }
 
             TACBlock* splitEndBlock = IREditor<TACTypes>::insertBlockAfter(splitStartBlock, Message{});
 
@@ -51,15 +67,12 @@ void InlineFunctions(TAC& TAC)
             {
                 auto& inst = splitStartBlock->Instructions[callIndex + 1];
 
-                if (inst->type == TACInstType::CALL)
-                {
-                    auto callLocation = std::find_if(calls.begin(), calls.end(), [&inst](auto& callLocation) { return callLocation.first == inst.get(); });
-
-                    if (callLocation != calls.end())
-                        callLocation->second = splitEndBlock;
-                }
+                auto movedCall = std::find_if(calls.begin(), calls.end(), [&inst](TACInstruction* i) { return i == inst.get(); });
 
                 IREditor<TACTypes>::moveInstructionTo(splitStartBlock, inst.get(), splitEndBlock, Message{});
+
+                if (movedCall != calls.end())
+                    *movedCall = splitEndBlock->Instructions.back().get();
             }
 
             if (splitEndBlock->Instructions.back()->type == TACInstType::JUMP)
@@ -104,16 +117,19 @@ void InlineFunctions(TAC& TAC)
 
                         TACVariable& var = std::get<TACVariable>(*operand);
 
-                        if (paramToArgMap.contains(var))
-                        {
-                            *operand = paramToArgMap[var];
-                            continue;
-                        }
-
                         var.OriginalName = var.OriginalName + "_" + calledFunction->Name + std::to_string(inlineCount[calledFunction->Name]);
                         var.SSAName = var.OriginalName;
                     }
                 }
+            }
+
+            TACBlock* clonedEntry = clonedBlockMap[calledFunction->Blocks[0].get()];
+
+            for (int i = static_cast<int>(calledFunction->Parameters.size()) - 1; i >= 0; i--)
+            {
+                TACVariable paramVar = TACVariable{calledFunction->Parameters[i] + "_" + calledFunction->Name + std::to_string(inlineCount[calledFunction->Name])};
+
+                IREditor<TACTypes>::addInstructionBefore(clonedEntry, clonedEntry->Instructions.front().get(), std::make_unique<TACAssign>(paramVar, call->args[i]), Message{});
             }
 
             IREditor<TACTypes>::appendInstruction(splitStartBlock, std::make_unique<TACJump>(clonedBlockMap[calledFunction->Blocks[0].get()]), Message{});
@@ -129,6 +145,8 @@ void InlineFunctions(TAC& TAC)
                     TACJump* jump = static_cast<TACJump*>(lastInst);
 
                     jump->TargetBlock = clonedBlockMap[jump->TargetBlock];
+
+                    IREditor<TACTypes>::addEdge(newBlock, jump->TargetBlock);
                 }
 
                 else if (lastInst->type == TACInstType::BRANCH)
@@ -137,6 +155,9 @@ void InlineFunctions(TAC& TAC)
 
                     branch->TrueTarget = clonedBlockMap[branch->TrueTarget];
                     branch->FalseTarget = clonedBlockMap[branch->FalseTarget];
+
+                    IREditor<TACTypes>::addEdge(newBlock, branch->TrueTarget);
+                    IREditor<TACTypes>::addEdge(newBlock, branch->FalseTarget);
                 }
 
                 else if (lastInst->type == TACInstType::RETURN)

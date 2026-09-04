@@ -2,6 +2,7 @@
 #include "IRDebugger.h"
 #include "MIRGenerator.h"
 #include <fstream>
+#include <print>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/syscall.h>
@@ -136,7 +137,6 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 
                             if (std::holds_alternative<MIRBlock*>(jump->Target))
                                 out << "    jmp ." << function->FunctionName << "L" << std::get<MIRBlock*>(jump->Target)->ID << "\n";
-
                             else if (std::holds_alternative<MIRFunction*>(jump->Target))
                                 out << "    jmp " << std::get<MIRFunction*>(jump->Target)->FunctionName << "\n";
                         }

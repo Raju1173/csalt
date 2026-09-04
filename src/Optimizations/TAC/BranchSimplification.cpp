@@ -44,27 +44,27 @@ bool SimplifyBranches(TAC& TAC)
                         switch (br->cond.Op)
                         {
                             case BinaryOp::DOUBLE_EQUAL:
-                                result = left == right;
+                                result = *left == *right;
                                 break;
 
                             case BinaryOp::NOT_EQUAL:
-                                result = left != right;
+                                result = *left != *right;
                                 break;
 
                             case BinaryOp::GREATER:
-                                result = left > right;
+                                result = *left > *right;
                                 break;
 
                             case BinaryOp::GREATER_EQUAL:
-                                result = left >= right;
+                                result = *left >= *right;
                                 break;
 
                             case BinaryOp::LESS:
-                                result = left < right;
+                                result = *left < *right;
                                 break;
 
                             case BinaryOp::LESS_EQUAL:
-                                result = left <= right;
+                                result = *left <= *right;
                                 break;
                         }
                     }

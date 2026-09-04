@@ -101,7 +101,7 @@ void RenameBlock(TACBlock* Block, TACDominatorTreeInfo& DomTreeInfo)
 
         if (GetTACInstOperands(inst.get()).Def != nullptr)
         {
-            TACVariable& var = std::get<TACVariable>(*GetTACInstOperands(inst.get()).Def);
+            TACVariable& var = std::get<TACVariable>(*(GetTACInstOperands(inst.get()).Def));
 
             if (var.OriginalName.size() >= 2 && var.OriginalName[1] == '.')
                 continue;
