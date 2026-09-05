@@ -85,7 +85,9 @@ int main(int argc, char** argv)
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{Phase::LICM, {.Run = HoistLoopInvariants}}},
+                    {Pass<::TAC>{Phase::UNROLLING, {.Run = UnrollLoops}}},
                     {Pass<::TAC>{Phase::SCO, {.Run = MarkSiblingCalls}}},
+                    {Pass<::TAC>{Phase::IF_CONV, {.Run = IfConversion}}},
                 }},
         });
     // clang-format on

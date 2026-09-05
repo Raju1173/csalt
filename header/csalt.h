@@ -30,9 +30,11 @@
 #include "RegisterAllocator.h"
 #include "SpillAllocator.h"
 #include "LoopInversion.h"
+#include "LoopUnrolling.h"
 #include "FunctionInlining.h"
+#include "IfConversion.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 30, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 32, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -61,7 +63,9 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"ctfe", Phase::CTFE},
     {"loop-inv", Phase::LOOP_INV},
     {"licm", Phase::LICM},
+    {"unrolling", Phase::UNROLLING},
     {"inlining", Phase::INLINING},
+    {"if-conv", Phase::IF_CONV},
 
     {"mir-const", Phase::MIR_CONST},
     {"mir-reg-alloc", Phase::MIR_REG_ALLOC},

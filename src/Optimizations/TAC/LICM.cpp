@@ -16,14 +16,15 @@ std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
     {
         TACLoopInfo& LoopInfo = TACFunc->getLoopInfo();
 
-        for (TACLoop& loop : LoopInfo.Loops)
+        for (auto& loop : LoopInfo.allLoops)
         {
-            TACBlock* header = loop.Header;
+            TACBlock* header = loop->Header;
+
             std::vector<TACBlock*> outsideParents;
 
             for (TACBlock* parent : header->Parents)
             {
-                if (!loop.Blocks.contains(parent))
+                if (!loop->Blocks.contains(parent))
                     outsideParents.push_back(parent);
             }
 
@@ -75,9 +76,9 @@ void HoistLoopInvariants(TAC& TAC)
         TACDefBlocksInfo& DefBlocksInfo = TACFunc->getDefBlocksInfo();
         TACDominatorInfo& DomInfo = TACFunc->getDominatorInfo();
 
-        for (TACLoop& Loop : LoopInfo.Loops)
+        for (TACLoop* Loop : LoopInfo.allLoops)
         {
-            TACBlock* preheader = preheaderMap[Loop.Header];
+            TACBlock* preheader = preheaderMap[Loop->Header];
 
             std::unordered_set<TACVariable> invariants;
 
@@ -89,7 +90,7 @@ void HoistLoopInvariants(TAC& TAC)
 
                 if (DefBlocksInfo.DefBlocks.find(val) != DefBlocksInfo.DefBlocks.end())
                 {
-                    if (!Loop.Blocks.contains(*DefBlocksInfo.DefBlocks.find(val)->second.begin()))
+                    if (!Loop->Blocks.contains(*DefBlocksInfo.DefBlocks.find(val)->second.begin()))
                     {
                         return true;
                     }
@@ -104,9 +105,9 @@ void HoistLoopInvariants(TAC& TAC)
             {
                 changed = false;
 
-                for (TACBlock* block : Loop.Blocks)
+                for (TACBlock* block : Loop->Blocks)
                 {
-                    if (!std::all_of(Loop.Latches.begin(), Loop.Latches.end(), [&DomInfo, &block](TACBlock* latch) { return DomInfo.Dominators[latch].contains(block); }))
+                    if (!std::all_of(Loop->Latches.begin(), Loop->Latches.end(), [&DomInfo, &block](TACBlock* latch) { return DomInfo.Dominators[latch].contains(block); }))
                         continue;
 
                     for (int i = block->Instructions.size() - 1; i >= 0; --i)

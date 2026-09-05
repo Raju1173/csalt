@@ -12,15 +12,15 @@ void InvertLoops(TAC& TAC)
     {
         TACLoopInfo& loopInfo = TACFunc->getLoopInfo();
 
-        for (TACLoop& loop : loopInfo.Loops)
+        for (TACLoop* loop : loopInfo.allLoops)
         {
-            TACBlock* guardBlock = IREditor<TACTypes>::insertBlockBefore(loop.Header, Message{Phase::LOOP_INV, IRTransformType::ADDED, "created initial guard block"});
+            TACBlock* guardBlock = IREditor<TACTypes>::insertBlockBefore(loop->Header, Message{Phase::LOOP_INV, IRTransformType::ADDED, "created initial guard block"});
 
             std::vector<TACBlock*> outsideParents;
 
-            for (TACBlock* parent : loop.Header->Parents)
+            for (TACBlock* parent : loop->Header->Parents)
             {
-                if (!loop.Blocks.contains(parent))
+                if (!loop->Blocks.contains(parent))
                     outsideParents.push_back(parent);
             }
 
@@ -41,22 +41,22 @@ void InvertLoops(TAC& TAC)
                     {
                         TACBranch* branch = static_cast<TACBranch*>(insts.back().get());
 
-                        if (branch->TrueTarget == loop.Header)
+                        if (branch->TrueTarget == loop->Header)
                             branch->TrueTarget = guardBlock;
 
-                        if (branch->FalseTarget == loop.Header)
+                        if (branch->FalseTarget == loop->Header)
                             branch->FalseTarget = guardBlock;
                     }
                 }
 
-                IREditor<TACTypes>::removeEdge(parent, loop.Header);
+                IREditor<TACTypes>::removeEdge(parent, loop->Header);
                 IREditor<TACTypes>::addEdge(parent, guardBlock);
             }
 
             auto cloneHeaderTo = [&](TACBlock* targetBlock) {
                 std::unordered_map<std::string, std::string> tempMap;
 
-                for (auto& inst : loop.Header->Instructions)
+                for (auto& inst : loop->Header->Instructions)
                 {
                     IREditor<TACTypes>::cloneInstructionTo(inst.get(), targetBlock);
 
@@ -98,7 +98,7 @@ void InvertLoops(TAC& TAC)
             IREditor<TACTypes>::addEdge(guardBlock, guardCond->TrueTarget);
             IREditor<TACTypes>::addEdge(guardBlock, guardCond->FalseTarget);
 
-            for (TACBlock* latch : loop.Latches)
+            for (TACBlock* latch : loop->Latches)
             {
                 if (!latch->Instructions.empty() && latch->Instructions.back()->type == TACInstType::JUMP)
                 {
@@ -116,16 +116,16 @@ void InvertLoops(TAC& TAC)
                 IREditor<TACTypes>::addEdge(latch, latchCond->FalseTarget);
             }
 
-            std::vector<TACBlock*> headerParents = loop.Header->Parents;
-            std::vector<TACBlock*> headerChildren = loop.Header->Children;
+            std::vector<TACBlock*> headerParents = loop->Header->Parents;
+            std::vector<TACBlock*> headerChildren = loop->Header->Children;
 
             for (TACBlock* parent : headerParents)
-                IREditor<TACTypes>::removeEdge(parent, loop.Header);
+                IREditor<TACTypes>::removeEdge(parent, loop->Header);
 
             for (TACBlock* child : headerChildren)
-                IREditor<TACTypes>::removeEdge(loop.Header, child);
+                IREditor<TACTypes>::removeEdge(loop->Header, child);
 
-            IREditor<TACTypes>::deleteBlock(loop.Header, Message{Phase::LOOP_INV, IRTransformType::DELETED, "merged loop header into latches"});
+            IREditor<TACTypes>::deleteBlock(loop->Header, Message{Phase::LOOP_INV, IRTransformType::DELETED, "merged loop header into latches"});
         }
     }
 }

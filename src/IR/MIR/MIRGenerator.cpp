@@ -293,6 +293,79 @@ void GenerateMachineIR(TAC& TAC, MIR& MIR)
                     curBlock->Instructions.push_back(std::make_unique<MIRJump>(blockMap[branch->FalseTarget]));
                 }
 
+                else if (inst->type == TACInstType::SELECT)
+                {
+                    TACSelect* select = static_cast<TACSelect*>(inst.get());
+
+                    Operand dest = GetOperand(select->dest);
+                    Operand trueVal = GetOperand(select->TrueVal);
+                    Operand falseVal = GetOperand(select->FalseVal);
+
+                    Operand left = GetOperand(select->cond.Left);
+                    Operand right = GetOperand(select->cond.Right);
+
+                    auto leftInt = std::get_if<Immediate>(&left);
+                    auto rightInt = std::get_if<Immediate>(&right);
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRMov>(dest, falseVal));
+
+                    bool swapped = false;
+
+                    if (select->cond.Op == BinaryOp::NOT_EQUAL && ((leftInt && leftInt->Value == 0) || (rightInt && rightInt->Value == 0)))
+                    {
+                        if (rightInt)
+                            curBlock->Instructions.push_back(std::make_unique<MIRTest>(left, left));
+                        else
+                            curBlock->Instructions.push_back(std::make_unique<MIRTest>(right, right));
+                    }
+
+                    else
+                    {
+                        if (std::holds_alternative<Immediate>(right) && std::holds_alternative<Immediate>(left))
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRMov>(Register::EAX, left));
+                            curBlock->Instructions.push_back(std::make_unique<MIRCmp>(Register::EAX, right));
+                        }
+
+                        else if (std::holds_alternative<Immediate>(left))
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRCmp>(right, left));
+                            swapped = true;
+                        }
+
+                        else
+                        {
+                            curBlock->Instructions.push_back(std::make_unique<MIRCmp>(left, right));
+                        }
+                    }
+
+                    Condition condition;
+
+                    switch (select->cond.Op)
+                    {
+                        case BinaryOp::DOUBLE_EQUAL:
+                            condition = Condition::EQUAL;
+                            break;
+                        case BinaryOp::NOT_EQUAL:
+                            condition = Condition::NOT_EQUAL;
+                            break;
+                        case BinaryOp::LESS:
+                            condition = swapped ? Condition::GREATER : Condition::LESS;
+                            break;
+                        case BinaryOp::LESS_EQUAL:
+                            condition = swapped ? Condition::GREATER_EQUAL : Condition::LESS_EQUAL;
+                            break;
+                        case BinaryOp::GREATER:
+                            condition = swapped ? Condition::LESS : Condition::GREATER;
+                            break;
+                        case BinaryOp::GREATER_EQUAL:
+                            condition = swapped ? Condition::LESS_EQUAL : Condition::GREATER_EQUAL;
+                            break;
+                    }
+
+                    curBlock->Instructions.push_back(std::make_unique<MIRCmov>(condition, dest, trueVal));
+                }
+
                 else if (inst->type == TACInstType::JUMP)
                 {
                     TACJump* jump = static_cast<TACJump*>(inst.get());

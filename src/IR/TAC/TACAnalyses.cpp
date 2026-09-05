@@ -1,5 +1,8 @@
+#include "TACAnalyses.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
+#include <algorithm>
+#include <variant>
 
 TACDominatorInfo& TACFunction::getDominatorInfo()
 {
@@ -16,18 +19,18 @@ TACDominatorInfo& TACFunction::getDominatorInfo()
 
         TACBlock* entryBlock = Blocks[0].get();
 
-        std::unordered_set<TACBlock*> universalSet;
+        std::unordered_set<TACBlock*> unIVersalSet;
 
         for (auto& block : Blocks)
         {
-            universalSet.insert(block.get());
+            unIVersalSet.insert(block.get());
         }
 
         DomInfo.Dominators[entryBlock] = {entryBlock};
 
         for (size_t j = 1; j < Blocks.size(); ++j)
         {
-            DomInfo.Dominators[Blocks[j].get()] = universalSet;
+            DomInfo.Dominators[Blocks[j].get()] = unIVersalSet;
         }
 
         bool changed = true;
@@ -249,20 +252,21 @@ void findLoopBlocks(TACLoop& loop, TACBlock* block)
             continue;
 
         loop.Blocks.insert(parent);
-
         findLoopBlocks(loop, parent);
     }
 }
 
 TACLoopInfo& TACFunction::getLoopInfo()
 {
-    TACLoopInfo& LoopInfo = Metadata.LoopInfo;
     TACDominatorInfo& DominatorInfo = getDominatorInfo();
+    TACLoopInfo& LoopInfo = Metadata.LoopInfo;
 
     if (!LoopInfo.isValid)
     {
         LoopInfo.isValid = true;
-        LoopInfo.Loops.clear();
+
+        LoopInfo.LoopForest.clear();
+        LoopInfo.allLoops.clear();
 
         std::unordered_map<TACBlock*, std::vector<TACBlock*>> backedgesToHeader;
 
@@ -277,24 +281,158 @@ TACLoopInfo& TACFunction::getLoopInfo()
             }
         }
 
+        std::vector<std::unique_ptr<TACLoop>> flatLoops;
+
         for (auto& [header, latches] : backedgesToHeader)
         {
-            TACLoop loop;
+            auto loop = std::make_unique<TACLoop>();
 
-            loop.Header = header;
-            loop.Latches = latches;
-
-            loop.Blocks.insert(header);
+            loop->Header = header;
+            loop->Latches = latches;
+            loop->Blocks.insert(header);
 
             for (TACBlock* latch : latches)
             {
-                loop.Blocks.insert(latch);
-                findLoopBlocks(loop, latch);
+                loop->Blocks.insert(latch);
+                findLoopBlocks(*loop, latch);
             }
 
-            LoopInfo.Loops.push_back(loop);
+            std::vector<TACBlock*> outsideParents;
+
+            for (TACBlock* parent : header->Parents)
+            {
+                if (!loop->Blocks.contains(parent))
+                    outsideParents.push_back(parent);
+            }
+
+            if (outsideParents.size() == 1)
+                loop->Preheader = outsideParents[0];
+
+            flatLoops.push_back(std::move(loop));
+        }
+
+        std::sort(flatLoops.begin(), flatLoops.end(), [](auto& a, auto& b) { return a->Blocks.size() < b->Blocks.size(); });
+
+        for (size_t i = 0; i < flatLoops.size(); i++)
+        {
+            for (size_t j = i + 1; j < flatLoops.size(); j++)
+            {
+                if (flatLoops[j].get()->Blocks.contains(flatLoops[i].get()->Header))
+                {
+                    flatLoops[i].get()->parentLoop = flatLoops[j].get();
+                    break;
+                }
+            }
+        }
+
+        for (auto& loop : flatLoops)
+        {
+            LoopInfo.allLoops.push_back(loop.get());
+
+            if (loop->parentLoop != nullptr)
+                loop->parentLoop->childLoops.push_back(std::move(loop));
+
+            else
+                LoopInfo.LoopForest.push_back(std::move(loop));
         }
     }
 
     return LoopInfo;
+}
+
+TACInductionVariableInfo& TACFunction::getInductionVariableInfo()
+{
+    TACLoopInfo& LoopInfo = getLoopInfo();
+    TACDefBlocksInfo& DefBlocksInfo = getDefBlocksInfo();
+    TACInductionVariableInfo& IndVarInfo = Metadata.InductionVariableInfo;
+
+    if (!IndVarInfo.isValid)
+    {
+        IndVarInfo.isValid = true;
+
+        IndVarInfo.InductionVariables.clear();
+
+        for (TACLoop* loop : LoopInfo.allLoops)
+        {
+            if (!loop->Preheader || loop->Latches.size() != 1)
+                continue;
+
+            TACBlock* latch = loop->Latches[0];
+
+            for (auto& inst : loop->Header->Instructions)
+            {
+                if (inst->type == TACInstType::PHI)
+                {
+                    if (inst->type != TACInstType::PHI)
+                        continue;
+
+                    auto* phi = static_cast<TACPhi*>(inst.get());
+
+                    auto initValIt = std::find_if(phi->args.begin(), phi->args.end(), [loop](const PhiArgument& arg) { return arg.SourceBlock == loop->Preheader; });
+
+                    auto latchValIt = std::find_if(phi->args.begin(), phi->args.end(), [latch](const PhiArgument& arg) { return arg.SourceBlock == latch; });
+
+                    if (initValIt == phi->args.end() || latchValIt == phi->args.end())
+                        continue;
+
+                    TACValue initVal = initValIt->Value;
+                    TACValue latchVal = latchValIt->Value;
+
+                    TACBinaryOp* stepInst = nullptr;
+
+                    if (DefBlocksInfo.DefBlocks.find(latchVal) == DefBlocksInfo.DefBlocks.end())
+                        continue;
+
+                    for (auto* block : DefBlocksInfo.DefBlocks.find(latchVal)->second)
+                    {
+                        for (auto& blockInst : block->Instructions)
+                        {
+                            TACInstOperands operands = GetTACInstOperands(blockInst.get());
+
+                            if (operands.Def != nullptr && *operands.Def == latchVal)
+                            {
+                                if (blockInst->type == TACInstType::BINARYOP)
+                                    stepInst = static_cast<TACBinaryOp*>(blockInst.get());
+                            }
+                        }
+                    }
+
+                    if (!stepInst)
+                        continue;
+
+                    if (stepInst->op != BinaryOp::PLUS && stepInst->op != BinaryOp::MINUS)
+                        continue;
+
+                    if (stepInst->left != phi->variable && stepInst->right != phi->variable)
+                        continue;
+
+                    TACValue stepVal = (stepInst->left == phi->variable) ? stepInst->right : stepInst->left;
+
+                    bool isStepValInvariant = false;
+
+                    if (std::holds_alternative<int>(stepVal))
+                    {
+                        isStepValInvariant = true;
+                    }
+
+                    else
+                    {
+                        if (DefBlocksInfo.DefBlocks.find(stepVal) != DefBlocksInfo.DefBlocks.end() && !DefBlocksInfo.DefBlocks.find(stepVal)->second.empty())
+                        {
+                            TACBlock* defBlock = *DefBlocksInfo.DefBlocks.find(stepVal)->second.begin();
+
+                            isStepValInvariant = !loop->Blocks.contains(defBlock);
+                        }
+                    }
+
+                    if (!isStepValInvariant)
+                        continue;
+
+                    IndVarInfo.InductionVariables[loop] = TACInductionVariable{phi, initVal, stepVal, stepInst};
+                }
+            }
+        }
+    }
+
+    return IndVarInfo;
 }

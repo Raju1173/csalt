@@ -133,6 +133,7 @@ enum class MIRInstType
 {
     MOV,
     MOVZX,
+    CMOV,
     ADD,
     SUB,
     MUL,
@@ -154,6 +155,18 @@ enum class MIRInstType
     SET,
 
     COUNT
+};
+
+enum class Condition
+{
+    EQUAL,
+    NOT_EQUAL,
+
+    LESS,
+    LESS_EQUAL,
+
+    GREATER,
+    GREATER_EQUAL,
 };
 
 class MIRBlock;
@@ -193,6 +206,17 @@ public:
 
     MIRMovzx() : MIRInstruction(MIRInstType::MOVZX){};
     MIRMovzx(Operand dest, Operand source) : MIRInstruction(MIRInstType::MOVZX), Dest(dest), Source(source){};
+};
+
+class MIRCmov : public MIRInstruction
+{
+public:
+    Condition Cond;
+    Operand Dest;
+    Operand Source;
+
+    MIRCmov() : MIRInstruction(MIRInstType::CMOV){};
+    MIRCmov(Condition cond, Operand dest, Operand source) : MIRInstruction(MIRInstType::CMOV), Cond(cond), Dest(dest), Source(source){};
 };
 
 class MIRAdd : public MIRInstruction
@@ -334,18 +358,6 @@ public:
     MIRPop(Operand dest) : MIRInstruction(MIRInstType::POP), Dest(dest){};
 };
 
-enum class Condition
-{
-    EQUAL,
-    NOT_EQUAL,
-
-    LESS,
-    LESS_EQUAL,
-
-    GREATER,
-    GREATER_EQUAL,
-};
-
 class MIRCondJump : public MIRInstruction
 {
 public:
@@ -389,7 +401,7 @@ public:
 
 inline std::unique_ptr<MIRInstruction> cloneMIRInstruction(MIRInstruction* inst)
 {
-    static_assert(std::to_underlying(MIRInstType::COUNT) == 21, "Add another case and increment the count check when adding a new MIRInstType!!!");
+    static_assert(std::to_underlying(MIRInstType::COUNT) == 22, "Add another case and increment the count check when adding a new MIRInstType!!!");
 
     switch (inst->type)
     {
@@ -397,6 +409,8 @@ inline std::unique_ptr<MIRInstruction> cloneMIRInstruction(MIRInstruction* inst)
             return std::make_unique<MIRMov>(*static_cast<MIRMov*>(inst));
         case MIRInstType::MOVZX:
             return std::make_unique<MIRMovzx>(*static_cast<MIRMovzx*>(inst));
+        case MIRInstType::CMOV:
+            return std::make_unique<MIRCmov>(*static_cast<MIRCmov*>(inst));
         case MIRInstType::ADD:
             return std::make_unique<MIRAdd>(*static_cast<MIRAdd*>(inst));
         case MIRInstType::SUB:
@@ -460,7 +474,7 @@ struct MIRInstOperands
 
 inline MIRInstOperands GetMIRInstOperands(MIRInstruction* inst)
 {
-    static_assert(std::to_underlying(MIRInstType::COUNT) == 21, "Add another case and increment the count check when adding a new MIRInstType!!!");
+    static_assert(std::to_underlying(MIRInstType::COUNT) == 22, "Add another case and increment the count check when adding a new MIRInstType!!!");
 
     switch (inst->type)
     {
@@ -473,6 +487,11 @@ inline MIRInstOperands GetMIRInstOperands(MIRInstruction* inst)
             {
                 MIRMovzx* movzx = static_cast<MIRMovzx*>(inst);
                 return {&movzx->Dest, {&movzx->Source}};
+            }
+        case MIRInstType::CMOV:
+            {
+                MIRCmov* cmov = static_cast<MIRCmov*>(inst);
+                return {&cmov->Dest, {&cmov->Dest, &cmov->Source}};
             }
         case MIRInstType::ADD:
             {

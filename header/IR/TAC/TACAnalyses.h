@@ -45,16 +45,39 @@ struct TACDefBlocksInfo
 
 struct TACLoop
 {
+    TACBlock* Preheader = nullptr;
     TACBlock* Header;
     std::vector<TACBlock*> Latches;
+
     std::unordered_set<TACBlock*> Blocks;
+
+    TACLoop* parentLoop = nullptr;
+    std::vector<std::unique_ptr<TACLoop>> childLoops;
 };
 
 struct TACLoopInfo
 {
     bool isValid = false;
 
-    std::vector<TACLoop> Loops;
+    std::vector<std::unique_ptr<TACLoop>> LoopForest;
+    std::vector<TACLoop*> allLoops;
+};
+
+struct TACInductionVariable
+{
+    TACPhi* phi = nullptr;
+
+    TACValue initVal;
+    TACValue stepVal;
+
+    TACBinaryOp* stepInst = nullptr;
+};
+
+struct TACInductionVariableInfo
+{
+    bool isValid = false;
+
+    std::unordered_map<TACLoop*, TACInductionVariable> InductionVariables;
 };
 
 struct TACMetaData
@@ -70,4 +93,6 @@ struct TACMetaData
     TACDefBlocksInfo DefBlocksInfo;
 
     TACLoopInfo LoopInfo;
+
+    TACInductionVariableInfo InductionVariableInfo;
 };

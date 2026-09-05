@@ -69,6 +69,8 @@ public:
 
     TACLoopInfo& getLoopInfo();
 
+    TACInductionVariableInfo& getInductionVariableInfo();
+
     template<typename IRTypes> friend class IREditor;
 };
 

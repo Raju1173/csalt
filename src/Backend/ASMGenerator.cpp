@@ -1,6 +1,7 @@
 #include "Globals.h"
 #include "IRDebugger.h"
 #include "MIRGenerator.h"
+#include "MIRInstructions.h"
 #include <fstream>
 #include <print>
 #include <sys/ptrace.h>
@@ -48,6 +49,38 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
                             MIRMovzx* movzx = static_cast<MIRMovzx*>(inst.get());
 
                             out << "    movzx " << OperandString(movzx->Dest) << ", " << OperandString(movzx->Source) << "\n";
+                        }
+                        break;
+
+                    case MIRInstType::CMOV:
+                        {
+                            MIRCmov* cmov = static_cast<MIRCmov*>(inst.get());
+
+                            out << "    ";
+
+                            switch (cmov->Cond)
+                            {
+                                case Condition::EQUAL:
+                                    out << "cmove ";
+                                    break;
+                                case Condition::NOT_EQUAL:
+                                    out << "cmovne ";
+                                    break;
+                                case Condition::LESS:
+                                    out << "cmovl ";
+                                    break;
+                                case Condition::LESS_EQUAL:
+                                    out << "cmovle ";
+                                    break;
+                                case Condition::GREATER:
+                                    out << "cmovg ";
+                                    break;
+                                case Condition::GREATER_EQUAL:
+                                    out << "cmovge ";
+                                    break;
+                            }
+
+                            out << OperandString(cmov->Dest) << "," << OperandString(cmov->Source) << "\n";
                         }
                         break;
 

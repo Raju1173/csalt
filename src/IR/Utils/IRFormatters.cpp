@@ -473,6 +473,38 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
             }
             break;
 
+        case MIRInstType::CMOV:
+            {
+                MIRCmov* cmov = static_cast<MIRCmov*>(inst);
+
+                out += "    ";
+
+                switch (cmov->Cond)
+                {
+                    case Condition::EQUAL:
+                        out += "cmove ";
+                        break;
+                    case Condition::NOT_EQUAL:
+                        out += "cmovne ";
+                        break;
+                    case Condition::LESS:
+                        out += "cmovl ";
+                        break;
+                    case Condition::LESS_EQUAL:
+                        out += "cmovle ";
+                        break;
+                    case Condition::GREATER:
+                        out += "cmovg ";
+                        break;
+                    case Condition::GREATER_EQUAL:
+                        out += "cmovge ";
+                        break;
+                }
+
+                out += std::format("{}, {}\n", OperandString(cmov->Dest), OperandString(cmov->Source));
+            }
+            break;
+
         case MIRInstType::ADD:
             {
                 MIRAdd* add = static_cast<MIRAdd*>(inst);

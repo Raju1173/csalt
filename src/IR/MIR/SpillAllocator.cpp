@@ -48,6 +48,18 @@ void ResolveVRegsSpillAll(MIR& MIR)
                     }
                 }
 
+                else if (inst->type == MIRInstType::CMOV)
+                {
+                    MIRCmov* cmov = static_cast<MIRCmov*>(inst);
+
+                    if (std::holds_alternative<StackOffset>(cmov->Dest) && std::holds_alternative<StackOffset>(cmov->Source))
+                    {
+                        IREditor<MIRTypes>::addInstructionBefore(block.get(), inst, std::make_unique<MIRMov>(Register::R10D, cmov->Source));
+                        i++;
+                        IREditor<MIRTypes>::replaceInstruction(block.get(), inst, std::make_unique<MIRMov>(cmov->Dest, Register::R10D));
+                    }
+                }
+
                 else if (inst->type == MIRInstType::ADD)
                 {
                     MIRAdd* add = static_cast<MIRAdd*>(inst);

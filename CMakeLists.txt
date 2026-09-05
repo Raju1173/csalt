@@ -64,10 +64,12 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/GVN.cpp
     ${TAC}/LoopInversion.cpp
     ${TAC}/LICM.cpp
+    ${TAC}/LoopUnrolling.cpp
     ${TAC}/CTFE.cpp
     ${TAC}/TRE.cpp
     ${TAC}/SCO.cpp
     ${TAC}/FunctionInlining.cpp
+    ${TAC}/IfConversion.cpp
 
     ${MIR}/FramePointerOmission.cpp
 )
