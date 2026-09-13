@@ -356,7 +356,7 @@ inline TACInstOperands GetTACInstOperands(TACInstruction* inst)
         case TACInstType::SELECT:
             {
                 TACSelect* select = static_cast<TACSelect*>(inst);
-                return {&select->dest, {&select->cond.Left, &select->cond.Right}};
+                return {&select->dest, {&select->cond.Left, &select->cond.Right, &select->TrueVal, &select->FalseVal}};
             }
 
         case TACInstType::JUMP:

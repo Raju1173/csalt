@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/resource.h>
+#include <thread>
 
 void EmitAssembly(MIR& MIR, const std::string& filename)
 {
@@ -300,34 +301,102 @@ void PrintOutput(std::string ExecFilePath)
     else
     {
         int status;
+        auto startTime = std::chrono::steady_clock::now();
 
-        waitpid(pid, &status, 0);
+        auto waitWithTimeout = [&startTime, &pid, &status]() -> bool {
+            while (true)
+            {
+                int res = waitpid(pid, &status, WNOHANG);
 
-        ptrace(PTRACE_SETOPTIONS, pid, nullptr, PTRACE_O_EXITKILL);
+                if (res > 0)
+                    return true;
+                if (res == -1)
+                    return false;
 
-        ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
+                auto now = std::chrono::steady_clock::now();
+
+                if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 1000)
+                {
+                    return false;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        };
+
+        if (!waitWithTimeout())
+        {
+            kill(pid, SIGKILL);
+
+            waitpid(pid, &status, 0);
+
+            std::print("\033[31mCOMPILED CODE'S EXECUTION TIMED OUT\033[0m\n");
+
+            return;
+        }
+
+        ptrace(PTRACE_SETOPTIONS, pid, nullptr, PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD);
 
         struct user_regs_struct regs;
 
+        bool timedOut = false;
+
         while (true)
         {
+            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
+
+            if (!waitWithTimeout())
+            {
+                timedOut = true;
+                break;
+            }
+
+            if (WIFEXITED(status))
+            {
+                std::print("\033[31mOUTPUT OF COMPILED CODE\033[0m : \033[33m{}\033[0m\n", WIFEXITED(status));
+                break;
+            }
+
+            if (WIFSIGNALED(status))
+            {
+                std::print("\033[31mCOMPILED CODE'S EXECUTION FAILED\033[0m\n");
+                break;
+            }
+
+            if (WIFSTOPPED(status))
+            {
+                int sig = WSTOPSIG(status);
+
+                if (sig != (SIGTRAP | 0x80))
+                {
+                    if (sig == SIGSEGV || sig == SIGILL || sig == SIGABRT || sig == SIGFPE)
+                    {
+                        std::print("\033[31mCOMPILED CODE'S EXECUTION FAILED\033[0m\n");
+                        break;
+                    }
+
+                    ptrace(PTRACE_SYSCALL, pid, nullptr, sig);
+
+                    continue;
+                }
+
+                ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
+
+                if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
+                {
+                    std::print("\033[31mOUTPUT OF COMPILED CODE\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
+                    break;
+                }
+            }
+        }
+
+        if (timedOut)
+        {
+            kill(pid, SIGKILL);
+
             waitpid(pid, &status, 0);
 
-            if (WIFEXITED(status) || WIFSIGNALED(status))
-            {
-                break;
-            }
-
-            ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
-
-            if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
-            {
-                std::print("\033[31mOUTPUT (EXIT CODE)\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
-
-                break;
-            }
-
-            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
+            std::print("\033[31mCOMPILED CODE'S EXECUTION TIMED OUT\033[0m\n");
         }
 
         ptrace(PTRACE_KILL, pid, nullptr, nullptr);

@@ -15,9 +15,6 @@ template<typename IRTypes> void IREditor<IRTypes>::appendInstruction(Block* bloc
     block->Instructions.push_back(std::move(inst));
 
     invalidateDataFlowAnalyses(block->Function->Metadata);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::addInstructionBefore(Block* block, Instruction* target, std::unique_ptr<Instruction> inst, std::optional<Message> msg)
@@ -28,9 +25,6 @@ template<typename IRTypes> void IREditor<IRTypes>::addInstructionBefore(Block* b
     block->Instructions.insert(std::find_if(block->Instructions.begin(), block->Instructions.end(), [&target](auto& i) { return i.get() == target; }), std::move(inst));
 
     invalidateDataFlowAnalyses(block->Function->Metadata);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::addInstructionAfter(Block* block, Instruction* target, std::unique_ptr<Instruction> inst, std::optional<Message> msg)
@@ -41,9 +35,6 @@ template<typename IRTypes> void IREditor<IRTypes>::addInstructionAfter(Block* bl
     block->Instructions.insert(std::next(std::find_if(block->Instructions.begin(), block->Instructions.end(), [&target](auto& i) { return i.get() == target; })), std::move(inst));
 
     invalidateDataFlowAnalyses(block->Function->Metadata);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::replaceInstruction(Block* block, Instruction* oldInst, std::unique_ptr<Instruction> newInst, std::optional<Message> msg)
@@ -60,9 +51,6 @@ template<typename IRTypes> void IREditor<IRTypes>::replaceInstruction(Block* blo
     invalidateDataFlowAnalyses(block->Function->Metadata);
 
     oldInstPtr = std::move(newInst);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::cloneInstructionTo(Instruction* inst, Block* destBlock, std::optional<Message> msg)
@@ -75,9 +63,6 @@ template<typename IRTypes> void IREditor<IRTypes>::cloneInstructionTo(Instructio
         instCopy = cloneMIRInstruction(inst);
 
     appendInstruction(destBlock, std::move(instCopy), msg);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::moveInstructionTo(Block* srcBlock, Instruction* inst, Block* destBlock, std::optional<Message> msg)
@@ -94,9 +79,6 @@ template<typename IRTypes> void IREditor<IRTypes>::moveInstructionTo(Block* srcB
     cascadeDeletion<Instruction>(srcBlock->Instructions, index, &srcBlock->LastDeadInstruction, true);
 
     appendInstruction(destBlock, std::move(instCopy), msg);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::moveInstructionBefore(Block* srcBlock, Instruction* inst, Block* destBlock, Instruction* destInst, std::optional<Message> msg)
@@ -113,9 +95,6 @@ template<typename IRTypes> void IREditor<IRTypes>::moveInstructionBefore(Block* 
     cascadeDeletion<Instruction>(srcBlock->Instructions, index, &srcBlock->LastDeadInstruction, true);
 
     addInstructionBefore(destBlock, destInst, std::move(instCopy), msg);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::moveInstructionAfter(Block* srcBlock, Instruction* inst, Block* destBlock, Instruction* destInst, std::optional<Message> msg)
@@ -132,9 +111,6 @@ template<typename IRTypes> void IREditor<IRTypes>::moveInstructionAfter(Block* s
     cascadeDeletion<Instruction>(srcBlock->Instructions, index, &srcBlock->LastDeadInstruction, true);
 
     addInstructionAfter(destBlock, destInst, std::move(instCopy), msg);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::deleteInstruction(Block* block, Instruction* inst, std::optional<Message> msg)
@@ -147,9 +123,6 @@ template<typename IRTypes> void IREditor<IRTypes>::deleteInstruction(Block* bloc
     auto instIt = std::find_if(block->Instructions.begin(), block->Instructions.end(), [&inst](auto& i) { return i.get() == inst; });
 
     cascadeDeletion<Instruction>(block->Instructions, instIt - block->Instructions.begin(), &block->LastDeadInstruction);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::addEdge(Block* From, Block* To)
@@ -182,9 +155,6 @@ template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockBefore(
     if (msg.has_value())
         newBlockPtr->History.push_back(msg.value());
 
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
-
     return newBlockPtr;
 }
 
@@ -198,9 +168,6 @@ template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::insertBlockAfter(B
 
     if (msg.has_value())
         newBlockPtr->History.push_back(msg.value());
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 
     return newBlockPtr;
 }
@@ -224,9 +191,6 @@ template<typename IRTypes> IRTypes::Block* IREditor<IRTypes>::cloneBlockBefore(B
     if (msg.has_value())
         clonedBlockPtr->History.push_back(msg.value());
 
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
-
     return clonedBlockPtr;
 }
 
@@ -240,9 +204,6 @@ template<typename IRTypes> void IREditor<IRTypes>::deleteBlock(Block* block, std
     cascadeDeletion<Block>(block->Function->Blocks, blockIt - block->Function->Blocks.begin(), &block->Function->LastDeadBlock);
 
     invalidateAllAnalyses(block->Function->Metadata);
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
 template<typename IRTypes> void IREditor<IRTypes>::deleteFunction(IR& IR, Function* function, std::optional<Message> msg)
@@ -258,12 +219,9 @@ template<typename IRTypes> void IREditor<IRTypes>::deleteFunction(IR& IR, Functi
     auto functionIt = std::find_if(IR.begin(), IR.end(), [&function](auto& f) { return f.get() == function; });
 
     cascadeDeletion<TACFunction>(IR, functionIt - IR.begin());
-
-    if (msg.has_value() && (gCompilerOptions[msg->Pass].InteractiveDump || gCompilerOptions[msg->Pass].InteractiveHistoryDump))
-        Debugger::Notify(msg->Pass);
 }
 
-template<typename IRTypes> void IREditor<IRTypes>::removePhiSource(Block* block, Block* parent) requires std::same_as<IRTypes, TACTypes>
+template<typename IRTypes> void IREditor<IRTypes>::removePhiSource(TACBlock* block, TACBlock* parent) requires std::same_as<IRTypes, TACTypes>
 {
     for (auto& inst : block->Instructions)
     {
@@ -276,12 +234,12 @@ template<typename IRTypes> void IREditor<IRTypes>::removePhiSource(Block* block,
 
         if (phi->args.size() == 1)
         {
-            inst = std::make_unique<TACAssign>(phi->variable, phi->args[0].Value);
+            replaceInstruction(block, phi, std::make_unique<TACAssign>(phi->variable, phi->args[0].Value));
         }
     }
 }
 
-template<typename IRTypes> void IREditor<IRTypes>::remapPhiSources(Block* block, Block* oldParent, const std::vector<Block*>& newParents) requires std::same_as<IRTypes, TACTypes>
+template<typename IRTypes> void IREditor<IRTypes>::remapPhiSources(TACBlock* block, TACBlock* oldParent, const std::vector<TACBlock*>& newParents) requires std::same_as<IRTypes, TACTypes>
 {
     if (newParents.empty())
         return;
@@ -311,7 +269,7 @@ template<typename IRTypes> void IREditor<IRTypes>::remapPhiSources(Block* block,
     }
 }
 
-template<typename IRTypes> void IREditor<IRTypes>::redirectPhiSourcesInto(Block* targetBlock, Block* intermediateBlock, std::vector<Block*>& redirectedParents) requires std::same_as<IRTypes, TACTypes>
+template<typename IRTypes> void IREditor<IRTypes>::redirectPhiSourcesInto(TACBlock* targetBlock, TACBlock* intermediateBlock, std::vector<TACBlock*>& redirectedParents) requires std::same_as<IRTypes, TACTypes>
 {
     if (redirectedParents.empty())
         return;
@@ -345,7 +303,7 @@ template<typename IRTypes> void IREditor<IRTypes>::redirectPhiSourcesInto(Block*
 
         else
         {
-            TACVariable newTemp = TACVariable{std::get<TACVariable>(phi->variable).OriginalName, "t." + std::to_string(targetBlock->Function->NextTemp++)};
+            TACVariable newTemp = TACVariable{std::get<TACVariable>(phi->variable).OriginalName, std::get<TACVariable>(phi->variable).OriginalName + "." + std::to_string(targetBlock->Function->NextTemp++)};
 
             auto newPhi = std::make_unique<TACPhi>(newTemp, redirectedArgs);
 

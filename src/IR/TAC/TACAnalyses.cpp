@@ -305,7 +305,7 @@ TACLoopInfo& TACFunction::getLoopInfo()
                     outsideParents.push_back(parent);
             }
 
-            if (outsideParents.size() == 1)
+            if (outsideParents.size() == 1 && outsideParents[0]->Children.size() == 1)
                 loop->Preheader = outsideParents[0];
 
             flatLoops.push_back(std::move(loop));
@@ -340,6 +340,24 @@ TACLoopInfo& TACFunction::getLoopInfo()
     return LoopInfo;
 }
 
+TACInstruction* getDefiningInst(TACValue& val, TACDefBlocksInfo& DefBlocksInfo)
+{
+    if (DefBlocksInfo.DefBlocks[val].empty())
+        return nullptr;
+
+    TACBlock* defBlock = *DefBlocksInfo.DefBlocks[val].begin();
+
+    for (auto& blockInst : defBlock->Instructions)
+    {
+        TACInstOperands operands = GetTACInstOperands(blockInst.get());
+
+        if (operands.Def != nullptr && *operands.Def == val)
+            return blockInst.get();
+    }
+
+    return nullptr;
+}
+
 TACInductionVariableInfo& TACFunction::getInductionVariableInfo()
 {
     TACLoopInfo& LoopInfo = getLoopInfo();
@@ -349,87 +367,103 @@ TACInductionVariableInfo& TACFunction::getInductionVariableInfo()
     if (!IndVarInfo.isValid)
     {
         IndVarInfo.isValid = true;
-
         IndVarInfo.InductionVariables.clear();
 
         for (TACLoop* loop : LoopInfo.allLoops)
         {
-            if (!loop->Preheader || loop->Latches.size() != 1)
+            if (loop->Latches.size() != 1)
                 continue;
 
             TACBlock* latch = loop->Latches[0];
 
             for (auto& inst : loop->Header->Instructions)
             {
-                if (inst->type == TACInstType::PHI)
+                if (inst->type != TACInstType::PHI)
+                    continue;
+
+                TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                auto initValIt = std::find_if(phi->args.begin(), phi->args.end(), [loop](PhiArgument& arg) { return !loop->Blocks.contains(arg.SourceBlock); });
+
+                auto latchValIt = std::find_if(phi->args.begin(), phi->args.end(), [latch](PhiArgument& arg) { return arg.SourceBlock == latch; });
+
+                if (initValIt == phi->args.end() || latchValIt == phi->args.end())
+                    continue;
+
+                TACValue initVal = initValIt->Value;
+                TACValue latchVal = latchValIt->Value;
+
+                TACValue currVal = latchVal;
+                TACBinaryOp* stepInst = nullptr;
+
+                while (true)
                 {
-                    if (inst->type != TACInstType::PHI)
-                        continue;
+                    TACInstruction* defInst = getDefiningInst(currVal, DefBlocksInfo);
 
-                    auto* phi = static_cast<TACPhi*>(inst.get());
+                    if (!defInst)
+                        break;
 
-                    auto initValIt = std::find_if(phi->args.begin(), phi->args.end(), [loop](const PhiArgument& arg) { return arg.SourceBlock == loop->Preheader; });
-
-                    auto latchValIt = std::find_if(phi->args.begin(), phi->args.end(), [latch](const PhiArgument& arg) { return arg.SourceBlock == latch; });
-
-                    if (initValIt == phi->args.end() || latchValIt == phi->args.end())
-                        continue;
-
-                    TACValue initVal = initValIt->Value;
-                    TACValue latchVal = latchValIt->Value;
-
-                    TACBinaryOp* stepInst = nullptr;
-
-                    if (DefBlocksInfo.DefBlocks.find(latchVal) == DefBlocksInfo.DefBlocks.end())
-                        continue;
-
-                    for (auto* block : DefBlocksInfo.DefBlocks.find(latchVal)->second)
+                    if (defInst->type == TACInstType::BINARYOP)
                     {
-                        for (auto& blockInst : block->Instructions)
-                        {
-                            TACInstOperands operands = GetTACInstOperands(blockInst.get());
-
-                            if (operands.Def != nullptr && *operands.Def == latchVal)
-                            {
-                                if (blockInst->type == TACInstType::BINARYOP)
-                                    stepInst = static_cast<TACBinaryOp*>(blockInst.get());
-                            }
-                        }
+                        stepInst = static_cast<TACBinaryOp*>(defInst);
+                        break;
                     }
 
-                    if (!stepInst)
-                        continue;
+                    TACInstOperands operands = GetTACInstOperands(defInst);
 
-                    if (stepInst->op != BinaryOp::PLUS && stepInst->op != BinaryOp::MINUS)
-                        continue;
+                    if (operands.Uses.size() == 1)
+                        currVal = **operands.Uses.begin();
+                    else
+                        break;
+                }
 
-                    if (stepInst->left != phi->variable && stepInst->right != phi->variable)
-                        continue;
+                if (!stepInst)
+                    continue;
 
-                    TACValue stepVal = (stepInst->left == phi->variable) ? stepInst->right : stepInst->left;
+                if (stepInst->op != BinaryOp::PLUS && stepInst->op != BinaryOp::MINUS)
+                    continue;
 
-                    bool isStepValInvariant = false;
+                if (stepInst->left != phi->variable && stepInst->right != phi->variable)
+                    continue;
 
-                    if (std::holds_alternative<int>(stepVal))
+                if (stepInst->op == BinaryOp::MINUS && stepInst->left != phi->variable)
+                    continue;
+
+                TACValue stepVal = (stepInst->left == phi->variable) ? stepInst->right : stepInst->left;
+
+                bool isStepValInvariant = false;
+
+                if (std::holds_alternative<int>(stepVal))
+                {
+                    isStepValInvariant = true;
+                }
+
+                else
+                {
+                    if (DefBlocksInfo.DefBlocks[stepVal].empty())
                     {
                         isStepValInvariant = true;
                     }
 
                     else
                     {
-                        if (DefBlocksInfo.DefBlocks.find(stepVal) != DefBlocksInfo.DefBlocks.end() && !DefBlocksInfo.DefBlocks.find(stepVal)->second.empty())
-                        {
-                            TACBlock* defBlock = *DefBlocksInfo.DefBlocks.find(stepVal)->second.begin();
+                        isStepValInvariant = true;
 
-                            isStepValInvariant = !loop->Blocks.contains(defBlock);
+                        for (TACBlock* defBlock : DefBlocksInfo.DefBlocks[stepVal])
+                        {
+                            if (loop->Blocks.contains(defBlock))
+                            {
+                                isStepValInvariant = false;
+                                break;
+                            }
                         }
                     }
-
-                    if (!isStepValInvariant)
-                        continue;
-
-                    IndVarInfo.InductionVariables[loop] = TACInductionVariable{phi, initVal, stepVal, stepInst};
                 }
+
+                if (!isStepValInvariant)
+                    continue;
+
+                IndVarInfo.InductionVariables[loop].push_back(TACInductionVariable{phi, initVal, stepVal, stepInst});
             }
         }
     }

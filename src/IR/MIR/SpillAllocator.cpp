@@ -54,9 +54,10 @@ void ResolveVRegsSpillAll(MIR& MIR)
 
                     if (std::holds_alternative<StackOffset>(cmov->Dest) && std::holds_alternative<StackOffset>(cmov->Source))
                     {
-                        IREditor<MIRTypes>::addInstructionBefore(block.get(), inst, std::make_unique<MIRMov>(Register::R10D, cmov->Source));
+                        IREditor<MIRTypes>::addInstructionBefore(block.get(), inst, std::make_unique<MIRMov>(Register::R10D, cmov->Dest));
                         i++;
-                        IREditor<MIRTypes>::replaceInstruction(block.get(), inst, std::make_unique<MIRMov>(cmov->Dest, Register::R10D));
+                        IREditor<MIRTypes>::addInstructionAfter(block.get(), inst, std::make_unique<MIRMov>(cmov->Dest, Register::R10D));
+                        IREditor<MIRTypes>::replaceInstruction(block.get(), inst, std::make_unique<MIRCmov>(cmov->Cond, Register::R10D, cmov->Source));
                     }
                 }
 

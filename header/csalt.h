@@ -31,10 +31,11 @@
 #include "SpillAllocator.h"
 #include "LoopInversion.h"
 #include "LoopUnrolling.h"
+#include "IVM.h"
 #include "FunctionInlining.h"
 #include "IfConversion.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 32, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 35, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -64,6 +65,9 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"loop-inv", Phase::LOOP_INV},
     {"licm", Phase::LICM},
     {"unrolling", Phase::UNROLLING},
+    {"ivm", Phase::IVM},
+    {"lsr", Phase::IVM},
+    {"ive", Phase::IVE},
     {"inlining", Phase::INLINING},
     {"if-conv", Phase::IF_CONV},
 
@@ -80,24 +84,24 @@ inline bool ParseCompileFlag(std::string arg)
 {
     std::string target;
 
-    if (arg.starts_with("--interactive-history-dump-"))
+    if (arg.starts_with("--history-meta-dump-"))
     {
         target = arg.substr(27);
 
         if (targetPhaseMap.contains(target))
         {
-            gCompilerOptions[targetPhaseMap.at(target)].InteractiveHistoryDump = true;
+            gCompilerOptions[targetPhaseMap.at(target)].HistoryMetaDump = true;
             return true;
         }
     }
 
-    else if (arg.starts_with("--interactive-dump-"))
+    else if (arg.starts_with("--meta-dump-"))
     {
         target = arg.substr(19);
 
         if (targetPhaseMap.contains(target))
         {
-            gCompilerOptions[targetPhaseMap.at(target)].InteractiveDump = true;
+            gCompilerOptions[targetPhaseMap.at(target)].MetaDump = true;
             return true;
         }
     }

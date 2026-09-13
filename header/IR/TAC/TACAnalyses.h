@@ -77,7 +77,7 @@ struct TACInductionVariableInfo
 {
     bool isValid = false;
 
-    std::unordered_map<TACLoop*, TACInductionVariable> InductionVariables;
+    std::unordered_map<TACLoop*, std::vector<TACInductionVariable>> InductionVariables;
 };
 
 struct TACMetaData

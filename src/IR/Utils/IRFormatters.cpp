@@ -54,12 +54,7 @@ std::string FormatNode(Node& node, int depth = 0)
 
 std::string FormatAST(Node& root)
 {
-    std::string out;
-
-    out += FormatNode(root, 0);
-    out += "\n";
-
-    return out;
+    return FormatNode(root, 0) + "\n";
 }
 
 std::string FormatCFGBlock(CFGBlock* Block)
@@ -419,7 +414,7 @@ std::string FormatTACFunction(TACFunction* func, bool history)
     return out;
 }
 
-std::string FormatTAC(TAC& TAC, bool history)
+std::string FormatTAC(TAC& TAC, bool history, bool metadata)
 {
     std::string out;
 
@@ -838,7 +833,7 @@ std::string FormatMIRFunction(MIRFunction* func, bool history)
     return out;
 }
 
-std::string FormatMIR(MIR& MIR, bool history)
+std::string FormatMIR(MIR& MIR, bool history, bool metadata)
 {
     std::string out;
 

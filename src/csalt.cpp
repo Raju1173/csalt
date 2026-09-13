@@ -79,6 +79,7 @@ int main(int argc, char** argv)
                     {Pass<::TAC>{Phase::CFG_SIMP, {.RunIter = SimplifyControlFlow}}},
                     {Pass<::TAC>{Phase::DCE, {.RunIter = RemoveDeadCode}}},
                     {Pass<::TAC>{Phase::GVN, {.RunIter = GVN}}},
+                    {Pass<::TAC>{Phase::IVM, {.RunIter = MergeInductionVariables}}},
                 }},
 
             PassGroup<::TAC>{
@@ -128,8 +129,6 @@ int main(int argc, char** argv)
 
     std::string ExecutableFilePath = std::string(argv[argc - 1], 0, std::strlen(argv[argc - 1]) - 1) + "out";
     EmitExecutable(AssemblyFilePath, ExecutableFilePath);
-
-    Debugger::Run();
 
     PrintOutput(ExecutableFilePath);
 

@@ -8,68 +8,54 @@
 #include <variant>
 #include <vector>
 
-std::unordered_map<TACBlock*, TACBlock*> createPreHeaders(TAC& TAC)
+void createPreheader(TACLoop* loop)
 {
-    std::unordered_map<TACBlock*, TACBlock*> preheaderMap;
+    TACBlock* header = loop->Header;
 
-    for (auto& TACFunc : TAC)
+    std::vector<TACBlock*> outsideParents;
+
+    for (TACBlock* parent : header->Parents)
     {
-        TACLoopInfo& LoopInfo = TACFunc->getLoopInfo();
-
-        for (auto& loop : LoopInfo.allLoops)
-        {
-            TACBlock* header = loop->Header;
-
-            std::vector<TACBlock*> outsideParents;
-
-            for (TACBlock* parent : header->Parents)
-            {
-                if (!loop->Blocks.contains(parent))
-                    outsideParents.push_back(parent);
-            }
-
-            TACBlock* preheader = IREditor<TACTypes>::insertBlockBefore(header, Message{Phase::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", TACFunc->NextBlockID + 1, header->ID)});
-
-            for (TACBlock* parent : outsideParents)
-            {
-                if (parent->Instructions.back()->type == TACInstType::JUMP)
-                {
-                    TACJump* jump = static_cast<TACJump*>(parent->Instructions.back().get());
-
-                    jump->TargetBlock = preheader;
-                }
-
-                else if (parent->Instructions.back()->type == TACInstType::BRANCH)
-                {
-                    TACBranch* branch = static_cast<TACBranch*>(parent->Instructions.back().get());
-
-                    if (branch->TrueTarget == header)
-                        branch->TrueTarget = preheader;
-
-                    if (branch->FalseTarget == header)
-                        branch->FalseTarget = preheader;
-                }
-
-                IREditor<TACTypes>::removeEdge(parent, header);
-                IREditor<TACTypes>::addEdge(parent, preheader);
-            }
-
-            IREditor<TACTypes>::redirectPhiSourcesInto(header, preheader, outsideParents);
-
-            IREditor<TACTypes>::addEdge(preheader, header);
-            IREditor<TACTypes>::appendInstruction(preheader, std::make_unique<TACJump>(header));
-
-            preheaderMap[header] = preheader;
-        }
+        if (!loop->Blocks.contains(parent))
+            outsideParents.push_back(parent);
     }
 
-    return preheaderMap;
+    TACBlock* preheader = IREditor<TACTypes>::insertBlockBefore(header, Message{Phase::LICM, IRTransformType::ADDED, std::format("created preheader 'Block - {}' for loop header 'Block - {}'", loop->Header->Function->NextBlockID + 1, header->ID)});
+
+    for (TACBlock* parent : outsideParents)
+    {
+        if (parent->Instructions.back()->type == TACInstType::JUMP)
+        {
+            TACJump* jump = static_cast<TACJump*>(parent->Instructions.back().get());
+
+            jump->TargetBlock = preheader;
+        }
+
+        else if (parent->Instructions.back()->type == TACInstType::BRANCH)
+        {
+            TACBranch* branch = static_cast<TACBranch*>(parent->Instructions.back().get());
+
+            if (branch->TrueTarget == header)
+                branch->TrueTarget = preheader;
+
+            if (branch->FalseTarget == header)
+                branch->FalseTarget = preheader;
+        }
+
+        IREditor<TACTypes>::removeEdge(parent, header);
+        IREditor<TACTypes>::addEdge(parent, preheader);
+    }
+
+    IREditor<TACTypes>::redirectPhiSourcesInto(header, preheader, outsideParents);
+
+    IREditor<TACTypes>::addEdge(preheader, header);
+    IREditor<TACTypes>::appendInstruction(preheader, std::make_unique<TACJump>(header));
+
+    loop->Preheader = preheader;
 }
 
 void HoistLoopInvariants(TAC& TAC)
 {
-    std::unordered_map<TACBlock*, TACBlock*> preheaderMap = createPreHeaders(TAC);
-
     for (auto& TACFunc : TAC)
     {
         TACLoopInfo& LoopInfo = TACFunc->getLoopInfo();
@@ -78,7 +64,8 @@ void HoistLoopInvariants(TAC& TAC)
 
         for (TACLoop* Loop : LoopInfo.allLoops)
         {
-            TACBlock* preheader = preheaderMap[Loop->Header];
+            if (Loop->Preheader == nullptr)
+                createPreheader(Loop);
 
             std::unordered_set<TACVariable> invariants;
 
@@ -149,7 +136,7 @@ void HoistLoopInvariants(TAC& TAC)
 
                         if (canHoist)
                         {
-                            IREditor<TACTypes>::moveInstructionBefore(block, inst.get(), preheader, preheader->Instructions.back().get(), Message{Phase::LICM, IRTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
+                            IREditor<TACTypes>::moveInstructionBefore(block, inst.get(), Loop->Preheader, Loop->Preheader->Instructions.back().get(), Message{Phase::LICM, IRTransformType::MOVED, std::format("moved loop invariant instruction from 'Block - {}' to preheader", block->ID)});
 
                             changed = true;
                         }

@@ -15,7 +15,23 @@ An optimization focused compiler for a minimal subset of C targeting x86-64 asse
 |  | 100% () |  |  |
 |  | 100% () |  |  |
 
-# Optimization Pipeline
+# Optimization Passes
+
+1. Function Inlining
+2. Compile Time Function Execution (disabled by default)
+3. Tail Recursion Elimination
+4. Sibling Call Optimization
+5. Loop Invariant Code Motion
+6. Induction Variable Merging
+7. Loop Inversion
+8. Global Value Numbering
+9. Algebraic Simplification
+10. Constant Folding
+11. If Conversion
+12. Branch Simplification
+13. Control Flow Simplification
+14. Dead Code Elimination
+15. Frame Pointer Omission
 
 # Language Features
 

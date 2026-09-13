@@ -49,6 +49,7 @@ private:
         metadata.DomTreeInfo.isValid = false;
         metadata.FrontierInfo.isValid = false;
         metadata.LoopInfo.isValid = false;
+        metadata.InductionVariableInfo.isValid = false;
     }
 
     static void invalidateControlFlowAnalyses(TACMetaData& metadata)
@@ -57,12 +58,14 @@ private:
         metadata.DomTreeInfo.isValid = false;
         metadata.FrontierInfo.isValid = false;
         metadata.LoopInfo.isValid = false;
+        metadata.InductionVariableInfo.isValid = false;
     }
 
     static void invalidateDataFlowAnalyses(TACMetaData& metadata)
     {
         metadata.VarUsesInfo.isValid = false;
         metadata.DefBlocksInfo.isValid = false;
+        metadata.InductionVariableInfo.isValid = false;
     }
 
     static void invalidateAllAnalyses(MIRMetaData& metadata)
@@ -72,7 +75,7 @@ private:
 
     static void invalidateControlFlowAnalyses(MIRMetaData& metadata)
     {
-        metadata.LivenessInfo.isValid = false; // even though liveness is a data flow anaylsis, it relies on control flow...
+        metadata.LivenessInfo.isValid = false;
     }
 
     static void invalidateDataFlowAnalyses(MIRMetaData& metadata)
@@ -163,9 +166,9 @@ public:
 
     static void deleteFunction(IR& IR, Function* function, std::optional<Message> msg = std::nullopt);
 
-    static void removePhiSource(Block* block, Block* parent) requires std::same_as<IRTypes, TACTypes>;
+    static void removePhiSource(TACBlock* block, TACBlock* parent) requires std::same_as<IRTypes, TACTypes>;
 
-    static void remapPhiSources(Block* block, Block* oldParent, const std::vector<Block*>& newParents) requires std::same_as<IRTypes, TACTypes>;
+    static void remapPhiSources(TACBlock* block, TACBlock* oldParent, const std::vector<TACBlock*>& newParents) requires std::same_as<IRTypes, TACTypes>;
 
-    static void redirectPhiSourcesInto(Block* targetBlock, Block* intermediateBlock, std::vector<Block*>& redirectedParents) requires std::same_as<IRTypes, TACTypes>;
+    static void redirectPhiSourcesInto(TACBlock* targetBlock, TACBlock* intermediateBlock, std::vector<TACBlock*>& redirectedParents) requires std::same_as<IRTypes, TACTypes>;
 };

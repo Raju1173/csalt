@@ -33,10 +33,7 @@ private:
 
     inline static std::unordered_set<Phase> RecievedNotifications;
 
-    inline static std::vector<IRSnapshot> StaticIRSnapshots;
-    inline static std::vector<IRSnapshot> InteractiveIRSnapshots;
-
-    template<typename R> static void TakeSnapshot(R* IR, Phase phase);
+    template<typename R> static void PrintIR(R* IR, Phase phase);
 
 public:
     static void AddIR(TokenStream& TokenStream);
@@ -47,8 +44,6 @@ public:
     static void AddIR(std::string ASMFilePath);
 
     static void Notify(Phase phase);
-
-    static void Run();
 
     static void Reset();
 };

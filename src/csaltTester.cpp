@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <print>
+#include <string>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
 #include <sys/user.h>
@@ -22,163 +23,100 @@ bool tryParse(std::string str, int& out)
 
 struct CompileResult
 {
-    bool timedOut;
-    bool success;
+    bool compilationTimedOut;
+    bool compilationSuccess;
+
+    bool executionSuccess;
+    bool executionCrashed;
+    bool executionTimedOut;
+
+    int recievedOutput;
 };
 
 CompileResult compileTest(std::string flags, std::string filePath)
 {
-    std::string compileCommand = "timeout 1s csalt --disable-output " + flags + " " + filePath + " > /dev/null 2>&1";
+    std::string compileCommand = "timeout 2s csalt " + flags + " " + filePath + " 2>&1";
 
-    int status = std::system(compileCommand.c_str());
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(compileCommand.c_str(), "r"), pclose);
+
+    if (!pipe)
+    {
+        return CompileResult{false, false, false, false, false, -1};
+    }
+
+    std::string compileOutput;
+
+    std::string buffer;
+
+    while (fgets(buffer.data(), sizeof(buffer), pipe.get()) != nullptr)
+    {
+        compileOutput += buffer;
+    }
+
+    int status = pclose(pipe.release());
+
+    CompileResult result{};
+
+    result.recievedOutput = -1;
 
     if (WIFEXITED(status))
     {
-        if (WEXITSTATUS(status) == 124)
+        int exitCode = WEXITSTATUS(status);
+
+        if (exitCode == 124)
         {
-            return {true, false};
+            result.compilationTimedOut = true;
+            result.compilationSuccess = false;
         }
 
-        return {false, WEXITSTATUS(status) == 0};
-    }
-
-    return {false, false};
-}
-
-struct TestResult
-{
-    bool success;
-    bool crashed;
-    bool timedOut;
-    int actualOutput;
-};
-
-TestResult compareTestOutput(std::string ExecFilePath, int expected)
-{
-    std::string runPath = ExecFilePath;
-
-    if (runPath.find('/') == std::string::npos)
-    {
-        runPath = "./" + runPath;
-    }
-
-    pid_t pid = fork();
-
-    if (pid == 0)
-    {
-        ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
-
-        execl(runPath.c_str(), runPath.c_str(), nullptr);
-
-        _exit(1);
+        else
+        {
+            result.compilationSuccess = (exitCode == 0);
+        }
     }
 
     else
     {
-        int status;
-        auto startTime = std::chrono::steady_clock::now();
-
-        auto waitWithTimeout = [&startTime, &pid, &status]() -> bool {
-            while (true)
-            {
-                int res = waitpid(pid, &status, WNOHANG);
-
-                if (res > 0)
-                    return true;
-                if (res == -1)
-                    return false;
-
-                auto now = std::chrono::steady_clock::now();
-
-                if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= 1000)
-                {
-                    return false;
-                }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-        };
-
-        if (!waitWithTimeout())
-        {
-            kill(pid, SIGKILL);
-
-            waitpid(pid, &status, 0);
-
-            return {false, false, true, -1};
-        }
-
-        ptrace(PTRACE_SETOPTIONS, pid, nullptr, PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD);
-
-        struct user_regs_struct regs;
-
-        bool crashed = false;
-        bool timedOut = false;
-        int actualOutput = -1;
-
-        while (true)
-        {
-            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
-
-            if (!waitWithTimeout())
-            {
-                timedOut = true;
-                break;
-            }
-
-            if (WIFEXITED(status))
-            {
-                actualOutput = WEXITSTATUS(status);
-                break;
-            }
-
-            if (WIFSIGNALED(status))
-            {
-                crashed = true;
-                break;
-            }
-
-            if (WIFSTOPPED(status))
-            {
-                int sig = WSTOPSIG(status);
-
-                if (sig != (SIGTRAP | 0x80))
-                {
-                    if (sig == SIGSEGV || sig == SIGILL || sig == SIGABRT || sig == SIGFPE)
-                    {
-                        crashed = true;
-                        break;
-                    }
-
-                    ptrace(PTRACE_SYSCALL, pid, nullptr, sig);
-
-                    continue;
-                }
-
-                ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
-
-                if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
-                {
-                    actualOutput = static_cast<int32_t>(regs.rdi);
-                    break;
-                }
-            }
-        }
-
-        if (timedOut)
-        {
-            kill(pid, SIGKILL);
-
-            waitpid(pid, &status, 0);
-
-            return {false, false, true, -1};
-        }
-
-        ptrace(PTRACE_KILL, pid, nullptr, nullptr);
-        waitpid(pid, &status, 0);
-
-        return {!crashed && (actualOutput == expected), crashed, false, actualOutput};
+        result.compilationSuccess = false;
     }
+
+    if (compileOutput.find("COMPILED CODE'S EXECUTION TIMED OUT") != std::string::npos)
+    {
+        result.executionTimedOut = true;
+    }
+
+    else if (compileOutput.find("COMPILED CODE'S EXECUTION FAILED") != std::string::npos)
+    {
+        result.executionCrashed = true;
+    }
+
+    else
+    {
+        size_t pos = compileOutput.find("OUTPUT OF COMPILED CODE");
+
+        if (pos != std::string::npos)
+        {
+            size_t valPos = compileOutput.find("\033[33m", pos);
+
+            if (valPos != std::string::npos)
+            {
+                valPos += 5;
+
+                try
+                {
+                    result.recievedOutput = std::stoi(compileOutput.substr(valPos));
+                    result.executionSuccess = true;
+                }
+
+                catch (const std::exception&)
+                {
+                    result.executionCrashed = true;
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 int main(int argc, char** argv)
@@ -242,37 +180,35 @@ int main(int argc, char** argv)
 
                 CompileResult compileResult = compileTest(allFlags, child.path().string());
 
-                if (compileResult.timedOut)
+                if (compileResult.compilationTimedOut)
                 {
                     std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Timed Out", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                     return;
                 }
 
-                else if (!compileResult.success)
+                else if (!compileResult.compilationSuccess)
                 {
                     std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Failed", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                     return;
                 }
 
-                TestResult testResult = compareTestOutput(ExecutableFilePath, expectedOutput);
-
-                if (testResult.timedOut)
+                else if (compileResult.executionTimedOut)
                 {
                     std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION TIMED OUT", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                 }
 
-                else if (testResult.crashed)
+                else if (compileResult.executionCrashed)
                 {
                     std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "SEGFAULT / CRASHED", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                 }
 
-                else if (!testResult.success)
+                else if (compileResult.executionSuccess && !(compileResult.recievedOutput == expectedOutput))
                 {
-                    std::string reason = std::format("EXPECTED: {}, RECIEVED: {}", expectedOutput, testResult.actualOutput);
+                    std::string reason = std::format("EXPECTED: {}, RECIEVED: {}", expectedOutput, compileResult.recievedOutput);
                     std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, reason, REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                 }

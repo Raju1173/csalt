@@ -33,6 +33,9 @@ enum class Phase
     LOOP_INV,
     LICM,
     UNROLLING,
+    IVM,
+    LSR,
+    IVE,
     INLINING,
     IF_CONV,
 
@@ -52,9 +55,9 @@ struct PhaseOptions
     bool enabled = true; // for optimization passes...
 
     bool Dump = false;
+    bool MetaDump = false;
     bool HistoryDump = false;
-    bool InteractiveDump = false;
-    bool InteractiveHistoryDump = false;
+    bool HistoryMetaDump = false;
 };
 
 using CompilerOptions = std::unordered_map<Phase, PhaseOptions>;
@@ -77,7 +80,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 32, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 35, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -133,6 +136,12 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "LOOP INVARIANT CODE MOTION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::UNROLLING:
             return {.name = "LOOP UNROLLING", .isTACPhase = true, .isOptimizationPhase = true};
+        case Phase::IVM:
+            return {.name = "INDUCTION VARIABLE MERGING", .isTACPhase = true, .isOptimizationPhase = true};
+        case Phase::LSR:
+            return {.name = "LOOP STRENGTH REDUCTION", .isTACPhase = true, .isOptimizationPhase = true};
+        case Phase::IVE:
+            return {.name = "INDUCTION VARIABLE ELIMINATION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::INLINING:
             return {.name = "FUNCTION INLINING", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::IF_CONV:

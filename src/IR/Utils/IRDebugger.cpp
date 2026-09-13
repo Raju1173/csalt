@@ -37,24 +37,31 @@ void Debugger::AddIR(std::string ASMFilePath)
         mASMFilePath = ASMFilePath;
 }
 
-template<typename R> void Debugger::TakeSnapshot(R* IR, Phase phase)
+template<typename R> void Debugger::PrintIR(R* IR, Phase phase)
 {
     if (gCompilerOptions[phase].Dump)
     {
-        StaticIRSnapshots.push_back(IRSnapshot{getPhaseMetadata(phase).name, FormatIR(*IR)});
-        std::print("-----{}-----\n\n", StaticIRSnapshots.back().Name);
-        std::print("{}", StaticIRSnapshots.back().Snapshot);
+        std::print("-----{}-----\n\n", getPhaseMetadata(phase).name);
+        std::print("{}", FormatIR(*IR, false, false));
     }
 
     if (gCompilerOptions[phase].HistoryDump)
     {
-        StaticIRSnapshots.push_back(IRSnapshot{getPhaseMetadata(phase).name, FormatIR(*IR, true)});
-        std::print("-----{}-----\n\n", StaticIRSnapshots.back().Name);
-        std::print("{}", StaticIRSnapshots.back().Snapshot);
+        std::print("-----{}-----\n\n", getPhaseMetadata(phase).name);
+        std::print("{}", FormatIR(*IR, true, false));
     }
 
-    if (gCompilerOptions[phase].InteractiveDump || gCompilerOptions[phase].InteractiveHistoryDump)
-        InteractiveIRSnapshots.push_back(IRSnapshot{getPhaseMetadata(phase).name, FormatIR(*IR, gCompilerOptions[phase].InteractiveHistoryDump)});
+    if (gCompilerOptions[phase].MetaDump)
+    {
+        std::print("-----{}-----\n\n", getPhaseMetadata(phase).name);
+        std::print("{}", FormatIR(*IR, false, true));
+    }
+
+    if (gCompilerOptions[phase].HistoryMetaDump)
+    {
+        std::print("-----{}-----\n\n", getPhaseMetadata(phase).name);
+        std::print("{}", FormatIR(*IR, true, true));
+    }
 }
 
 void Debugger::Notify(Phase phase)
@@ -62,104 +69,27 @@ void Debugger::Notify(Phase phase)
     PhaseMetadata phaseMeta = getPhaseMetadata(phase);
 
     if (RecievedNotifications.contains(phase))
-    {
-        if (phaseMeta.isOptimizationPhase)
-        {
-            if (gCompilerOptions[phase].InteractiveDump || gCompilerOptions[phase].InteractiveHistoryDump)
-            {
-                if (phaseMeta.isTACPhase)
-                    InteractiveIRSnapshots.push_back(IRSnapshot{phaseMeta.name, FormatIR(*mTAC, gCompilerOptions[phase].InteractiveHistoryDump)});
-                else if (phaseMeta.isMIRPhase)
-                    InteractiveIRSnapshots.push_back(IRSnapshot{phaseMeta.name, FormatIR(*mMIR, gCompilerOptions[phase].InteractiveHistoryDump)});
-            }
-        }
-
         return;
-    }
 
     if (phaseMeta.isTOKPhase)
-        TakeSnapshot(mTokenStream, phase);
+        PrintIR(mTokenStream, phase);
 
     else if (phaseMeta.isASTPhase)
-        TakeSnapshot(mAST, phase);
+        PrintIR(mAST, phase);
 
     else if (phaseMeta.isCFGPhase)
-        TakeSnapshot(mCFG, phase);
+        PrintIR(mCFG, phase);
 
     else if (phaseMeta.isTACPhase || (phaseMeta.isTACPhase && phaseMeta.isOptimizationPhase))
-        TakeSnapshot(mTAC, phase);
+        PrintIR(mTAC, phase);
 
     else if (phaseMeta.isMIRPhase || (phaseMeta.isMIRPhase && phaseMeta.isOptimizationPhase))
-        TakeSnapshot(mMIR, phase);
+        PrintIR(mMIR, phase);
 
     else if (phaseMeta.isASMPhase)
-        TakeSnapshot(&mASMFilePath, phase);
+        PrintIR(&mASMFilePath, phase);
 
     RecievedNotifications.insert(phase);
-}
-
-void Debugger::Run()
-{
-    if (!InteractiveIRSnapshots.empty())
-    {
-        int i = 0;
-
-        std::string prevInput = "n";
-
-        while (true)
-        {
-            std::print("\033[2J\033[3J\033[1;1H");
-            std::print("-----{}-----\n\n", InteractiveIRSnapshots[i].Name);
-            std::print("{}", InteractiveIRSnapshots[i].Snapshot);
-            std::print("\nSnapshot : {}/{}\n", i + 1, InteractiveIRSnapshots.size());
-            std::print("\nControls : [n/p [N]] - next/prev N times, [q] - quit, [Enter] - repeat\n\n");
-            std::print("(csalt) ");
-
-            std::string input;
-            std::getline(std::cin, input);
-
-            if (input.empty())
-                input = prevInput;
-            else
-                prevInput = input;
-
-            std::istringstream iss(input);
-            std::string cmd;
-            int steps = 1;
-
-            iss >> cmd;
-            if (iss >> steps)
-            {
-                if (steps < 0)
-                    steps = 0;
-            }
-
-            if (cmd == "n" || cmd == "next")
-            {
-                i = std::min(i + steps, static_cast<int>(InteractiveIRSnapshots.size()) - 1);
-            }
-
-            else if (cmd == "p" || cmd == "prev")
-            {
-                i = std::max(i - steps, 0);
-            }
-
-            else if (cmd == "q" || cmd == "quit")
-            {
-                std::print("\033[2J\033[3J\033[1;1H");
-                break;
-            }
-        }
-    }
-
-    for (IRSnapshot Snapshot : StaticIRSnapshots)
-    {
-        if (!InteractiveIRSnapshots.empty())
-        {
-            std::print("-----{}-----\n\n", Snapshot.Name);
-            std::print("{}", Snapshot.Snapshot);
-        }
-    }
 }
 
 void Debugger::Reset()
@@ -172,7 +102,4 @@ void Debugger::Reset()
     mASMFilePath = "";
 
     RecievedNotifications.clear();
-
-    StaticIRSnapshots.clear();
-    InteractiveIRSnapshots.clear();
 };
