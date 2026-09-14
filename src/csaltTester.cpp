@@ -14,11 +14,22 @@
 #include <filesystem>
 #include <csalt.h>
 
+#include <iostream>
+#include <string>
+#include <vector>
+#include <filesystem>
+#include <fstream>
+#include <charconv>
+#include <memory>
+#include <print>
+#include <cstring>
+#include <format>
+
 bool tryParse(std::string str, int& out)
 {
     auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), out);
 
-    return ec == std::errc{} && ptr == str.data() + str.size();
+    return ec == std::errc{};
 }
 
 struct CompileResult
@@ -46,9 +57,9 @@ CompileResult compileTest(std::string flags, std::string filePath)
 
     std::string compileOutput;
 
-    std::string buffer;
+    char buffer[256];
 
-    while (fgets(buffer.data(), sizeof(buffer), pipe.get()) != nullptr)
+    while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr)
     {
         compileOutput += buffer;
     }
@@ -147,7 +158,7 @@ int main(int argc, char** argv)
 
             if (!file.is_open())
             {
-                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Could not open file");
+                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR ]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Could not open file");
                 continue;
             }
 
@@ -167,11 +178,9 @@ int main(int argc, char** argv)
 
             if (!found || !line.starts_with("// EXPECTED : ") || !tryParse(line.substr(14), expectedOutput))
             {
-                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Missing or invalid '// EXPECTED : [out]' header");
+                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR ]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Missing or invalid '// EXPECTED : [output integer]' header");
                 continue;
             }
-
-            std::string ExecutableFilePath = std::string(child.path(), 0, std::strlen(child.path().c_str()) - 1) + "out";
 
             bool allFlagsPassed = true;
 
@@ -182,14 +191,14 @@ int main(int argc, char** argv)
 
                 if (compileResult.compilationTimedOut)
                 {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Timed Out", REASON_WIDTH, allFlags);
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "COMPILATION TIMED OUT", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                     return;
                 }
 
                 else if (!compileResult.compilationSuccess)
                 {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Compilation Failed", REASON_WIDTH, allFlags);
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "COMPILATION FAILED", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                     return;
                 }
@@ -202,7 +211,7 @@ int main(int argc, char** argv)
 
                 else if (compileResult.executionCrashed)
                 {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "SEGFAULT / CRASHED", REASON_WIDTH, allFlags);
+                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION FAILED", REASON_WIDTH, allFlags);
                     allFlagsPassed = false;
                 }
 
@@ -229,7 +238,7 @@ int main(int argc, char** argv)
 
             if (allFlagsPassed)
             {
-                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;92m[PASS]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "All tests passed");
+                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;92m[PASS]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "ALL TESTS PASSED");
             }
         }
     }

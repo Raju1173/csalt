@@ -330,7 +330,7 @@ void PrintOutput(std::string ExecFilePath)
 
             waitpid(pid, &status, 0);
 
-            std::print("\033[31mCOMPILED CODE'S EXECUTION TIMED OUT\033[0m\n");
+            std::print("\033[35mCOMPILED CODE'S EXECUTION TIMED OUT\033[0m\n");
 
             return;
         }
@@ -353,13 +353,13 @@ void PrintOutput(std::string ExecFilePath)
 
             if (WIFEXITED(status))
             {
-                std::print("\033[31mOUTPUT OF COMPILED CODE\033[0m : \033[33m{}\033[0m\n", WIFEXITED(status));
+                std::print("\033[35mOUTPUT OF COMPILED CODE\033[0m : \033[33m{}\033[0m\n", WIFEXITED(status));
                 break;
             }
 
             if (WIFSIGNALED(status))
             {
-                std::print("\033[31mCOMPILED CODE'S EXECUTION FAILED\033[0m\n");
+                std::print("\033[35mCOMPILED CODE'S EXECUTION FAILED\033[0m\n");
                 break;
             }
 
@@ -371,7 +371,7 @@ void PrintOutput(std::string ExecFilePath)
                 {
                     if (sig == SIGSEGV || sig == SIGILL || sig == SIGABRT || sig == SIGFPE)
                     {
-                        std::print("\033[31mCOMPILED CODE'S EXECUTION FAILED\033[0m\n");
+                        std::print("\033[35mCOMPILED CODE'S EXECUTION FAILED\033[0m\n");
                         break;
                     }
 
@@ -384,7 +384,7 @@ void PrintOutput(std::string ExecFilePath)
 
                 if (regs.orig_rax == SYS_exit || regs.orig_rax == SYS_exit_group)
                 {
-                    std::print("\033[31mOUTPUT OF COMPILED CODE\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
+                    std::print("\033[35mOUTPUT OF COMPILED CODE\033[0m : \033[33m{}\033[0m\n", static_cast<int32_t>(regs.rdi));
                     break;
                 }
             }
@@ -396,7 +396,7 @@ void PrintOutput(std::string ExecFilePath)
 
             waitpid(pid, &status, 0);
 
-            std::print("\033[31mCOMPILED CODE'S EXECUTION TIMED OUT\033[0m\n");
+            std::print("\033[35mCOMPILED CODE'S EXECUTION TIMED OUT\033[0m\n");
         }
 
         ptrace(PTRACE_KILL, pid, nullptr, nullptr);
