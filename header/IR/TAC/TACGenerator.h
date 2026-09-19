@@ -71,6 +71,8 @@ public:
 
     TACInductionVariableInfo& getInductionVariableInfo();
 
+    TACLivenessInfo& getLivenessInfo();
+
     template<typename IRTypes> friend class IREditor;
 };
 

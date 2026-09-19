@@ -66,7 +66,7 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"licm", Phase::LICM},
     {"unrolling", Phase::UNROLLING},
     {"ivm", Phase::IVM},
-    {"lsr", Phase::IVM},
+    {"lsr", Phase::LSR},
     {"ive", Phase::IVE},
     {"inlining", Phase::INLINING},
     {"if-conv", Phase::IF_CONV},
@@ -86,7 +86,7 @@ inline bool ParseCompileFlag(std::string arg)
 
     if (arg.starts_with("--history-meta-dump-"))
     {
-        target = arg.substr(27);
+        target = arg.substr(20);
 
         if (targetPhaseMap.contains(target))
         {
@@ -97,7 +97,7 @@ inline bool ParseCompileFlag(std::string arg)
 
     else if (arg.starts_with("--meta-dump-"))
     {
-        target = arg.substr(19);
+        target = arg.substr(12);
 
         if (targetPhaseMap.contains(target))
         {
@@ -162,9 +162,6 @@ inline bool ParseCompileFlag(std::string arg)
             return true;
         }
     }
-
-    else
-        return false;
 
     return false;
 }

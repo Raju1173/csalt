@@ -3,7 +3,9 @@
 #include "IRCommon.h"
 #include "MIRGenerator.h"
 #include "MIRInstructions.h"
+#include "TACAnalyses.h"
 #include "TACGenerator.h"
+#include "TACInstructions.h"
 #include "lexer.h"
 #include "parser.h"
 #include <fstream>
@@ -151,7 +153,7 @@ std::string FormatMessage(Message& msg)
     return out;
 }
 
-std::string FormatTACInstruction(TACInstruction* inst, bool history)
+std::string FormatTACInstruction(TACInstruction* inst, bool history, bool metadata)
 {
     std::string out;
 
@@ -271,9 +273,11 @@ std::string FormatTACInstruction(TACInstruction* inst, bool history)
     return out;
 }
 
-std::string FormatTACBlock(TACBlock* block, bool history)
+std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
 {
     std::string out;
+
+    TACBlockLiveness& BlockLiveness = block->Function->getLivenessInfo().BlockLiveness[block];
 
     auto blockDead = std::find_if(block->Function->Blocks.begin(), block->Function->Blocks.end(), [&block](auto& b) { return b.get() == block; });
 
@@ -294,16 +298,16 @@ std::string FormatTACBlock(TACBlock* block, bool history)
             for (auto& prec : block->LastDeadInstruction->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatTACInstruction(prec.get(), history);
+                out += FormatTACInstruction(prec.get(), history, metadata);
             }
 
             out += "\033[2;37m";
-            out += FormatTACInstruction(block->LastDeadInstruction.get(), history);
+            out += FormatTACInstruction(block->LastDeadInstruction.get(), history, metadata);
 
             for (auto& trail : block->LastDeadInstruction->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatTACInstruction(trail.get(), history);
+                out += FormatTACInstruction(trail.get(), history, metadata);
             }
         }
     }
@@ -315,29 +319,54 @@ std::string FormatTACBlock(TACBlock* block, bool history)
             for (auto& prec : inst->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatTACInstruction(prec.get(), history);
+                out += FormatTACInstruction(prec.get(), history, metadata);
             }
         }
 
         if (blockDead == block->Function->Blocks.end())
             out += "\033[2;37m";
 
-        out += FormatTACInstruction(inst.get(), history);
+        out += FormatTACInstruction(inst.get(), history, metadata);
 
         if (history)
         {
             for (auto& trail : inst->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatTACInstruction(trail.get(), history);
+                out += FormatTACInstruction(trail.get(), history, metadata);
             }
         }
+    }
+
+    if (metadata)
+    {
+        out += "\n    [Liveness Info]\n";
+
+        out += "      LiveIn - {";
+
+        for (TACValue val : BlockLiveness.LiveIn)
+        {
+            out += std::get<TACVariable>(val).SSAName + ", ";
+        }
+
+        out += "}\n";
+
+        out += "      LiveOut - {";
+
+        for (TACValue val : BlockLiveness.LiveOut)
+        {
+            out += std::get<TACVariable>(val).SSAName + ", ";
+        }
+
+        out += "}\n";
+
+        out += std::format("      Max Register Pressure - {}\n", BlockLiveness.MaxPressure);
     }
 
     return out;
 }
 
-std::string FormatTACFunction(TACFunction* func, bool history)
+std::string FormatTACFunction(TACFunction* func, bool history, bool metadata)
 {
     std::string out;
 
@@ -368,16 +397,16 @@ std::string FormatTACFunction(TACFunction* func, bool history)
             for (auto& prec : func->LastDeadBlock->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatTACBlock(prec.get(), history);
+                out += FormatTACBlock(prec.get(), history, metadata);
             }
 
             out += "\033[2;37m";
-            out += FormatTACBlock(func->LastDeadBlock.get(), history);
+            out += FormatTACBlock(func->LastDeadBlock.get(), history, metadata);
 
             for (auto& trail : func->LastDeadBlock->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatTACBlock(trail.get(), history);
+                out += FormatTACBlock(trail.get(), history, metadata);
             }
 
             out += std::format("\n\033[2;37mend {}\033[0m\n\n", func->Name);
@@ -393,18 +422,18 @@ std::string FormatTACFunction(TACFunction* func, bool history)
             for (auto& prec : block->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatTACBlock(prec.get(), history);
+                out += FormatTACBlock(prec.get(), history, metadata);
             }
         }
 
-        out += FormatTACBlock(block.get(), history);
+        out += FormatTACBlock(block.get(), history, metadata);
 
         if (history)
         {
             for (auto& trail : block->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatTACBlock(trail.get(), history);
+                out += FormatTACBlock(trail.get(), history, metadata);
             }
         }
     }
@@ -425,18 +454,18 @@ std::string FormatTAC(TAC& TAC, bool history, bool metadata)
             for (auto& prec : func->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatTACFunction(prec.get(), history);
+                out += FormatTACFunction(prec.get(), history, metadata);
             }
         }
 
-        out += FormatTACFunction(func.get(), history);
+        out += FormatTACFunction(func.get(), history, metadata);
 
         if (history)
         {
             for (auto& trail : func->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatTACFunction(trail.get(), history);
+                out += FormatTACFunction(trail.get(), history, metadata);
             }
         }
     }

@@ -19,18 +19,18 @@ TACDominatorInfo& TACFunction::getDominatorInfo()
 
         TACBlock* entryBlock = Blocks[0].get();
 
-        std::unordered_set<TACBlock*> unIVersalSet;
+        std::unordered_set<TACBlock*> universalSet;
 
         for (auto& block : Blocks)
         {
-            unIVersalSet.insert(block.get());
+            universalSet.insert(block.get());
         }
 
         DomInfo.Dominators[entryBlock] = {entryBlock};
 
         for (size_t j = 1; j < Blocks.size(); ++j)
         {
-            DomInfo.Dominators[Blocks[j].get()] = unIVersalSet;
+            DomInfo.Dominators[Blocks[j].get()] = universalSet;
         }
 
         bool changed = true;
@@ -469,4 +469,145 @@ TACInductionVariableInfo& TACFunction::getInductionVariableInfo()
     }
 
     return IndVarInfo;
+}
+
+TACLivenessInfo& TACFunction::getLivenessInfo()
+{
+    TACLivenessInfo& LivenessInfo = Metadata.LivenessInfo;
+
+    if (!LivenessInfo.isValid)
+    {
+        LivenessInfo.isValid = true;
+
+        LivenessInfo.BlockLiveness.clear();
+
+        std::unordered_map<TACBlock*, std::unordered_set<TACValue>> UpwardUses;
+        std::unordered_map<TACBlock*, std::unordered_set<TACValue>> Defs;
+        std::unordered_map<TACBlock*, std::unordered_set<TACValue>> PhiUsesAtParent;
+
+        for (auto& Block : Blocks)
+        {
+            std::unordered_set<TACValue>& upward = UpwardUses[Block.get()];
+            std::unordered_set<TACValue>& defs = Defs[Block.get()];
+
+            for (auto& inst : Block->Instructions)
+            {
+                if (inst->type == TACInstType::PHI)
+                {
+                    TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                    defs.insert(phi->variable);
+
+                    for (PhiArgument& arg : phi->args)
+                    {
+                        PhiUsesAtParent[arg.SourceBlock].insert(arg.Value);
+                    }
+
+                    continue;
+                }
+
+                TACInstOperands operands = GetTACInstOperands(inst.get());
+
+                for (TACValue* use : operands.Uses)
+                {
+                    if (std::holds_alternative<TACVariable>(*use) && !defs.contains(*use))
+                    {
+                        upward.insert(*use);
+                    }
+                }
+
+                if (operands.Def != nullptr && std::holds_alternative<TACVariable>(*operands.Def))
+                {
+                    defs.insert(*operands.Def);
+                }
+            }
+        }
+
+        bool changed = true;
+
+        while (changed)
+        {
+            changed = false;
+
+            for (auto& Block : Blocks)
+            {
+                std::unordered_set<TACValue> OUT = PhiUsesAtParent[Block.get()];
+
+                for (TACBlock* child : Block.get()->Children)
+                {
+                    for (TACValue val : LivenessInfo.BlockLiveness[child].LiveIn)
+                    {
+                        OUT.insert(val);
+                    }
+                }
+
+                std::unordered_set<TACValue> IN = OUT;
+
+                for (TACValue def : Defs[Block.get()])
+                {
+                    IN.erase(def);
+                }
+
+                for (TACValue use : UpwardUses[Block.get()])
+                {
+                    IN.insert(use);
+                }
+
+                if (IN != LivenessInfo.BlockLiveness[Block.get()].LiveIn || OUT != LivenessInfo.BlockLiveness[Block.get()].LiveOut)
+                {
+                    LivenessInfo.BlockLiveness[Block.get()].LiveIn = std::move(IN);
+                    LivenessInfo.BlockLiveness[Block.get()].LiveOut = std::move(OUT);
+                    changed = true;
+                }
+            }
+        }
+
+        for (auto& Block : Blocks)
+        {
+            std::unordered_set<TACValue> live = LivenessInfo.BlockLiveness[Block.get()].LiveOut;
+
+            int maxPressure = live.size();
+
+            for (int i = static_cast<int>(Block.get()->Instructions.size()) - 1; i >= 0; i--)
+            {
+                auto& inst = Block.get()->Instructions[i];
+
+                if (inst->type == TACInstType::PHI)
+                    continue;
+
+                TACInstOperands operands = GetTACInstOperands(inst.get());
+
+                if (operands.Def != nullptr && std::holds_alternative<TACVariable>(*operands.Def))
+                {
+                    live.erase(*operands.Def);
+                }
+
+                maxPressure = std::max(maxPressure, (int)live.size());
+
+                for (TACValue* use : operands.Uses)
+                {
+                    if (std::holds_alternative<TACVariable>(*use))
+                    {
+                        live.insert(*use);
+                    }
+                }
+
+                maxPressure = std::max(maxPressure, (int)live.size());
+            }
+
+            for (auto& inst : Block.get()->Instructions)
+            {
+                if (inst->type != TACInstType::PHI)
+                    break;
+
+                live.erase(static_cast<TACPhi*>(inst.get())->variable);
+            }
+
+            maxPressure = std::max(maxPressure, static_cast<int>(live.size()));
+
+            LivenessInfo.BlockLiveness[Block.get()].MaxPressure = maxPressure;
+        }
+    }
+
+    return LivenessInfo;
 }

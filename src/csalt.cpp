@@ -8,7 +8,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // CTFE stays disabled by default and during benchmarks since its basically a cheat code...
+    // CTFE stays disabled by default and during benchmarks since its basically a cheat code given this compiler's constraints...
     gCompilerOptions[Phase::CTFE].enabled = false;
 
     for (int i = 1; i < argc - 1; i++)
@@ -45,13 +45,15 @@ int main(int argc, char** argv)
     // clang-format off
     PassManager<::TAC> TACPassManagerPreSSA(
         {
-            PassGroup<::TAC>{
+            PassGroup<::TAC>
+            {
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{Phase::TRE, {.Run = EliminateTailRecursions}}},
                     {Pass<::TAC>{Phase::LOOP_INV, {.Run = InvertLoops}}},
                     {Pass<::TAC>{Phase::INLINING, {.Run = InlineFunctions}}},
-                }},
+                }
+            },
         });
     // clang-format on
 
@@ -64,13 +66,16 @@ int main(int argc, char** argv)
     // clang-format off
     PassManager<::TAC> TACPassManagerPostSSA(
         {
-            PassGroup<::TAC>{
+            PassGroup<::TAC>
+            {
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{Phase::CTFE, {.Run = EvaluateConstantFunctions}}},
-                }},
+                }
+            },
 
-            PassGroup<::TAC>{
+            PassGroup<::TAC>
+            {
                 .IterateToFixedPoint = true,
                 .Passes = {
                     {Pass<::TAC>{Phase::FOLDING, {.RunIter = FoldConstants}}},
@@ -80,16 +85,19 @@ int main(int argc, char** argv)
                     {Pass<::TAC>{Phase::DCE, {.RunIter = RemoveDeadCode}}},
                     {Pass<::TAC>{Phase::GVN, {.RunIter = GVN}}},
                     {Pass<::TAC>{Phase::IVM, {.RunIter = MergeInductionVariables}}},
-                }},
+                }
+            },
 
-            PassGroup<::TAC>{
+            PassGroup<::TAC>
+            {
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{Phase::LICM, {.Run = HoistLoopInvariants}}},
                     {Pass<::TAC>{Phase::UNROLLING, {.Run = UnrollLoops}}},
                     {Pass<::TAC>{Phase::SCO, {.Run = MarkSiblingCalls}}},
                     {Pass<::TAC>{Phase::IF_CONV, {.Run = IfConversion}}},
-                }},
+                }
+            },
         });
     // clang-format on
 
@@ -112,11 +120,13 @@ int main(int argc, char** argv)
     // clang-format off
     PassManager<::MIR> MIRPassManager(
         {
-            PassGroup<::MIR>{
+            PassGroup<::MIR>
+            {
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::MIR>{Phase::FPO, {.Run = OmitFramePointers}}},
-                }},
+                }
+            },
         });
     // clang-format on
 

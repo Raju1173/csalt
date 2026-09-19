@@ -80,6 +80,20 @@ struct TACInductionVariableInfo
     std::unordered_map<TACLoop*, std::vector<TACInductionVariable>> InductionVariables;
 };
 
+struct TACBlockLiveness
+{
+    std::unordered_set<TACValue> LiveIn;
+    std::unordered_set<TACValue> LiveOut;
+    int MaxPressure;
+};
+
+struct TACLivenessInfo
+{
+    bool isValid = false;
+
+    std::unordered_map<TACBlock*, TACBlockLiveness> BlockLiveness;
+};
+
 struct TACMetaData
 {
     TACDominatorInfo DomInfo;
@@ -95,4 +109,6 @@ struct TACMetaData
     TACLoopInfo LoopInfo;
 
     TACInductionVariableInfo InductionVariableInfo;
+
+    TACLivenessInfo LivenessInfo;
 };
