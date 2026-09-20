@@ -1,15 +1,37 @@
+#include "Globals.h"
 #include "IRCommon.h"
 #include "IREditor.h"
+#include "TACAnalyses.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
 #include <memory>
 
-// TODO : have to add if conversion heuristics...
+bool conditionIsLoopVariant(TACBranch* branch, TACLoop* enclosingLoop, TACDefBlocksInfo& DefBlocksInfo)
+{
+    if (!enclosingLoop)
+        return true;
+
+    for (TACValue* operand : GetTACInstOperands(branch).Uses)
+    {
+        if (std::holds_alternative<int>(*operand))
+            continue;
+
+        // using "DefBlocksSet.begin()" since this is a post SSA optimization thus, there can only be one def block...
+        if (enclosingLoop->Blocks.contains(*DefBlocksInfo.DefBlocks[*operand].begin()))
+            return true;
+    }
+
+    return false;
+}
 
 void IfConversion(TAC& TAC)
 {
     for (auto& TACFunc : TAC)
     {
+        TACLoopInfo& LoopInfo = TACFunc->getLoopInfo();
+        TACLivenessInfo& LivenessInfo = TACFunc->getLivenessInfo();
+        TACDefBlocksInfo& DefBlocksInfo = TACFunc->getDefBlocksInfo();
+
         std::unordered_set<TACBlock*> blocksToDelete;
 
         for (auto& Block : TACFunc->Blocks)
@@ -62,6 +84,34 @@ void IfConversion(TAC& TAC)
             {
                 continue;
             }
+
+            int mergePhiCount = 0;
+
+            for (auto& inst : mergeBlock->Instructions)
+            {
+                if (inst->type == TACInstType::PHI)
+                    mergePhiCount++;
+                else
+                    break;
+            }
+
+            int pressureAtMerge = LivenessInfo.BlockLiveness[mergeBlock].LiveIn.size() + mergePhiCount;
+
+            int allocatableRegs = gCompilerOptions[Phase::FPO].enabled ? 15 : 14;
+
+            if (pressureAtMerge > allocatableRegs)
+                continue;
+
+            TACLoop* enclosingLoop = nullptr;
+
+            for (TACLoop* loop : LoopInfo.allLoops)
+            {
+                if (loop->Blocks.contains(Block.get()) && (!enclosingLoop || loop->Blocks.size() < enclosingLoop->Blocks.size()))
+                    enclosingLoop = loop;
+            }
+
+            if (!conditionIsLoopVariant(branch, enclosingLoop, DefBlocksInfo))
+                continue;
 
             for (auto& inst : mergeBlock->Instructions)
             {
