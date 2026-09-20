@@ -1,6 +1,7 @@
 #include "FunctionInlining.h"
 #include "IRCommon.h"
 #include "IREditor.h"
+#include "TACAnalyses.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
 #include <algorithm>
@@ -18,6 +19,8 @@ void InlineFunctions(TAC& TAC)
 {
     for (auto& TACFunc : TAC)
     {
+        TACLivenessInfo& LivenessInfo = TACFunc->getLivenessInfo();
+
         std::vector<TACInstruction*> calls;
 
         for (auto& Block : TACFunc->Blocks)
@@ -53,6 +56,21 @@ void InlineFunctions(TAC& TAC)
                     break;
                 }
             }
+
+            int pressureAtCallBlock = LivenessInfo.BlockLiveness[splitStartBlock].LiveIn.size();
+
+            int peakPressureInCalledFunction = 0;
+
+            for (auto& [block, blockLiveness] : LivenessInfo.BlockLiveness)
+            {
+                peakPressureInCalledFunction = std::max(peakPressureInCalledFunction, blockLiveness.MaxPressure);
+            }
+
+            int allocatableRegs = gCompilerOptions[Phase::FPO].enabled ? 15 : 14;
+
+            // this heuristic is 'overly pessimistic' because a missed optimization is better than a regression for this compiler...
+            if (pressureAtCallBlock + peakPressureInCalledFunction > allocatableRegs - 2)
+                continue;
 
             TACBlock* splitEndBlock = IREditor<TACTypes>::insertBlockAfter(splitStartBlock, Message{});
 
