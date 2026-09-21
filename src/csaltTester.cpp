@@ -14,17 +14,6 @@
 #include <filesystem>
 #include <csalt.h>
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <filesystem>
-#include <fstream>
-#include <charconv>
-#include <memory>
-#include <print>
-#include <cstring>
-#include <format>
-
 bool tryParse(std::string str, int& out)
 {
     auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), out);
@@ -149,97 +138,126 @@ int main(int argc, char** argv)
     const int FILE_WIDTH = 35;
     const int REASON_WIDTH = 40;
 
+    std::vector<std::string> flagCombinations = {"", "--disable-all"};
+
+    for (auto& [target, phase] : targetPhaseMap)
+    {
+        if (getPhaseMetadata(phase).isOptimizationPhase)
+        {
+            flagCombinations.push_back("--disable-" + target);
+            flagCombinations.push_back("--disable-all --enable-" + target);
+        }
+    }
+
+    std::vector<std::filesystem::path> testFiles;
+
     for (auto& child : std::filesystem::recursive_directory_iterator(std::string(argv[argc - 1])))
     {
         if (child.is_regular_file() && child.path().extension() == ".c")
         {
-            std::string filename = child.path().filename().string();
-            std::ifstream file(child.path());
+            testFiles.push_back(child.path());
+        }
+    }
 
-            if (!file.is_open())
+    std::atomic<size_t> fileIndex{0};
+
+    std::vector<std::thread> workers;
+
+    for (int t = 0; t < testFiles.size(); t++)
+    {
+        workers.emplace_back([&]() {
+            while (true)
             {
-                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR ]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Could not open file");
-                continue;
-            }
+                size_t idx = fileIndex.fetch_add(1);
 
-            std::string line;
-            bool found = false;
-
-            while (std::getline(file, line))
-            {
-                if (!line.empty())
-                {
-                    found = true;
+                if (idx >= testFiles.size())
                     break;
+
+                auto& filePath = testFiles[idx];
+
+                std::string filename = filePath.filename().string();
+
+                std::ifstream file(filePath);
+
+                if (!file.is_open())
+                {
+                    std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR ]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Could not open file");
+                    continue;
+                }
+
+                std::string line;
+
+                bool found = false;
+
+                while (std::getline(file, line))
+                {
+                    if (!line.empty())
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                int expectedOutput;
+
+                if (!found || !line.starts_with("// EXPECTED : ") || !tryParse(line.substr(14), expectedOutput))
+                {
+                    std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR ]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Missing or invalid '// EXPECTED : [output integer]' header");
+                    continue;
+                }
+
+                bool allFlagsPassed = true;
+
+                for (std::string& flags : flagCombinations)
+                {
+                    std::string allFlags = flags + permanentFlags;
+                    CompileResult compileResult = compileTest(allFlags, filePath.string());
+
+                    if (compileResult.compilationTimedOut || !compileResult.compilationSuccess || compileResult.executionTimedOut || compileResult.executionCrashed || (compileResult.executionSuccess && compileResult.recievedOutput != expectedOutput))
+                    {
+                        allFlagsPassed = false;
+
+                        if (compileResult.compilationTimedOut)
+                        {
+                            std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "COMPILATION TIMED OUT", REASON_WIDTH, allFlags);
+                        }
+
+                        else if (!compileResult.compilationSuccess)
+                        {
+                            std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "COMPILATION FAILED", REASON_WIDTH, allFlags);
+                        }
+
+                        else if (compileResult.executionTimedOut)
+                        {
+                            std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION TIMED OUT", REASON_WIDTH, allFlags);
+                        }
+
+                        else if (compileResult.executionCrashed)
+                        {
+                            std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION FAILED", REASON_WIDTH, allFlags);
+                        }
+
+                        else
+                        {
+                            std::string reason = std::format("EXPECTED: {}, RECIEVED: {}", expectedOutput, compileResult.recievedOutput);
+                            std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, reason, REASON_WIDTH, allFlags);
+                        }
+                    }
+                }
+
+                if (allFlagsPassed)
+                {
+                    std::print("{:<{}} | {:<{}} | {}\n", "\033[0;92m[PASS]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "ALL TESTS PASSED");
                 }
             }
+        });
+    }
 
-            int expectedOutput;
-
-            if (!found || !line.starts_with("// EXPECTED : ") || !tryParse(line.substr(14), expectedOutput))
-            {
-                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;93m[ERR ]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "Missing or invalid '// EXPECTED : [output integer]' header");
-                continue;
-            }
-
-            bool allFlagsPassed = true;
-
-            auto runTestCase = [&](std::string flags) {
-                std::string allFlags = flags + permanentFlags;
-
-                CompileResult compileResult = compileTest(allFlags, child.path().string());
-
-                if (compileResult.compilationTimedOut)
-                {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "COMPILATION TIMED OUT", REASON_WIDTH, allFlags);
-                    allFlagsPassed = false;
-                    return;
-                }
-
-                else if (!compileResult.compilationSuccess)
-                {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "COMPILATION FAILED", REASON_WIDTH, allFlags);
-                    allFlagsPassed = false;
-                    return;
-                }
-
-                else if (compileResult.executionTimedOut)
-                {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION TIMED OUT", REASON_WIDTH, allFlags);
-                    allFlagsPassed = false;
-                }
-
-                else if (compileResult.executionCrashed)
-                {
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "EXECUTION FAILED", REASON_WIDTH, allFlags);
-                    allFlagsPassed = false;
-                }
-
-                else if (compileResult.executionSuccess && !(compileResult.recievedOutput == expectedOutput))
-                {
-                    std::string reason = std::format("EXPECTED: {}, RECIEVED: {}", expectedOutput, compileResult.recievedOutput);
-                    std::print("{:<{}} | {:<{}} | {:<{}} | FLAGS: {}\n", "\033[0;91m[FAIL]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, reason, REASON_WIDTH, allFlags);
-                    allFlagsPassed = false;
-                }
-            };
-
-            runTestCase("");
-
-            runTestCase("--disable-all");
-
-            for (auto& [target, phase] : targetPhaseMap)
-            {
-                if (getPhaseMetadata(phase).isOptimizationPhase)
-                {
-                    runTestCase("--disable-" + target);
-                    runTestCase("--disable-all --enable-" + target);
-                }
-            }
-
-            if (allFlagsPassed)
-            {
-                std::print("{:<{}} | {:<{}} | {}\n", "\033[0;92m[PASS]\033[0m", TAG_WIDTH, filename, FILE_WIDTH, "ALL TESTS PASSED");
-            }
+    for (auto& worker : workers)
+    {
+        if (worker.joinable())
+        {
+            worker.join();
         }
     }
 
