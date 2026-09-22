@@ -277,11 +277,18 @@ std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
 {
     std::string out;
 
+    // formatters should not be triggering analysis recomputations in my opinion but printing invalid analyses would be pretty stupid...
+    TACLoopInfo& LoopInfo = block->Function->getLoopInfo();
+    TACInductionVariableInfo& IndVarInfo = block->Function->getInductionVariableInfo();
     TACBlockLiveness& BlockLiveness = block->Function->getLivenessInfo().BlockLiveness[block];
 
-    auto blockDead = std::find_if(block->Function->Blocks.begin(), block->Function->Blocks.end(), [&block](auto& b) { return b.get() == block; });
+    bool blockDead = std::find_if(block->Function->Blocks.begin(), block->Function->Blocks.end(), [&block](auto& b) { return b.get() == block; }) == block->Function->Blocks.end();
 
-    out += std::format("\nBlock - {} :\n\033[0m", block->ID);
+    auto loopIt = std::find_if(LoopInfo.allLoops.begin(), LoopInfo.allLoops.end(), [&block](TACLoop* loop) { return loop->Header == block; });
+
+    bool isLoopHeader = loopIt != LoopInfo.allLoops.end();
+
+    out += std::format("\nBlock - {}{} :\n\033[0m", block->ID, (isLoopHeader && metadata ? "\033[38;5;103m [Loop Header]\033[0m" : ""));
 
     if (history)
     {
@@ -323,7 +330,7 @@ std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
             }
         }
 
-        if (blockDead == block->Function->Blocks.end())
+        if (blockDead)
             out += "\033[2;37m";
 
         out += FormatTACInstruction(inst.get(), history, metadata);
@@ -338,15 +345,67 @@ std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
         }
     }
 
-    if (metadata)
+    if (metadata && !blockDead)
     {
+        out += "\033[38;5;103m";
+
+        if (isLoopHeader)
+        {
+            out += "\n    [Loop Info]\n";
+
+            out += std::format("      Preheader - {}\n", ((*loopIt)->Preheader == nullptr ? "NULL" : "B" + std::to_string((*loopIt)->Preheader->ID)));
+
+            out += "      Blocks - {";
+
+            for (TACBlock* loopBlock : (*loopIt)->Blocks)
+            {
+                out += "B" + std::to_string(loopBlock->ID) + ", ";
+            }
+
+            out += "}\n";
+
+            out += "      Latches - {";
+
+            for (TACBlock* latch : (*loopIt)->Latches)
+            {
+                out += "B" + std::to_string(latch->ID) + ", ";
+            }
+
+            out += "}\n";
+
+            out += std::format("      Parent Loop - {}\n", ((*loopIt)->parentLoop == nullptr ? "NULL" : "B" + std::to_string((*loopIt)->parentLoop->Header->ID)));
+
+            out += "      Child Loops - {";
+
+            for (auto& childLoop : (*loopIt)->childLoops)
+            {
+                out += "B" + std::to_string(childLoop->Header->ID) + ", ";
+            }
+
+            out += "}\n";
+
+            std::vector<TACInductionVariable>& IndVars = IndVarInfo.InductionVariables[*loopIt];
+
+            if (!IndVars.empty())
+            {
+                out += "\n    [Induction Variables]\n";
+
+                for (TACInductionVariable& IndVar : IndVars)
+                {
+                    std::string stepInstString = FormatTACInstruction(IndVar.stepInst, false, false);
+
+                    out += std::format("      {} - {{Initial Value : {}, Step Value : {}, Step Inst : '{}'}}\n", std::get<TACVariable>(IndVar.phi->variable).SSAName, TACValToStr(IndVar.initVal), TACValToStr(IndVar.stepVal), stepInstString.substr(4, stepInstString.length() - 9));
+                }
+            }
+        }
+
         out += "\n    [Liveness Info]\n";
 
         out += "      LiveIn - {";
 
         for (TACValue val : BlockLiveness.LiveIn)
         {
-            out += std::get<TACVariable>(val).SSAName + ", ";
+            out += TACValToStr(val) + ", ";
         }
 
         out += "}\n";
@@ -355,12 +414,14 @@ std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
 
         for (TACValue val : BlockLiveness.LiveOut)
         {
-            out += std::get<TACVariable>(val).SSAName + ", ";
+            out += TACValToStr(val) + ", ";
         }
 
         out += "}\n";
 
         out += std::format("      Max Register Pressure - {}\n", BlockLiveness.MaxPressure);
+
+        out += "\033[0m";
     }
 
     return out;

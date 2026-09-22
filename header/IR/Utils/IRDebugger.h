@@ -7,13 +7,9 @@
 #include "TACGenerator.h"
 #include "lexer.h"
 #include "parser.h"
-#include <algorithm>
-#include <iostream>
 #include <print>
-#include <sstream>
 #include <string>
 #include <unordered_set>
-#include <vector>
 
 struct IRSnapshot
 {

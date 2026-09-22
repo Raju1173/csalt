@@ -38,6 +38,7 @@ enum class Phase
     IVE,
     INLINING,
     IF_CONV,
+    PHI_SIMP,
 
     MIR_CONST,
     MIR_REG_ALLOC,
@@ -80,7 +81,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 35, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 36, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -146,6 +147,8 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "FUNCTION INLINING", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::IF_CONV:
             return {.name = "IF CONVERSION", .isTACPhase = true, .isOptimizationPhase = true};
+        case Phase::PHI_SIMP:
+            return {.name = "PHI SIMPLIFICATION", .isTACPhase = true, .isOptimizationPhase = true};
 
         case Phase::MIR_CONST:
             return {.name = "MIR AFTER CONSTRUCTION", .isMIRPhase = true};

@@ -24,10 +24,18 @@ struct FunctionCallKey
     auto operator<=>(const FunctionCallKey&) const = default;
 };
 
+struct PhiKey
+{
+    std::vector<std::pair<TACBlock*, TACValue>> args;
+
+    auto operator<=>(const PhiKey&) const = default;
+};
+
 std::map<TACValue, TACValue> Copies;
 std::map<ExpressionKey, TACValue> Expressions;
 std::map<TACValue, TACValue> NegDefs;
 std::map<FunctionCallKey, TACValue> Calls; // all functions are guaranteed to be pure in the supported C subset...
+std::map<PhiKey, TACValue> Phis;
 
 bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 {
@@ -37,6 +45,7 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
     std::vector<ExpressionKey> addedExpressions;
     std::vector<TACValue> addedNegDefs;
     std::vector<FunctionCallKey> addedCalls;
+    std::vector<PhiKey> addedPhis;
 
     auto tryPropagate = [](TACValue& val) {
         auto it = Copies.find(val);
@@ -71,6 +80,37 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
 
                     Copies[assign->dest] = assign->source;
                     addedCopies.push_back(assign->dest);
+                }
+                break;
+
+            case TACInstType::PHI:
+                {
+                    TACPhi* phi = static_cast<TACPhi*>(inst.get());
+
+                    for (PhiArgument& arg : phi->args)
+                    {
+                        changed |= tryPropagate(arg.Value);
+                    }
+
+                    PhiKey key;
+
+                    for (PhiArgument& arg : phi->args)
+                    {
+                        key.args.push_back({arg.SourceBlock, arg.Value});
+                    }
+
+                    std::sort(key.args.begin(), key.args.end());
+
+                    if (Phis.contains(key))
+                    {
+                        replaceWithAssign(inst, phi->variable, Phis[key]);
+                    }
+
+                    else
+                    {
+                        Phis[key] = phi->variable;
+                        addedPhis.push_back(key);
+                    }
                 }
                 break;
 
@@ -176,6 +216,8 @@ bool WalkTACDomTree(TACBlock* block, TACDominatorTreeInfo& DomTreeInfo)
         NegDefs.erase(key);
     for (FunctionCallKey& key : addedCalls)
         Calls.erase(key);
+    for (PhiKey& key : addedPhis)
+        Phis.erase(key);
 
     return changed;
 }

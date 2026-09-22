@@ -85,6 +85,8 @@ int main(int argc, char** argv)
                     {Pass<::TAC>{Phase::DCE, {.RunIter = RemoveDeadCode}}},
                     {Pass<::TAC>{Phase::GVN, {.RunIter = GVN}}},
                     {Pass<::TAC>{Phase::IVM, {.RunIter = MergeInductionVariables}}},
+                    {Pass<::TAC>{Phase::LSR, {.RunIter = ReduceLoopMultiplications}}},
+                    {Pass<::TAC>{Phase::PHI_SIMP, {.RunIter = SimplifyPhiNodes}}},
                 }
             },
 

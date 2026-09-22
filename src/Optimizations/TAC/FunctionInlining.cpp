@@ -13,8 +13,6 @@
 #include <variant>
 #include <vector>
 
-// TODO : have to add inlining heuristics...
-
 void InlineFunctions(TAC& TAC)
 {
     for (auto& TACFunc : TAC)

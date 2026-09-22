@@ -77,7 +77,7 @@ void HoistLoopInvariants(TAC& TAC)
 
                 if (DefBlocksInfo.DefBlocks.find(val) != DefBlocksInfo.DefBlocks.end())
                 {
-                    if (!Loop->Blocks.contains(*DefBlocksInfo.DefBlocks.find(val)->second.begin()))
+                    if (!DefBlocksInfo.DefBlocks[val].empty() && !Loop->Blocks.contains(*DefBlocksInfo.DefBlocks[val].begin()))
                     {
                         return true;
                     }

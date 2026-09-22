@@ -17,7 +17,7 @@ bool conditionIsLoopVariant(TACBranch* branch, TACLoop* enclosingLoop, TACDefBlo
             continue;
 
         // using "DefBlocksSet.begin()" since this is a post SSA optimization thus, there can only be one def block...
-        if (enclosingLoop->Blocks.contains(*DefBlocksInfo.DefBlocks[*operand].begin()))
+        if (!DefBlocksInfo.DefBlocks[*operand].empty() && enclosingLoop->Blocks.contains(*DefBlocksInfo.DefBlocks[*operand].begin()))
             return true;
     }
 
