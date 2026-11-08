@@ -32,7 +32,6 @@ enum class Phase
     CTFE,
     LOOP_INV,
     LICM,
-    UNROLLING,
     IVM,
     LSR,
     IVE,
@@ -81,7 +80,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 36, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 35, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -135,8 +134,6 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "LOOP INVERSION", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::LICM:
             return {.name = "LOOP INVARIANT CODE MOTION", .isTACPhase = true, .isOptimizationPhase = true};
-        case Phase::UNROLLING:
-            return {.name = "LOOP UNROLLING", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::IVM:
             return {.name = "INDUCTION VARIABLE MERGING", .isTACPhase = true, .isOptimizationPhase = true};
         case Phase::LSR:

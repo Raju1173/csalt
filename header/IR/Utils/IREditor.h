@@ -99,6 +99,7 @@ private:
                 std::erase_if(vector[index]->deadSiblings.preceding, [&deadElementPtr](auto& element) { return element.get() == deadElementPtr; });
             }
         }
+
         else if (index > 0)
         {
             vector[index - 1]->deadSiblings.absorbRightSiblingCorpse(deadElement);
@@ -108,6 +109,7 @@ private:
                 std::erase_if(vector[index - 1]->deadSiblings.trailing, [&deadElementPtr](auto& element) { return element.get() == deadElementPtr; });
             }
         }
+
         else if (lastDead != nullptr)
         {
             if ((*lastDead).get() == nullptr)

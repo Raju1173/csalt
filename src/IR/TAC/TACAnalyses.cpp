@@ -1,6 +1,7 @@
 #include "TACAnalyses.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
+#include "Helpers.h"
 #include <algorithm>
 #include <variant>
 
@@ -207,7 +208,7 @@ TACVarUsesInfo& TACFunction::getVarUsesInfo()
             {
                 for (TACValue* val : GetTACInstOperands(inst.get()).Uses)
                 {
-                    VarUsesInfo.VarUses[*val]++;
+                    VarUsesInfo.VarUses[*val].insert(inst.get());
                 }
             }
         }
@@ -338,24 +339,6 @@ TACLoopInfo& TACFunction::getLoopInfo()
     }
 
     return LoopInfo;
-}
-
-TACInstruction* getDefiningInst(TACValue& val, TACDefBlocksInfo& DefBlocksInfo)
-{
-    if (DefBlocksInfo.DefBlocks[val].empty())
-        return nullptr;
-
-    TACBlock* defBlock = *DefBlocksInfo.DefBlocks[val].begin();
-
-    for (auto& blockInst : defBlock->Instructions)
-    {
-        TACInstOperands operands = GetTACInstOperands(blockInst.get());
-
-        if (operands.Def != nullptr && *operands.Def == val)
-            return blockInst.get();
-    }
-
-    return nullptr;
 }
 
 TACInductionVariableInfo& TACFunction::getInductionVariableInfo()

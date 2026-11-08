@@ -61,7 +61,7 @@ void RemoveDeadPhiNodes(TAC& TAC)
                 {
                     TACPhi* phi = static_cast<TACPhi*>(inst.get());
 
-                    return (!VarUsesInfo.VarUses.contains(phi->variable) || VarUsesInfo.VarUses[phi->variable] == 0) || phi->args.size() < 2;
+                    return (!VarUsesInfo.VarUses.contains(phi->variable) || VarUsesInfo.VarUses[phi->variable].size() == 0) || phi->args.size() < 2;
                 };
 
                 return false;

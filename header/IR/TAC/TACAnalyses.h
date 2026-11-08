@@ -33,7 +33,7 @@ struct TACVarUsesInfo
 {
     bool isValid = false;
 
-    std::unordered_map<TACValue, size_t> VarUses;
+    std::unordered_map<TACValue, std::unordered_set<TACInstruction*>> VarUses;
 };
 
 struct TACDefBlocksInfo

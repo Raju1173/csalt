@@ -93,8 +93,7 @@ bool SimplifyAlgebra(TAC& TAC)
 
                             else if (!left && !right)
                             {
-                                if ((negDefs.contains(bin->left) && negDefs[bin->left] == bin->right) ||
-                                    (negDefs.contains(bin->right) && negDefs[bin->right] == bin->left))
+                                if ((negDefs.contains(bin->left) && negDefs[bin->left] == bin->right) || (negDefs.contains(bin->right) && negDefs[bin->right] == bin->left))
                                 {
                                     result = 0;
                                     info = "simplified 'x + -x' to '0'";

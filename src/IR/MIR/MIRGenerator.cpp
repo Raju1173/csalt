@@ -14,15 +14,6 @@
 #include <vector>
 #include <unordered_map>
 
-Register ArgRegs[] = {
-    Register::EDI,
-    Register::ESI,
-    Register::EDX,
-    Register::ECX,
-    Register::R8D,
-    Register::R9D,
-};
-
 void GenerateMachineIR(TAC& TAC, MIR& MIR)
 {
     Debugger::AddIR(MIR);

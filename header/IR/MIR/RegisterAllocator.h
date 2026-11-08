@@ -1,3 +1,3 @@
 #include "MIRGenerator.h"
 
-void ResolveVRegsLinearScan(MIR& MIR);
+void ResolveVRegsChaitinBriggs(MIR& MIR);

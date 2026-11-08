@@ -64,7 +64,6 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/GVN.cpp
     ${TAC}/LoopInversion.cpp
     ${TAC}/LICM.cpp
-    ${TAC}/LoopUnrolling.cpp
     ${TAC}/CTFE.cpp
     ${TAC}/TRE.cpp
     ${TAC}/SCO.cpp
@@ -73,6 +72,7 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/PhiSimplification.cpp
     ${TAC}/IVM.cpp
     ${TAC}/LSR.cpp
+    ${TAC}/IVE.cpp
 
     ${MIR}/FramePointerOmission.cpp
 )

@@ -86,6 +86,7 @@ int main(int argc, char** argv)
                     {Pass<::TAC>{Phase::GVN, {.RunIter = GVN}}},
                     {Pass<::TAC>{Phase::IVM, {.RunIter = MergeInductionVariables}}},
                     {Pass<::TAC>{Phase::LSR, {.RunIter = ReduceLoopMultiplications}}},
+                    {Pass<::TAC>{Phase::IVE, {.RunIter = EliminateInductionVariables}}},
                     {Pass<::TAC>{Phase::PHI_SIMP, {.RunIter = SimplifyPhiNodes}}},
                 }
             },
@@ -95,7 +96,6 @@ int main(int argc, char** argv)
                 .IterateToFixedPoint = false,
                 .Passes = {
                     {Pass<::TAC>{Phase::LICM, {.Run = HoistLoopInvariants}}},
-                    {Pass<::TAC>{Phase::UNROLLING, {.Run = UnrollLoops}}},
                     {Pass<::TAC>{Phase::SCO, {.Run = MarkSiblingCalls}}},
                     {Pass<::TAC>{Phase::IF_CONV, {.Run = IfConversion}}},
                 }
@@ -115,7 +115,7 @@ int main(int argc, char** argv)
     GenerateMachineIR(TAC, MIR);
 
     if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
-        ResolveVRegsLinearScan(MIR);
+        ResolveVRegsChaitinBriggs(MIR);
     else
         ResolveVRegsSpillAll(MIR);
 

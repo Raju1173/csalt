@@ -2,7 +2,7 @@
 #include "MIRGenerator.h"
 #include "RegisterAllocator.h"
 
-void ResolveVRegsLinearScan(MIR& MIR)
+void ResolveVRegsChaitinBriggs(MIR& MIR)
 {
     for (auto& MIRFunc : MIR)
     {

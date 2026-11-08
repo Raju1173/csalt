@@ -56,7 +56,7 @@ bool ReduceLoopMultiplications(TAC& TAC)
 
             std::vector<MultiplicationToReduce> mulsToReduce;
 
-            auto isInvariant = [&](TACValue val) {
+            auto isInvariant = [&DefBlocksInfo, &loop](TACValue val) {
                 if (std::holds_alternative<int>(val))
                     return true;
 

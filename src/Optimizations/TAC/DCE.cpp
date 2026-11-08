@@ -75,7 +75,7 @@ bool EliminateDeadInstructions(TACFunction* TACFunc, TACVarUsesInfo& VarUsesInfo
                 continue;
             }
 
-            if (!VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar] == 0)
+            if (!VarUsesInfo.VarUses.contains(destVar) || VarUsesInfo.VarUses[destVar].size() == 0)
                 IREditor<TACTypes>::deleteInstruction(Block.get(), inst.get(), Message{Phase::DCE, IRTransformType::DELETED, "definition was unused"});
         }
 

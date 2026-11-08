@@ -23,15 +23,18 @@ An optimization focused compiler for a minimal subset of C targeting x86-64 asse
 4. Sibling Call Optimization
 5. Loop Invariant Code Motion
 6. Induction Variable Merging
-7. Loop Inversion
-8. Global Value Numbering
-9. Algebraic Simplification
-10. Constant Folding
-11. If Conversion
-12. Branch Simplification
-13. Control Flow Simplification
-14. Dead Code Elimination
-15. Frame Pointer Omission
+7. Loop Strength Reduction
+8. Induction Variable Elimination
+9. Loop Inversion
+10. Global Value Numbering
+11. Algebraic Simplification
+12. Constant Folding
+13. If Conversion
+14. Branch Simplification
+15. Control Flow Simplification
+16. Dead Code Elimination
+17. Frame Pointer Omission
+18. Phi Simplification
 
 # Language Features
 

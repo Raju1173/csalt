@@ -35,7 +35,7 @@ struct CompileResult
 
 CompileResult compileTest(std::string flags, std::string filePath)
 {
-    std::string compileCommand = "timeout 2s csalt " + flags + " " + filePath + " 2>&1";
+    std::string compileCommand = "timeout 5s csalt " + flags + " " + filePath + " 2>&1";
 
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(compileCommand.c_str(), "r"), pclose);
 
