@@ -36,8 +36,9 @@
 #include "FunctionInlining.h"
 #include "IfConversion.h"
 #include "PhiSimplification.h"
+#include "CompareElimination.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 35, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 37, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -74,10 +75,12 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"phi-simp", Phase::PHI_SIMP},
 
     {"mir-const", Phase::MIR_CONST},
+    {"mir-pre-ra-opt", Phase::MIR_PRE_RA_OPT},
     {"mir-reg-alloc", Phase::MIR_REG_ALLOC},
-    {"mir-opt", Phase::MIR_OPT},
+    {"mir-post-ra-opt", Phase::MIR_POST_RA_OPT},
 
     {"fpo", Phase::FPO},
+    {"cmp-elim", Phase::CMP_ELIM},
 
     {"output", Phase::OUTPUT},
 };

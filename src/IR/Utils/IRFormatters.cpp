@@ -584,6 +584,12 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
                     case Condition::GREATER_EQUAL:
                         out += "cmovge ";
                         break;
+                    case Condition::SIGN:
+                        out += "cmovs ";
+                        break;
+                    case Condition::NOT_SIGN:
+                        out += "cmovns ";
+                        break;
                 }
 
                 out += std::format("{}, {}\n", OperandString(cmov->Dest), OperandString(cmov->Source));
@@ -708,6 +714,12 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
                     case Condition::GREATER_EQUAL:
                         out += "jge ";
                         break;
+                    case Condition::SIGN:
+                        out += "js ";
+                        break;
+                    case Condition::NOT_SIGN:
+                        out += "jns ";
+                        break;
                 }
 
                 out += std::format("B{}\n", jump->TargetBlock->ID);
@@ -747,6 +759,12 @@ std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bo
                         break;
                     case Condition::GREATER_EQUAL:
                         out += "setge ";
+                        break;
+                    case Condition::SIGN:
+                        out += "sets ";
+                        break;
+                    case Condition::NOT_SIGN:
+                        out += "setns ";
                         break;
                 }
 

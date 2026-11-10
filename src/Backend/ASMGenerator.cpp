@@ -270,6 +270,8 @@ void EmitAssembly(MIR& MIR, const std::string& filename)
 
     out << ".section .note.GNU-stack, \"\", @progbits\n\n";
 
+    out.flush();
+
     Debugger::Notify(Phase::ASM);
 }
 

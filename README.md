@@ -35,6 +35,7 @@ An optimization focused compiler for a minimal subset of C targeting x86-64 asse
 16. Dead Code Elimination
 17. Frame Pointer Omission
 18. Phi Simplification
+19. Compare Elimination
 
 # Language Features
 

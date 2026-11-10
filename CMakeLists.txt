@@ -75,6 +75,7 @@ add_library(OPTIMIZATIONS STATIC
     ${TAC}/IVE.cpp
 
     ${MIR}/FramePointerOmission.cpp
+    ${MIR}/CompareElimination.cpp
 )
 
 target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)

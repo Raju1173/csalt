@@ -40,10 +40,12 @@ enum class Phase
     PHI_SIMP,
 
     MIR_CONST,
+    MIR_PRE_RA_OPT,
     MIR_REG_ALLOC,
-    MIR_OPT,
+    MIR_POST_RA_OPT,
 
     FPO,
+    CMP_ELIM,
 
     OUTPUT,
 
@@ -80,7 +82,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 35, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 37, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -149,16 +151,20 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
 
         case Phase::MIR_CONST:
             return {.name = "MIR AFTER CONSTRUCTION", .isMIRPhase = true};
+        case Phase::MIR_PRE_RA_OPT:
+            return {.name = "MIR AFTER PRE REG ALLOC OPTIMIZATIONS", .isMIRPhase = true};
         case Phase::MIR_REG_ALLOC:
             if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
                 return {.name = "MIR AFTER LINEAR SCAN REGISTER ALLOCATION", .isMIRPhase = true, .isOptimizationPhase = true};
             else
                 return {.name = "MIR AFTER SPILL ALLOCATION", .isMIRPhase = true, .isOptimizationPhase = true};
-        case Phase::MIR_OPT:
-            return {.name = "MIR AFTER OPTIMIZATIONS", .isMIRPhase = true};
+        case Phase::MIR_POST_RA_OPT:
+            return {.name = "MIR AFTER POST REG ALLOC OPTIMIZATIONS", .isMIRPhase = true};
 
         case Phase::FPO:
             return {.name = "FRAME POINTER OMISSION", .isMIRPhase = true, .isOptimizationPhase = true};
+        case Phase::CMP_ELIM:
+            return {.name = "COMPARE ELIMINATION", .isMIRPhase = true, .isOptimizationPhase = true};
 
         case Phase::OUTPUT:
             return {.name = "OUTPUT"};

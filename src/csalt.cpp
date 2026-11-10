@@ -114,13 +114,28 @@ int main(int argc, char** argv)
     MIR MIR;
     GenerateMachineIR(TAC, MIR);
 
+    // clang-format off
+    PassManager<::MIR> MIRPassManagerPreRA(
+        {
+            PassGroup<::MIR>
+            {
+                .IterateToFixedPoint = false,
+                .Passes = {
+                    {Pass<::MIR>{Phase::CMP_ELIM, {.Run = EliminateCompareInstructions}}},
+                }
+            },
+        });
+    // clang-format on
+
+    MIRPassManagerPreRA.RunOptimizations(MIR, Phase::MIR_PRE_RA_OPT);
+
     if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
         ResolveVRegsChaitinBriggs(MIR);
     else
         ResolveVRegsSpillAll(MIR);
 
     // clang-format off
-    PassManager<::MIR> MIRPassManager(
+    PassManager<::MIR> MIRPassManagerPostRA(
         {
             PassGroup<::MIR>
             {
@@ -132,7 +147,7 @@ int main(int argc, char** argv)
         });
     // clang-format on
 
-    MIRPassManager.RunOptimizations(MIR, Phase::MIR_OPT);
+    MIRPassManagerPostRA.RunOptimizations(MIR, Phase::MIR_POST_RA_OPT);
 
     Debugger::Notify(Phase::MIR);
 

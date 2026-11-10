@@ -92,6 +92,8 @@ inline std::string RegisterToStr(Register reg)
 struct VirtualRegister
 {
     int ID;
+
+    bool operator==(const VirtualRegister&) const = default;
 };
 
 struct StackOffset
@@ -99,11 +101,15 @@ struct StackOffset
     int Offset;
 
     bool RSP = false;
+
+    bool operator==(const StackOffset&) const = default;
 };
 
 struct Immediate
 {
     int Value;
+
+    bool operator==(const Immediate&) const = default;
 };
 
 using Operand = std::variant<Register, VirtualRegister, StackOffset, Immediate>;
@@ -176,6 +182,9 @@ enum class Condition
 
     GREATER,
     GREATER_EQUAL,
+
+    SIGN,
+    NOT_SIGN
 };
 
 class MIRBlock;
