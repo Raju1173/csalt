@@ -119,9 +119,9 @@ int main(int argc, char** argv)
         {
             PassGroup<::MIR>
             {
-                .IterateToFixedPoint = false,
+                .IterateToFixedPoint = true,
                 .Passes = {
-                    {Pass<::MIR>{Phase::CMP_ELIM, {.Run = EliminateCompareInstructions}}},
+                    {Pass<::MIR>{Phase::PEEP_OPT, {.RunIter = PeepholeOptimize}}},
                 }
             },
         });
@@ -130,7 +130,7 @@ int main(int argc, char** argv)
     MIRPassManagerPreRA.RunOptimizations(MIR, Phase::MIR_PRE_RA_OPT);
 
     if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
-        ResolveVRegsChaitinBriggs(MIR);
+        ResolveVRegsGraphColoring(MIR);
     else
         ResolveVRegsSpillAll(MIR);
 
@@ -139,9 +139,26 @@ int main(int argc, char** argv)
         {
             PassGroup<::MIR>
             {
+                .IterateToFixedPoint = true,
+                .Passes = {
+                    {Pass<::MIR>{Phase::REG_CPROP, {.RunIter = PropagateRegisterCopies}}},
+                }
+            },
+
+            PassGroup<::MIR>
+            {
                 .IterateToFixedPoint = false,
                 .Passes = {
+                    {Pass<::MIR>{Phase::CMP_ELIM, {.Run = EliminateCompareInstructions}}},
                     {Pass<::MIR>{Phase::FPO, {.Run = OmitFramePointers}}},
+                }
+            },
+
+            PassGroup<::MIR>
+            {
+                .IterateToFixedPoint = true,
+                .Passes = {
+                    {Pass<::MIR>{Phase::PEEP_OPT, {.RunIter = PeepholeOptimize}}},
                 }
             },
         });

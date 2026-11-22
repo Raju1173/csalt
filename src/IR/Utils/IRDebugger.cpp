@@ -68,9 +68,6 @@ void Debugger::Notify(Phase phase)
 {
     PhaseMetadata phaseMeta = getPhaseMetadata(phase);
 
-    if (RecievedNotifications.contains(phase))
-        return;
-
     if (phaseMeta.isTOKPhase)
         PrintIR(mTokenStream, phase);
 
@@ -80,16 +77,14 @@ void Debugger::Notify(Phase phase)
     else if (phaseMeta.isCFGPhase)
         PrintIR(mCFG, phase);
 
-    else if (phaseMeta.isTACPhase || (phaseMeta.isTACPhase && phaseMeta.isOptimizationPhase))
+    else if (phaseMeta.isTACPhase)
         PrintIR(mTAC, phase);
 
-    else if (phaseMeta.isMIRPhase || (phaseMeta.isMIRPhase && phaseMeta.isOptimizationPhase))
+    else if (phaseMeta.isMIRPhase)
         PrintIR(mMIR, phase);
 
     else if (phaseMeta.isASMPhase)
         PrintIR(&mASMFilePath, phase);
-
-    RecievedNotifications.insert(phase);
 }
 
 void Debugger::Reset()
@@ -100,6 +95,4 @@ void Debugger::Reset()
     mTAC = nullptr;
     mMIR = nullptr;
     mASMFilePath = "";
-
-    RecievedNotifications.clear();
-};
+}

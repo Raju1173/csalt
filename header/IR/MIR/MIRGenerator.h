@@ -56,10 +56,8 @@ public:
 
     MIRFunction(std::string name, std::vector<std::string> parameters) : FunctionName(name), Parameters(parameters){};
 
-private:
     MIRMetaData Metadata;
 
-public:
     MIRLivenessInfo& getLivenessInfo();
 
     template<typename IRTypes> friend class IREditor;

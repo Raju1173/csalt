@@ -1,5 +1,5 @@
 # CSalt
-An optimization focused compiler for a minimal subset of C targeting x86-64 assembly
+An optimization focused compiler for a minimal subset of C
 
 # Performance Benchmarks
 
@@ -36,6 +36,9 @@ An optimization focused compiler for a minimal subset of C targeting x86-64 asse
 17. Frame Pointer Omission
 18. Phi Simplification
 19. Compare Elimination
+20. Register Copy Propagation
+21. Peephole Optimizations
+22. Graph Coloring Register Allocation
 
 # Language Features
 
@@ -54,6 +57,7 @@ Keeping the fronted super small *(like a grain of **sea salt**)* makes implement
 
 - else blocks *(important, use consequent if blocks)*
 - any bitwise or logical operator *(important)*
+- Function declarations *(important)*
 - Variable shadowing *(important)*
 - Any unary operator except '-'
 - Structs
@@ -64,7 +68,7 @@ Keeping the fronted super small *(like a grain of **sea salt**)* makes implement
 - Other fancy C features like "int x, y;", etc.
 - Any other keyword except int, if, while or return
 
-# Architecture
+# Compilation Pipeline
 
 `Source Code -> Tokens -> AST -> CFG -> TAC -> Pre SSA Optimizations -> SSA TAC -> Post SSA Optimizations -> Machine IR -> Backend Optimizations -> Assembly`
 
@@ -72,9 +76,11 @@ Keeping the fronted super small *(like a grain of **sea salt**)* makes implement
 
 # Usage
 
-### CSalt can only compile a single file with no dependencies :
+`caslt --[flag1] --[flag2] ... --[flagN] [fileName].c`
 
-`csalt fileName`
+There is no strict order for passing the flags but they get processed sequentially so if you enable something in an earlier flag and disable it in a later flag, it will end up disabled and vice versa...
+
+*Note : CSalt can only compile a single C file with no dependencies...*
 
 ### Every IR can be inspected at every single compilation step individually using flags :
 
@@ -86,14 +92,20 @@ csalt   --dump-tok
         --dump-cfg
 
         --dump-tac-const
+        --dump-tac-pre-ssa-opt
         --dump-tac-phi-ins
         --dump-tac-rename
         --dump-tac-opt
+        --dump-tac-post-ssa-opt
+        --dump-tac-edge-split
         --dump-tac-phi-res
+        --dump-tac (after all transformations to TAC have been made)
 
         --dump-mir-const
+        --dump-tac-pre-ra-opt
         --dump-mir-reg-alloc
-        --dump-mir-opt
+        --dump-mir-post-ra-opt
+        --dump-mir (after all transformations to MIR have been made)
 
         --dump-asm
 
@@ -112,9 +124,80 @@ csalt   --disable/enable-folding
         --disable/enable-sco
         --disable/enable-licm
         --disable/enable-ctfe (disabled by default)
+        --disable/enable-inlining
+        --disable/enable-if-conv
+        --disable/enable-ive
+        --disable/enable-ivm
+        --disable/enable-loop-inv
+        --disable/enable-lsr
+        --disable/enable-phi-simp
+        --disable/enable-sco
+        --disable/enable-tre
 
         --disable/enable-reg-alloc
         --disable/enable-fpo
+        --disable/enable-cmp-elim
+        --disable/enable-reg-cprop
+        --disable/enable-peep-opt
 
         [fileName].c
+```
+
+### The immediate output of any optimization pass can be printed using :
+
+```
+csalt   --dump-folding
+        --dump-alg-simp
+        --dump-brn-simp
+        --dump-cfg-simp
+        --dump-dce
+        --dump-gvn
+        --dump-sco
+        --dump-licm
+        --dump-ctfe (disabled by default)
+        --dump-inlining
+        --dump-if-conv
+        --dump-ive
+        --dump-ivm
+        --dump-loop-inv
+        --dump-lsr
+        --dump-phi-simp
+        --dump-sco
+        --dump-tre
+
+        --dump-reg-alloc
+        --dump-fpo
+        --dump-cmp-elim
+        --dump-reg-cprop
+        --dump-peep-opt
+
+        [fileName].c
+```
+
+*Note :- for iterative optimizations, dump flags only print the IR after all the iterations of that pass have completed and if an optimization runs in multiple parts fo the compilation phase, it gets printed that many times in the same order...*
+
+### TAC and MIR track every single change made to them by any pass after construction and it can be printed using :
+
+```
+csalt --histor-dump-[compilation phase or optimization pass] [fileName].c
+```
+
+### TAC and MIR also hold specific metadata (dominator sets, liveness info, etc.) and it can be printed using :
+
+```
+csalt --meta-dump-[compilation phase or optimization pass] [fileName].c
+```
+
+### both of these dump modifiers can be applied together as well :
+
+```
+csalt --history-meta-dump-[compilation phase or optimization pass] [fileName].c
+```
+
+### finally, since the compiler does not support any way of printing outputs :
+
+you need to extract the exit code of your program before the OS truncates it, thats the only way of printing something to the screen and the compiler does it for you whenever you compile any code, if you dont want that, you can disable output printing
+
+```
+csalt --disable-output [fileName].c
 ```

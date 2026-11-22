@@ -37,8 +37,10 @@
 #include "IfConversion.h"
 #include "PhiSimplification.h"
 #include "CompareElimination.h"
+#include "RegisterCopyPropagation.h"
+#include "PeepholeOptimizations.h"
 
-static_assert(std::to_underlying(Phase::COUNT) == 37, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
+static_assert(std::to_underlying(Phase::COUNT) == 39, "Add another targetPhaseMap entry and increment the count check when adding a new phase!!!");
 
 inline std::unordered_map<std::string, Phase> targetPhaseMap = {
     {"tok", Phase::TOK},
@@ -81,6 +83,8 @@ inline std::unordered_map<std::string, Phase> targetPhaseMap = {
 
     {"fpo", Phase::FPO},
     {"cmp-elim", Phase::CMP_ELIM},
+    {"reg-cprop", Phase::REG_CPROP},
+    {"peep-opt", Phase::PEEP_OPT},
 
     {"output", Phase::OUTPUT},
 };

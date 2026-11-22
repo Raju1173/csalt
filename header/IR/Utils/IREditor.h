@@ -1,9 +1,11 @@
 #pragma once
 
+#include "IRCommon.h"
 #include "TACAnalyses.h"
 #include "MIRAnalyses.h"
 #include <concepts>
 #include <optional>
+#include <variant>
 
 class TACFunction;
 class TACBlock;
@@ -34,55 +36,7 @@ struct MIRTypes
 
 template<typename IRTypes> class IREditor
 {
-public:
-    using IR = typename IRTypes::IR;
-    using Function = typename IRTypes::Function;
-    using Block = typename IRTypes::Block;
-    using Instruction = typename IRTypes::Instruction;
-
 private:
-    static void invalidateAllAnalyses(TACMetaData& metadata)
-    {
-        metadata.VarUsesInfo.isValid = false;
-        metadata.DefBlocksInfo.isValid = false;
-        metadata.DomInfo.isValid = false;
-        metadata.DomTreeInfo.isValid = false;
-        metadata.FrontierInfo.isValid = false;
-        metadata.LoopInfo.isValid = false;
-        metadata.InductionVariableInfo.isValid = false;
-    }
-
-    static void invalidateControlFlowAnalyses(TACMetaData& metadata)
-    {
-        metadata.DomInfo.isValid = false;
-        metadata.DomTreeInfo.isValid = false;
-        metadata.FrontierInfo.isValid = false;
-        metadata.LoopInfo.isValid = false;
-        metadata.InductionVariableInfo.isValid = false;
-    }
-
-    static void invalidateDataFlowAnalyses(TACMetaData& metadata)
-    {
-        metadata.VarUsesInfo.isValid = false;
-        metadata.DefBlocksInfo.isValid = false;
-        metadata.InductionVariableInfo.isValid = false;
-    }
-
-    static void invalidateAllAnalyses(MIRMetaData& metadata)
-    {
-        metadata.LivenessInfo.isValid = false;
-    }
-
-    static void invalidateControlFlowAnalyses(MIRMetaData& metadata)
-    {
-        metadata.LivenessInfo.isValid = false;
-    }
-
-    static void invalidateDataFlowAnalyses(MIRMetaData& metadata)
-    {
-        metadata.LivenessInfo.isValid = false;
-    }
-
     template<typename T, typename ParentContainer, typename LastDead = typename ParentContainer::value_type> static void cascadeDeletion(ParentContainer& vector, size_t index, LastDead* lastDead = nullptr, bool excludeDeadElementFromCascade = false)
     {
         auto deadElement = std::move(vector[index]);
@@ -136,6 +90,55 @@ private:
     }
 
 public:
+    using IR = typename IRTypes::IR;
+    using Function = typename IRTypes::Function;
+    using Block = typename IRTypes::Block;
+    using Instruction = typename IRTypes::Instruction;
+
+    static void invalidateAllAnalyses(TACMetaData& metadata)
+    {
+        metadata.VarUsesInfo.isValid = false;
+        metadata.DefBlocksInfo.isValid = false;
+        metadata.DomInfo.isValid = false;
+        metadata.DomTreeInfo.isValid = false;
+        metadata.FrontierInfo.isValid = false;
+        metadata.LoopInfo.isValid = false;
+        metadata.InductionVariableInfo.isValid = false;
+    }
+
+    static void invalidateControlFlowAnalyses(TACMetaData& metadata)
+    {
+        metadata.DomInfo.isValid = false;
+        metadata.DomTreeInfo.isValid = false;
+        metadata.FrontierInfo.isValid = false;
+        metadata.LoopInfo.isValid = false;
+        metadata.InductionVariableInfo.isValid = false;
+    }
+
+    static void invalidateDataFlowAnalyses(TACMetaData& metadata)
+    {
+        metadata.VarUsesInfo.isValid = false;
+        metadata.DefBlocksInfo.isValid = false;
+        metadata.InductionVariableInfo.isValid = false;
+    }
+
+    static void invalidateAllAnalyses(MIRMetaData& metadata)
+    {
+        metadata.LivenessInfo.isValid = false;
+    }
+
+    static void invalidateControlFlowAnalyses(MIRMetaData& metadata)
+    {
+        metadata.LivenessInfo.isValid = false;
+    }
+
+    static void invalidateDataFlowAnalyses(MIRMetaData& metadata)
+    {
+        metadata.LivenessInfo.isValid = false;
+    }
+
+    static void addMessage(std::variant<Instruction*, Block*, Function*> obj, Message msg);
+
     static void appendInstruction(Block* block, std::unique_ptr<Instruction> inst, std::optional<Message> msg = std::nullopt);
 
     static void addInstructionBefore(Block* block, Instruction* target, std::unique_ptr<Instruction> inst, std::optional<Message> msg = std::nullopt);

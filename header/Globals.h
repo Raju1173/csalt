@@ -46,6 +46,8 @@ enum class Phase
 
     FPO,
     CMP_ELIM,
+    REG_CPROP,
+    PEEP_OPT,
 
     OUTPUT,
 
@@ -82,7 +84,7 @@ struct PhaseMetadata
 
 inline PhaseMetadata getPhaseMetadata(Phase pass)
 {
-    static_assert(std::to_underlying(Phase::COUNT) == 37, "Add another case and increment the count check when adding a new phase!!!");
+    static_assert(std::to_underlying(Phase::COUNT) == 39, "Add another case and increment the count check when adding a new phase!!!");
 
     switch (pass)
     {
@@ -154,10 +156,12 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
         case Phase::MIR_PRE_RA_OPT:
             return {.name = "MIR AFTER PRE REG ALLOC OPTIMIZATIONS", .isMIRPhase = true};
         case Phase::MIR_REG_ALLOC:
-            if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
-                return {.name = "MIR AFTER LINEAR SCAN REGISTER ALLOCATION", .isMIRPhase = true, .isOptimizationPhase = true};
-            else
-                return {.name = "MIR AFTER SPILL ALLOCATION", .isMIRPhase = true, .isOptimizationPhase = true};
+            {
+                if (gCompilerOptions[Phase::MIR_REG_ALLOC].enabled)
+                    return {.name = "MIR AFTER LINEAR SCAN REGISTER ALLOCATION", .isMIRPhase = true, .isOptimizationPhase = true};
+                else
+                    return {.name = "MIR AFTER SPILL ALLOCATION", .isMIRPhase = true, .isOptimizationPhase = true};
+            }
         case Phase::MIR_POST_RA_OPT:
             return {.name = "MIR AFTER POST REG ALLOC OPTIMIZATIONS", .isMIRPhase = true};
 
@@ -165,6 +169,10 @@ inline PhaseMetadata getPhaseMetadata(Phase pass)
             return {.name = "FRAME POINTER OMISSION", .isMIRPhase = true, .isOptimizationPhase = true};
         case Phase::CMP_ELIM:
             return {.name = "COMPARE ELIMINATION", .isMIRPhase = true, .isOptimizationPhase = true};
+        case Phase::REG_CPROP:
+            return {.name = "REGISTER COPY PROPAGATION", .isMIRPhase = true, .isOptimizationPhase = true};
+        case Phase::PEEP_OPT:
+            return {.name = "PEEPHOLE OPTIMIZATIONS", .isMIRPhase = true, .isOptimizationPhase = true};
 
         case Phase::OUTPUT:
             return {.name = "OUTPUT"};

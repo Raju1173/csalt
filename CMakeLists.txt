@@ -76,6 +76,8 @@ add_library(OPTIMIZATIONS STATIC
 
     ${MIR}/FramePointerOmission.cpp
     ${MIR}/CompareElimination.cpp
+    ${MIR}/RegisterCopyPropagation.cpp
+    ${MIR}/PeepholeOptimizations.cpp
 )
 
 target_link_libraries(OPTIMIZATIONS PUBLIC IR projectConfigs)

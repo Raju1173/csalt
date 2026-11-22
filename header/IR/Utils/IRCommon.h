@@ -16,7 +16,7 @@ enum class IRTransformType
     CLONED,
 
     REPLACED,
-    RENAMED,
+    MODIFIED,
 
     COUNT
 };
@@ -33,8 +33,8 @@ inline std::string IRTransformTypeToStr(IRTransformType transform)
             return "CLONED";
         case IRTransformType::REPLACED:
             return "REPLACED";
-        case IRTransformType::RENAMED:
-            return "RENAMED";
+        case IRTransformType::MODIFIED:
+            return "MODIFIED";
         case IRTransformType::ADDED:
             return "ADDED";
         case IRTransformType::DELETED:

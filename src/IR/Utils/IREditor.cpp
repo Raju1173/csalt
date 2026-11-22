@@ -4,8 +4,21 @@
 #include "TACInstructions.h"
 #include <algorithm>
 #include <concepts>
+#include <variant>
 #include <vector>
 #include "IREditor.h"
+
+template<typename IRTypes> void IREditor<IRTypes>::addMessage(std::variant<Instruction*, Block*, Function*> obj, Message msg)
+{
+    if (std::holds_alternative<Instruction*>(obj))
+        std::get<Instruction*>(obj)->History.push_back(msg);
+
+    else if (std::holds_alternative<Block*>(obj))
+        std::get<Block*>(obj)->History.push_back(msg);
+
+    else
+        std::get<Function*>(obj)->History.push_back(msg);
+}
 
 template<typename IRTypes> void IREditor<IRTypes>::appendInstruction(Block* block, std::unique_ptr<Instruction> inst, std::optional<Message> msg)
 {

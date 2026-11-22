@@ -134,7 +134,7 @@ std::string FormatMessage(Message& msg)
             color = "\033[0;92m";
             break;
 
-        case IRTransformType::RENAMED:
+        case IRTransformType::MODIFIED:
         case IRTransformType::REPLACED:
             color = "\033[0;93m";
             break;
@@ -536,7 +536,7 @@ std::string FormatTAC(TAC& TAC, bool history, bool metadata)
     return out;
 }
 
-std::string FormatMIRInstruction(MIRFunction* function, MIRInstruction* inst, bool history)
+std::string FormatMIRInstruction(MIRInstruction* inst, bool history)
 {
     std::string out;
 
@@ -821,16 +821,16 @@ std::string FormatMIRBlock(MIRBlock* block, bool history)
             for (auto& prec : block->LastDeadInstruction->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatMIRInstruction(block->Function, prec.get(), history);
+                out += FormatMIRInstruction(prec.get(), history);
             }
 
             out += "\033[2;37m";
-            out += FormatMIRInstruction(block->Function, block->LastDeadInstruction.get(), history);
+            out += FormatMIRInstruction(block->LastDeadInstruction.get(), history);
 
             for (auto& trail : block->LastDeadInstruction->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatMIRInstruction(block->Function, trail.get(), history);
+                out += FormatMIRInstruction(trail.get(), history);
             }
         }
     }
@@ -842,21 +842,21 @@ std::string FormatMIRBlock(MIRBlock* block, bool history)
             for (auto& prec : inst->deadSiblings.preceding)
             {
                 out += "\033[2;37m";
-                out += FormatMIRInstruction(block->Function, prec.get(), history);
+                out += FormatMIRInstruction(prec.get(), history);
             }
         }
 
         if (blockDead == block->Function->Blocks.end())
             out += "\033[2;37m";
 
-        out += FormatMIRInstruction(block->Function, inst.get(), history);
+        out += FormatMIRInstruction(inst.get(), history);
 
         if (history)
         {
             for (auto& trail : inst->deadSiblings.trailing)
             {
                 out += "\033[2;37m";
-                out += FormatMIRInstruction(block->Function, trail.get(), history);
+                out += FormatMIRInstruction(trail.get(), history);
             }
         }
     }

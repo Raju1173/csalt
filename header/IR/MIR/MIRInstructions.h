@@ -33,6 +33,21 @@ enum class Register
     COUNT
 };
 
+inline bool operator==(Register lhs, Register rhs)
+{
+    if ((static_cast<int>(lhs) == static_cast<int>(Register::R10D) && static_cast<int>(rhs) == static_cast<int>(Register::R10B)) || (static_cast<int>(lhs) == static_cast<int>(Register::R10B) && static_cast<int>(rhs) == static_cast<int>(Register::R10D)))
+    {
+        return true;
+    }
+
+    return static_cast<int>(lhs) == static_cast<int>(rhs);
+}
+
+inline bool operator!=(Register lhs, Register rhs)
+{
+    return !(lhs == rhs);
+}
+
 inline Register ArgRegs[] = {
     Register::EDI,
     Register::ESI,

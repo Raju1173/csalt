@@ -27,8 +27,6 @@ private:
     inline static MIR* mMIR = nullptr;
     inline static std::string mASMFilePath = "";
 
-    inline static std::unordered_set<Phase> RecievedNotifications;
-
     template<typename R> static void PrintIR(R* IR, Phase phase);
 
 public:

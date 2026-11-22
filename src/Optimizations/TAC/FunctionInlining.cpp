@@ -6,6 +6,7 @@
 #include "TACInstructions.h"
 #include <algorithm>
 #include <cassert>
+#include <format>
 #include <map>
 #include <memory>
 #include <string>
@@ -70,7 +71,7 @@ void InlineFunctions(TAC& TAC)
             if (pressureAtCallBlock + peakPressureInCalledFunction > allocatableRegs - 2)
                 continue;
 
-            TACBlock* splitEndBlock = IREditor<TACTypes>::insertBlockAfter(splitStartBlock, Message{});
+            TACBlock* splitEndBlock = IREditor<TACTypes>::insertBlockAfter(splitStartBlock, Message{Phase::INLINING, IRTransformType::ADDED, std::format("")});
 
             inlineCount[call->functionName]++;
 

@@ -11,6 +11,7 @@ std::string FormatAST(Node& AST);
 std::string FormatCFG(CFG& CFG);
 std::string FormatTAC(TAC& TAC, bool history = false, bool metadata = false);
 std::string FormatMIR(MIR& MIR, bool history = false, bool metadata = false);
+std::string FormatMIRInstruction(MIRInstruction* inst, bool history);
 std::string GetASM(std::string AsmFilePath);
 
 inline std::string FormatIR(TokenStream& tokenStream, bool history = false, bool meta = false) { return FormatTokens(tokenStream); }

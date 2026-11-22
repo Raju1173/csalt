@@ -1,3 +1,4 @@
+#include "IRCommon.h"
 #include "IREditor.h"
 #include "TACGenerator.h"
 #include "TACInstructions.h"
@@ -63,14 +64,13 @@ bool EliminateEmptyJumpBlocks(TACFunction* TACFunc)
             continue;
 
         TACJump* jump = static_cast<TACJump*>(emptyBlock->Instructions.back().get());
-        TACBlock* targetBlock = jump->TargetBlock;
 
-        if (targetBlock == emptyBlock.get())
+        if (jump->TargetBlock == emptyBlock.get())
             continue;
 
         auto parentsCopy = emptyBlock->Parents;
 
-        IREditor<TACTypes>::remapPhiSources(targetBlock, emptyBlock.get(), parentsCopy);
+        IREditor<TACTypes>::remapPhiSources(jump->TargetBlock, emptyBlock.get(), parentsCopy);
 
         for (TACBlock* parent : parentsCopy)
         {
@@ -79,7 +79,11 @@ bool EliminateEmptyJumpBlocks(TACFunction* TACFunc)
                 TACJump* parentJump = static_cast<TACJump*>(parent->Instructions.back().get());
 
                 if (parentJump->TargetBlock == emptyBlock.get())
-                    parentJump->TargetBlock = targetBlock;
+                {
+                    IREditor<TACTypes>::addMessage(parentJump, Message{Phase::CFG_SIMP, IRTransformType::MODIFIED, std::format("redirected jump to an empty block B{}, directly to that block's target B{}", parentJump->TargetBlock->ID, jump->TargetBlock->ID)});
+
+                    parentJump->TargetBlock = jump->TargetBlock;
+                }
             }
 
             else if (parent->Instructions.back()->type == TACInstType::BRANCH)
@@ -87,20 +91,28 @@ bool EliminateEmptyJumpBlocks(TACFunction* TACFunc)
                 TACBranch* parentBranch = static_cast<TACBranch*>(parent->Instructions.back().get());
 
                 if (parentBranch->TrueTarget == emptyBlock.get())
-                    parentBranch->TrueTarget = targetBlock;
+                {
+                    IREditor<TACTypes>::addMessage(parentBranch, Message{Phase::CFG_SIMP, IRTransformType::MODIFIED, std::format("redirected branch to an empty block B{}, directly to that block's target B{}", parentBranch->TrueTarget->ID, jump->TargetBlock->ID)});
+
+                    parentBranch->TrueTarget = jump->TargetBlock;
+                }
 
                 if (parentBranch->FalseTarget == emptyBlock.get())
-                    parentBranch->FalseTarget = targetBlock;
+                {
+                    IREditor<TACTypes>::addMessage(parentBranch, Message{Phase::CFG_SIMP, IRTransformType::MODIFIED, std::format("redirected branch to an empty block B{}, directly to that block's target B{}", parentBranch->TrueTarget->ID, jump->TargetBlock->ID)});
+
+                    parentBranch->FalseTarget = jump->TargetBlock;
+                }
             }
 
             IREditor<TACTypes>::removeEdge(parent, emptyBlock.get());
-            IREditor<TACTypes>::addEdge(parent, targetBlock);
+            IREditor<TACTypes>::addEdge(parent, jump->TargetBlock);
         }
 
-        IREditor<TACTypes>::removeEdge(emptyBlock.get(), targetBlock);
-        IREditor<TACTypes>::removePhiSource(targetBlock, emptyBlock.get());
+        IREditor<TACTypes>::removeEdge(emptyBlock.get(), jump->TargetBlock);
+        IREditor<TACTypes>::removePhiSource(jump->TargetBlock, emptyBlock.get());
 
-        IREditor<TACTypes>::deleteBlock(emptyBlock.get(), Message{Phase::CFG_SIMP, IRTransformType::DELETED, std::format("eliminated empty jump block, redirected parents to Block - {}", targetBlock->ID)});
+        IREditor<TACTypes>::deleteBlock(emptyBlock.get(), Message{Phase::CFG_SIMP, IRTransformType::DELETED, std::format("eliminated empty jump block, redirected parents to Block - {}", jump->TargetBlock->ID)});
 
         return true;
     }
@@ -120,7 +132,7 @@ bool SimplifyControlFlow(TAC& TAC)
         {
             blocksChanged = false;
 
-            // bitwise OR operator "|" makes both functions run whereas comparison OR operator "||" skips checking second condition if first condition evaluates to true...
+            // using bitwise OR operator to make both functions run...
             if (MergeLinearBlocks(TACFunc.get()) | EliminateEmptyJumpBlocks(TACFunc.get()))
             {
                 blocksChanged = true;

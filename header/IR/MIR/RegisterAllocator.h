@@ -1,3 +1,3 @@
 #include "MIRGenerator.h"
 
-void ResolveVRegsChaitinBriggs(MIR& MIR);
+void ResolveVRegsGraphColoring(MIR& MIR);
