@@ -278,6 +278,9 @@ std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
     std::string out;
 
     // formatters should not be triggering analysis recomputations in my opinion but printing invalid analyses would be pretty stupid...
+    TACDominatorInfo& DomInfo = block->Function->getDominatorInfo();
+    TACDominatorTreeInfo& DomTreeInfo = block->Function->getDominatorTreeInfo();
+    TACFrontierInfo& FrontierInfo = block->Function->getFrontierInfo();
     TACLoopInfo& LoopInfo = block->Function->getLoopInfo();
     TACInductionVariableInfo& IndVarInfo = block->Function->getInductionVariableInfo();
     TACBlockLiveness& BlockLiveness = block->Function->getLivenessInfo().BlockLiveness[block];
@@ -348,6 +351,33 @@ std::string FormatTACBlock(TACBlock* block, bool history, bool metadata)
     if (metadata && !blockDead)
     {
         out += "\033[38;5;103m";
+
+        out += "\n    Dominators - {";
+
+        for (TACBlock* B : DomInfo.Dominators[block])
+        {
+            out += "B" + std::to_string(B->ID) + ", ";
+        }
+
+        out += "}\n";
+
+        out += "\n    Dominator Tree Children - {";
+
+        for (TACBlock* B : DomTreeInfo.DominatorTree[block])
+        {
+            out += "B" + std::to_string(B->ID) + ", ";
+        }
+
+        out += "}\n";
+
+        out += "\n    Dominance Frontiers - {";
+
+        for (TACBlock* B : FrontierInfo.Frontiers[block])
+        {
+            out += "B" + std::to_string(B->ID) + ", ";
+        }
+
+        out += "}\n";
 
         if (isLoopHeader)
         {
